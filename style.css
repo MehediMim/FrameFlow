@@ -152,3 +152,37 @@ html, body, * {
 .ff-animation-preset label{min-width:0}
 .ff-animation-preset button{grid-column:1/-1;font-size:11px;margin-bottom:5px}
 .ff-animation-preset select,.ff-animation-preset input{width:100%}
+
+/* Motion and Map timelines now share the same clip/row visual language. */
+.workspace.motion-only + .timeline.motion-only .timeline-labels{background:#1a1e22}
+.timeline.motion-only .ruler-label{background:#1d2125;border-bottom:1px solid #33383d}
+.timeline.motion-only .track-label{height:38px;padding:0 10px;border-top:0;border-bottom:1px solid #30363b;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timeline.motion-only .track-label.selected{background:#2c3729;color:#d6edc5}
+.timeline.motion-only .track-row{height:38px;background:#1d2125;border-bottom:1px solid #30363b}
+.timeline.motion-only .track-row:nth-child(even){background:#20252a}
+.timeline.motion-only .track-row.selected{background:#263024}
+.timeline.motion-only .clip.clip-editable{top:6px;bottom:6px;left:auto;border-radius:5px;background:#657d4455;border:1px solid #88ae5a;display:flex;align-items:center;padding:0;min-width:8px;box-shadow:none}
+.timeline.motion-only .clip-label{font-size:9px;color:#e0efcd;font-weight:500}
+.timeline.motion-only .clip-handle{width:7px;background:transparent}
+.timeline.motion-only .clip-handle:hover{background:#b6f36e88}
+.timeline.motion-only .diamond{top:13px;width:10px;height:10px;background:#c4e6a2;border-color:#dbf5c5}
+.timeline.motion-only .tick{color:#89949f;background:transparent}
+
+
+/* Match the actual Map Studio clip geometry, color and row styling. */
+.timeline.motion-only .track-row,
+.timeline.motion-only .track-row:nth-child(even),
+.timeline.motion-only .track-row.selected{background:#1b2024;border-bottom:1px solid #30363b;height:38px}
+.timeline.motion-only .track-label{background:#181c1f;height:38px;border-bottom:1px solid #30363b;color:#d3e1e8}
+.timeline.motion-only .track-label.selected{background:#1d2b31;color:#d8f4ff}
+.timeline.motion-only .clip.clip-editable{
+  top:6px;bottom:6px;background:#245c70!important;border:1px solid #55c4ee!important;
+  border-radius:5px;box-shadow:none!important;color:#fff;overflow:hidden;
+  padding:0;justify-content:space-between;z-index:1
+}
+.timeline.motion-only .clip-label{color:#fff;font-size:9px;font-weight:600;opacity:1;padding:0 4px}
+.timeline.motion-only .clip-handle{width:7px;min-width:7px;background:transparent;opacity:.7}
+.timeline.motion-only .clip-handle:hover{background:#55c4ee88;opacity:1}
+.timeline.motion-only .track-row.selected .clip.clip-editable{box-shadow:0 0 0 1px #ffffff99!important}
+/* Keep manual motion keyframes visible as distinct diamond markers. */
+.timeline.motion-only .diamond{z-index:3}

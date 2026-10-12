@@ -440,6 +440,41 @@ window.addEventListener('keydown', e => {
 
 function renderAll() { renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
 
+// Fullscreen the entire Map Studio root. This avoids fullscreen/layout conflicts
+// with the nested grid and keeps playback controls available.
+const mapFullscreenRoot = document.getElementById('mapStudio');
+const mapFullscreenButton = document.getElementById('mapFullscreen');
+async function toggleMapFullscreen() {
+  try {
+    if (document.fullscreenElement === mapFullscreenRoot) {
+      await document.exitFullscreen();
+    } else if (!document.fullscreenElement) {
+      if (!mapFullscreenRoot.requestFullscreen) throw new Error('Browser fullscreen API is unavailable');
+      await mapFullscreenRoot.requestFullscreen();
+    } else {
+      notify('Exit the current fullscreen view first');
+    }
+  } catch (error) {
+    notify('Fullscreen unavailable: ' + (error?.message || String(error)));
+  }
+}
+mapFullscreenButton?.addEventListener('click', toggleMapFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  const active = document.fullscreenElement === mapFullscreenRoot;
+  if (mapFullscreenButton) {
+    mapFullscreenButton.textContent = active ? '⛶ Exit fullscreen' : '⛶ Fullscreen';
+    mapFullscreenButton.title = active ? 'Exit fullscreen (Esc or F)' : 'Show map fullscreen (F)';
+  }
+  requestAnimationFrame(() => { draw(); });
+});
+window.addEventListener('keydown', event => {
+  if (!document.body.classList.contains('mode-map') || event.key.toLowerCase() !== 'f' ||
+      event.repeat || event.ctrlKey || event.altKey || event.metaKey || $('#mModal').open ||
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+  event.preventDefault();
+  toggleMapFullscreen();
+});
+
 // ------------------------------------------------------------------ boot
 try { const saved = localStorage.getItem(STORE); proj = saved ? validateMapProject(JSON.parse(saved)) : demoMapProject(); } catch { proj = demoMapProject(); }
 buildStaticUI(); buildLists(); bindSettings(); bindToolbar(); $('#mHint').textContent = HINT;

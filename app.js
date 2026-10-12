@@ -112,6 +112,30 @@ let canvasZoom=1,zoomMode='fit';
 function updateCanvasZoom(){const area=$('.stage-area'),wrap=$('.canvas-wrap');if(!area||!wrap||!project)return;const fit=Math.min((area.clientWidth-70)/project.width,(area.clientHeight-65)/project.height);const scale=zoomMode==='fit'?Math.max(.05,fit):canvasZoom;canvas.style.width=`${project.width*scale}px`;canvas.style.height=`${project.height*scale}px`;wrap.style.width=`${Math.max(area.clientWidth-60,project.width*scale)}px`;wrap.style.height=`${Math.max(area.clientHeight-60,project.height*scale)}px`;$('#canvasZoomLabel').textContent=`${Math.round(scale*100)}%`;if(zoomMode==='fit')canvasZoom=scale}
 function setCanvasZoom(v){zoomMode='manual';canvasZoom=Math.max(.05,Math.min(4,v));updateCanvasZoom()}
 $('#canvasZoomIn').onclick=()=>setCanvasZoom(canvasZoom*1.25);$('#canvasZoomOut').onclick=()=>setCanvasZoom(canvasZoom/1.25);$('#canvasZoomFit').onclick=()=>{zoomMode='fit';updateCanvasZoom()};$('#canvasZoom100').onclick=()=>setCanvasZoom(1);$('.stage-area').addEventListener('wheel',evt=>{if(evt.ctrlKey||evt.metaKey){evt.preventDefault();setCanvasZoom(canvasZoom*(evt.deltaY<0?1.1:1/1.1))}},{passive:false});window.addEventListener('resize',updateCanvasZoom);
+// Only the Motion Studio preview enters fullscreen; the timeline and sidebars stay unchanged.
+const motionPreview=$('.workspace.motion-only main');
+const fullscreenButton=$('#motionFullscreen');
+async function toggleMotionFullscreen(){
+  try {
+    if(document.fullscreenElement===motionPreview)await document.exitFullscreen();
+    else if(!document.fullscreenElement)await motionPreview.requestFullscreen();
+    else notify('Exit the current fullscreen view first');
+  }catch(err){notify('Fullscreen unavailable: '+(err?.message||err))}
+}
+fullscreenButton.addEventListener('click',toggleMotionFullscreen);
+document.addEventListener('fullscreenchange',()=>{
+  const on=document.fullscreenElement===motionPreview;
+  fullscreenButton.textContent=on?'⛶ Exit fullscreen':'⛶ Fullscreen';
+  fullscreenButton.title=on?'Exit fullscreen (Esc or F)':'Show composition fullscreen (F)';
+  // Resize after the fullscreen layout has been applied.
+  requestAnimationFrame(updateCanvasZoom);
+});
+window.addEventListener('keydown',event=>{
+  if(event.key.toLowerCase()!=='f'||event.repeat||event.ctrlKey||event.altKey||event.metaKey)return;
+  if(document.body.classList.contains('mode-map')||$('#modal').open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+  event.preventDefault();toggleMotionFullscreen();
+});
+
 
 installMotionExtrasUI();
 $$('[data-add]').forEach(el=>el.onclick=()=>add(el.dataset.add));$('#duplicate').onclick=()=>{if(!current())return;if(current().type==='group'){notify('Duplicate child layers individually');return}checkpoint();const l=JSON.parse(JSON.stringify(current()));l.id=uid();l.name+=' copy';l.x+=30;l.y+=30;for(const prop of['x','y'])for(const k of l.keys[prop]||[])k.v+=30;project.layers.push(l);selected=l.id;changed()};$('#delete').onclick=()=>{if(!current())return;checkpoint();if(current().type==='group'){if(Object.values(current().keys).some(ks=>ks.length)){notify('Remove group keys or ungroup first');undoStack.pop();updateHistory();return}project.layers.forEach(l=>{if(l.parentId===selected)delete l.parentId})};project.layers=project.layers.filter(l=>l.id!==selected);selected=project.layers.at(-1)?.id;changed()};function reorder(delta){const i=project.layers.findIndex(l=>l.id===selected),j=i+delta;if(i<0||j<0||j>=project.layers.length)return;checkpoint();[project.layers[i],project.layers[j]]=[project.layers[j],project.layers[i]];changed()}$('#up').onclick=()=>reorder(1);$('#down').onclick=()=>reorder(-1);

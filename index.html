@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Make every frame count</title><meta name="description" content="Create motion graphics with a frame based timeline, keyframes and video export."><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="map.css"></head><body class="landing">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Make every frame count</title><meta name="description" content="Create motion graphics with a frame based timeline, keyframes and video export."><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="map.css"><link rel="stylesheet" href="color-swatches.css"></head><body class="landing">
 <style>
 /* Support links shared by both studios and landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -128,7 +128,7 @@ body.landing #landing{display:block}
 <input hidden type="file" id="mProjectFile" accept="application/json,.json">
 <dialog id="mModal"><div id="mModalBody"></div><button id="mCloseModal">Close</button></dialog>
 </div>
-<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="app.js"></script><script type="module" src="map-ui.js"></script><script type="module" src="audio-reference.mjs"></script><script type="module">
+<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="app.js"></script><script type="module" src="map-ui.js"></script><script type="module" src="audio-reference.mjs"></script><script type="module" src="color-swatches.mjs"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {

@@ -1,0 +1,10 @@
+/* Color presets across Motion and Map Studio; native picker remains available. */
+.ff-palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 12px;max-width:100%;line-height:1}
+.ff-color-chip{appearance:none;display:inline-block;position:relative;flex:0 0 19px;width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;margin:0!important;padding:0!important;border:1px solid #ffffff66!important;border-radius:5px!important;background:var(--chip-color)!important;cursor:pointer;box-shadow:0 1px 3px #0004;transition:transform .1s,box-shadow .1s}
+.ff-color-chip:hover{transform:scale(1.14);box-shadow:0 0 0 2px #b6f36e77}
+.ff-color-chip.selected{outline:2px solid var(--accent,#b6f36e);outline-offset:2px}
+.ff-color-chip:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.color-row:has(>.ff-palette){flex-wrap:wrap;gap:7px}
+.color-row>.ff-palette{flex:1 0 100%}
+.two label .ff-palette{margin-top:7px}
+/* Each button has its own tooltip; no dialog or additional settings needed. */

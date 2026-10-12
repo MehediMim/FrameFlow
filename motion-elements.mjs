@@ -63,7 +63,7 @@ function rasterize(svg) {
     img.onerror=()=>{URL.revokeObjectURL(url);reject(Error('Could not render SVG element'))};img.src=url;
   });
 }
-export function installMotionElements({ add, notify }) {
+export function installMotionElements({ add, notify, vector=false, sanitizeSvg }) {
   const toolbar = document.querySelector('.workspace.motion-only .add-grid');
   const inspector = document.querySelector('.workspace.motion-only #inspector');
   if (!toolbar || !inspector) return;
@@ -92,8 +92,13 @@ export function installMotionElements({ add, notify }) {
   async function insert(shape, button) {
     button.disabled = true;
     try {
-      const src = await rasterize(svgFor(shape, color.value, solid.checked));
-      close(); add('image', { name: shape[0], src, w: 230, h: 230, color: color.value });
+      if (vector && sanitizeSvg) {
+        const markup = sanitizeSvg(svgFor(shape, color.value, solid.checked));
+        close();add('vector',{name:shape[0],svgMarkup:markup,w:230,h:230,color:color.value,vectorFill:solid.checked?color.value:'#ffffff',vectorStroke:color.value,vectorStrokeWidth:solid.checked?0:7,vectorDraw:false,vectorDuration:40,vectorPin:false,vectorPinColor:'#ef476f',vectorPinSize:5});
+      } else {
+        const src = await rasterize(svgFor(shape, color.value, solid.checked));
+        close();add('image',{name:shape[0],src,w:230,h:230,color:color.value});
+      }
       notify(shape[0] + ' element added');
     } catch (e) { notify(e.message || String(e)); }
     finally { button.disabled = false; }

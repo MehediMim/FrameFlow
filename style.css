@@ -186,3 +186,9 @@ html, body, * {
 .timeline.motion-only .track-row.selected .clip.clip-editable{box-shadow:0 0 0 1px #ffffff99!important}
 /* Keep manual motion keyframes visible as distinct diamond markers. */
 .timeline.motion-only .diamond{z-index:3}
+
+/* Motion zoom: keep the preview smooth at 50%, 51%, and every other zoom.
+   The viewport remains scrollable using wheel/trackpad but never shows bars. */
+.workspace.motion-only .stage-area{padding:0!important;overflow:auto!important;scrollbar-width:none!important;-ms-overflow-style:none!important;overscroll-behavior:contain}
+.workspace.motion-only .stage-area::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+.workspace.motion-only .canvas-wrap{min-width:0!important;min-height:0!important;padding:0!important}

@@ -580,23 +580,34 @@ function drawBorder(ctx, v, geo, th, a, frame) {
 }
 
 // ---------------------------------------------------------------- Animation: highlight
+function featureRadius(f) { // farthest ring point from the centroid, in map units (cached)
+  if (f._rr) return f._rr;
+  let m = 0; for (const r of f.rings) for (let i = 0; i < r.n; i++) m = Math.max(m, Math.hypot(r.xy[2 * i] - f.cx, r.xy[2 * i + 1] - f.cy));
+  return (f._rr = m || .01);
+}
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
-  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), p = ease(a.easing, t), age = Math.max(0, frame - a.start);
+  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), p = ease(a.easing, t), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3));
   if (a.target?.kind === 'country') {
     const f = geo.byName.get(a.target.name); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
+    const c = project(v, f.cx + off, f.cy), rad = featureRadius(f) * v.S * 1.05 * p;
     ctx.save();
     if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); }
-    path(); ctx.globalAlpha = alpha * p * .78; ctx.fillStyle = a.color; ctx.fill('evenodd');
-    ctx.lineJoin = 'round'; glowStroke(ctx, a.color, 2.6 * v.unit, alpha * clamp01(p * 2), true);
-    if (a.pulse) { const q = (age % 54) / 54; ctx.globalAlpha = alpha * (1 - q) * .35 * p; ctx.fillStyle = '#fff'; path(); ctx.fill('evenodd'); }
+    if (rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
+      ctx.save(); ctx.beginPath(); groundCircle(ctx, v, f.cx, f.cy, rad, off); ctx.clip();
+      path(); ctx.globalAlpha = alpha * .78; ctx.fillStyle = a.color; ctx.fill('evenodd');
+      ctx.lineJoin = 'round'; glowStroke(ctx, a.color, 2.6 * v.unit, alpha, true);
+      if (a.pulse) { const q = (age % 54) / 54; ctx.globalAlpha = alpha * (1 - q) * .35; ctx.fillStyle = '#fff'; path(); ctx.fill('evenodd'); }
+      ctx.restore();
+    }
     ctx.restore();
-    if (a.showLabel) { const c = project(v, f.cx + off, f.cy); labels.push({ x: c.x, y: c.y, text: a.label || f.name, alpha: alpha * clamp01((p - .4) / .4), scale: 1.1 }); }
+    if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y, text: a.label || f.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
     return;
   }
   const r = resolveLoc(geo, a.target, v.cx); if (!r) return;
   const lat = yToLat(r.Y), rad = (a.radius / (40075 * Math.cos(lat * RAD))) * v.S; // km -> screen px
+  const c = project(v, r.X, r.Y, 0);
   ctx.save();
   if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha * .8; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); }
   ctx.globalAlpha = 1;
@@ -609,10 +620,9 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
     ctx.globalAlpha = alpha * (1 - q) * .7; ctx.strokeStyle = a.color; ctx.lineWidth = 2 * v.unit; ctx.stroke();
   }
   ctx.restore();
-  const c = project(v, r.X, r.Y, 0);
-  ctx.save(); ctx.globalAlpha = alpha * p; ctx.fillStyle = '#fff'; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit;
-  ctx.beginPath(); ctx.arc(c.x, c.y, 5 * v.unit, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
-  if (a.showLabel) labels.push({ x: c.x, y: c.y - 24 * v.unit, text: a.label || a.target.name, alpha: alpha * clamp01((p - .4) / .4), scale: 1.1 });
+  const dot = ease('backOut', clamp01(t / .35)); // centre dot grows into place instead of fading
+  if (dot > 0) { ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = '#fff'; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit; ctx.beginPath(); ctx.arc(c.x, c.y, 5 * v.unit * dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y - 24 * v.unit, text: a.label || a.target.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
 }
 
 // ---------------------------------------------------------------- Animation: plane

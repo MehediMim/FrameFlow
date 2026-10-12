@@ -1,6 +1,7 @@
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY } from './map-engine.mjs';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY } from './map-engine.mjs';
 import { CITIES, REGIONS } from './map-places.mjs';
+import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -73,7 +74,10 @@ function parseLoc(text, kinds) {
 }
 
 // ------------------------------------------------------------------ drawing + playback
+const seenFonts = new Set();
+function syncFonts() { for (const n of mapFontsUsed(proj)) { if (seenFonts.has(n)) continue; seenFonts.add(n); loadFont(n).then(() => draw()); } }
 function draw() {
+  syncFonts();
   if (canvas.width !== proj.width || canvas.height !== proj.height) { canvas.width = proj.width; canvas.height = proj.height; }
   canvas.style.aspectRatio = `${proj.width}/${proj.height}`;
   if (!geo) {
@@ -135,7 +139,7 @@ function addAction(type) {
 }
 function addShot(preset) {
   const needsPlane = PRESETS[preset].fields.includes('planeId');
-  if (needsPlane && !planes().length) { notify('Add a Plane animation first'); return; }
+  if (needsPlane && !planes().length) { notify('Add a Travel animation first'); return; }
   pause(); checkpoint();
   const c = current(), extra = {};
   const t = suggestTarget(); if (t) extra.target = t;
@@ -169,7 +173,7 @@ const F = {
 
 function renderInspector() {
   const it = current(), box = $('#mInspector');
-  if (!it) { box.innerHTML = '<p class="muted">Select an item in the timeline to edit it.<br><br>Add a <b>Border</b>, <b>Plane</b>, <b>Highlight</b> or <b>Pin</b>, then pick a camera preset. Presets move the camera for you.</p>'; $('#mInspTitle').textContent = 'Properties'; return; }
+  if (!it) { box.innerHTML = '<p class="muted">Select an item in the timeline to edit it.<br><br>Add a <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>, then pick a camera preset. Presets move the camera for you.</p>'; $('#mInspTitle').textContent = 'Properties'; return; }
   const shot = isShot(it);
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
   let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>` + F.text('name', 'Name', it.name, 100);
@@ -177,13 +181,13 @@ function renderInspector() {
   h += `<div class="two">${F.num('start', 'Start frame', it.start, 0, 1799)}${F.num('dur', 'Length (frames)', it.dur, 1, 1800)}</div>` + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   if (!shot) h += F.chk('keep', 'Stay on screen after it finishes', it.keep !== false);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
-  if (shot) h += shotFields(it); else h += actionFields(it);
+  if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
   box.innerHTML = h; bindInspector(it);
 }
 function actionFields(a) {
   switch (a.type) {
     case 'border': return F.loc('target', 'Country', a.target, 'border') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%');
-    case 'plane': return F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place') + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Plane color', a.planeColor) + `<div class="two">${F.num('size', 'Plane size', a.size, 8, 80)}${F.num('lift', 'Flight height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + F.chk('showLabels', 'Show place names', a.showLabels);
+    case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place') + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '');
     case 'highlight': {
       const country = a.target.kind === 'country';
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? 'Country' : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
@@ -197,13 +201,13 @@ function shotFields(s) {
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
   if (has('autoFit') && s.target.kind === 'country') h += F.chk('autoFit', 'Fit the whole country in view', s.autoFit);
-  if (has('planeId')) h += F.sel('planeId', 'Plane', s.planeId, [['', 'Choose a plane…'], ...planes().map(a => [a.id, `${a.name} (${a.from.name} → ${a.to.name})`])]);
+  if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, `${a.name} (${a.from.name} → ${a.to.name})`])]);
   if (has('zoom') && !(has('autoFit') && s.autoFit && s.target.kind === 'country')) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
   if (has('pitch')) h += F.range('pitch', 'Tilt', s.pitch, 0, 70, 1, x => x + '°');
   if (has('bearing')) h += F.num('bearing', 'Rotation (degrees)', s.bearing, -180, 180, 5);
-  if (has('lockHeading')) h += F.chk('lockHeading', 'Turn with the plane', s.lockHeading);
+  if (has('lockHeading')) h += F.chk('lockHeading', 'Turn with the icon', s.lockHeading);
   return h;
 }
 
@@ -232,18 +236,69 @@ function bindInspector(it) {
       checkpoint();
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }
       if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
+      if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
+      if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__hmode') { it.target = v === 'country' ? { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' } : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
       if (t === 'num') {
         const lo = Number(el.min), hi = Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         if (key === 'start' || key === 'dur') { v = Math.round(v); it[key] = v; ensureLength(it.start + it.dur); el.value = v; changed(); return; }
         el.value = v;
       }
-      it[key] = v; changed(); if (key === 'autoFit') renderInspector();
+      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels') renderInspector();
     };
   });
   $$('#mInspector [data-mpick]').forEach(el => el.onclick = () => startPick(el.dataset.mpick, el.dataset.kinds));
+  if (!isShot(it) && it.labelStyle) bindLabelStyle($('#mInspector'), 'mItemLbl', () => it.labelStyle, v => { it.labelStyle = v; }, () => renderInspector());
 }
 function centerLonLat() { const l = screenToLonLat(lastView, proj.width / 2, proj.height / 2); return l ? [l.lon, l.lat] : [0, 0]; }
+
+// ------------------------------------------------------------------ label style (project-wide in Map settings, optional override per item)
+function labelStyleHtml(st, pre) {
+  const o = (v, l, cur) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`;
+  const num = (k, label, min, max, step) => `<label>${label}<input data-ls="${k}" data-t="num" type="number" min="${min}" max="${max}" step="${step}" value="${Number(st[k])}"></label>`;
+  const chk = (k, label) => `<label class="m-chk"><input type="checkbox" data-ls="${k}" data-t="chk" ${st[k] ? 'checked' : ''}> ${label}</label>`;
+  const color = (k, label) => `<label class="color-row">${label}<input type="color" data-ls="${k}" data-t="color" value="${esc(st[k])}"></label>`;
+  const range = (k, label, min, max, step, fmt) => `<label>${label} <span class="m-val">${fmt(st[k])}</span><input data-ls="${k}" data-t="range" type="range" min="${min}" max="${max}" step="${step}" value="${st[k]}"></label>`;
+  return `<label>Start from a style<select data-lspreset><option value="">Choose a preset…</option>${Object.entries(LABEL_PRESETS).map(([k, p]) => o(k, p.label, '')).join('')}</select></label>` +
+    fontPickerHtml(pre + 'Font', 'Font', st.font) +
+    `<div class="two"><label>Weight<select data-ls="weight" data-t="int">${LABEL_WEIGHTS.map(([w, l]) => o(w, l, st.weight)).join('')}</select></label>${num('size', 'Size', 6, 80, 1)}</div>` +
+    `<label>Shape<select data-ls="shape" data-t="sel">${Object.entries(LABEL_SHAPES).map(([k, l]) => o(k, l, st.shape)).join('')}</select></label>` +
+    chk('useTheme', 'Use the map style’s label colors') + (st.useTheme ? '' : color('text', 'Text color') + (st.shape === 'none' ? '' : color('bg', 'Background color') + range('bgAlpha', 'Background opacity', 0, 1, .05, x => Math.round(x * 100) + '%'))) +
+    (st.shape === 'none' ? '' : `<div class="two">${num('borderW', 'Border width', 0, 8, .5)}${color('border', 'Border color')}</div>`) +
+    range('spacing', 'Letter spacing', 0, 40, 1, x => x + '%') + chk('italic', 'Italic') + chk('caps', 'ALL CAPS') + chk('halo', 'Outline around text') + chk('shadow', 'Soft shadow');
+}
+/** Wires up the controls made by labelStyleHtml(); `get` returns the style object being edited, `replace` swaps it, `rerender` rebuilds the panel. */
+function bindLabelStyle(root, pre, get, replace, rerender) {
+  let gesture = false;
+  bindFontPicker(pre + 'Font', n => { checkpoint(); get().font = n; changed(); });
+  const preset = root.querySelector('[data-lspreset]');
+  if (preset) preset.onchange = () => { const p = LABEL_PRESETS[preset.value]; if (!p) return; checkpoint(); replace({ ...DEFAULT_LABEL_STYLE, ...p.style }); changed(); rerender(); };
+  root.querySelectorAll('[data-ls]').forEach(el => {
+    const key = el.dataset.ls, t = el.dataset.t, val = () => (t === 'chk' ? el.checked : t === 'num' || t === 'range' ? Number(el.value) : t === 'int' ? Number(el.value) : el.value);
+    if (t === 'range' || t === 'color') {
+      el.oninput = () => { if (!gesture) { checkpoint(); gesture = true; } const v = val(); get()[key] = v; const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'spacing' ? v + '%' : Math.round(v * 100) + '%'; draw(); };
+      el.onchange = () => { gesture = false; changed(); };
+      return;
+    }
+    el.onchange = () => {
+      let v = val(); checkpoint();
+      if (t === 'num') { const lo = Number(el.min), hi = Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi); el.value = v; }
+      get()[key] = v; changed(); if (key === 'useTheme' || key === 'shape') rerender();
+    };
+  });
+}
+function renderLabelPanel() {
+  let box = $('#mLabelStyle');
+  if (!box) { box = document.createElement('div'); box.id = 'mLabelStyle'; $('#mTheme').closest('label').after(box); }
+  const wasOpen = box.querySelector('details')?.open;
+  const st = labelStyleOf(proj);
+  box.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">LABEL STYLE <span>Aa</span></summary><p class="mini-label">Applies to every place name, pin and highlight label. Pick a different style on any item to override it.</p>${labelStyleHtml(st, 'mProjLbl')}</details>`;
+  bindLabelStyle(box, 'mProjLbl', () => (proj.labelStyle ||= { ...DEFAULT_LABEL_STYLE }), v => { proj.labelStyle = v; }, renderLabelPanel);
+}
+function labelFields(a) {
+  if (!['plane', 'highlight', 'pin'].includes(a.type)) return '';
+  return '<div class="section-title m-sep">LABEL STYLE</div>' + F.chk('__lscustom', 'Custom style for this label', !!a.labelStyle) + (a.labelStyle ? labelStyleHtml(labelStyleOf(proj, a), 'mItemLbl') : '<p class="mini-label">Using the project label style (Map settings → Label style).</p>');
+}
 
 // ------------------------------------------------------------------ pick a location on the map
 function startPick(key, kinds) {
@@ -290,6 +345,7 @@ function renderSettings() {
   const i = proj.camera.init, match = Object.entries(REGIONS).find(([, r]) => r.lon === i.lon && r.lat === i.lat && r.zoom === i.zoom);
   $('#mRegion').value = match ? match[0] : 'custom'; $('#mStartZoom').value = i.zoom; $('#mStartPitch').value = i.pitch; $('#mStartBearing').value = i.bearing;
   $('#mGraticule').classList.toggle('active', !!proj.graticule);
+  renderLabelPanel();
 }
 function bindSettings() {
   const edit = fn => e => { pause(); checkpoint(); fn(e.target); saveLocal(); renderAll(); };
@@ -369,7 +425,7 @@ async function exportVideo() {
   const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height;
   const ec = c.getContext('2d');
   try {
-    await document.fonts.ready;
+    await loadFonts(mapFontsUsed(snapshot)); await document.fonts.ready;
     const video = await exportMapVideo({ canvas: c, fps: snapshot.fps, frames: snapshot.frames,
       draw: f => drawMap(ec, c.width, c.height, snapshot, f, geo),
       cancelled: () => !exporting,
@@ -414,7 +470,7 @@ function bindToolbar() {
   };
   $('#mNew').onclick = () => { if (!confirm('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); sel = null; frame = 0; saveLocal(); renderAll(); };
   $('#mDemo').onclick = () => { if (!confirm('Load the demo map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = demoMapProject(); sel = null; frame = 0; saveLocal(); renderAll(); };
-  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Plane</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change its length.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
+  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change its length.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
   $('#mCloseModal').onclick = () => { if (exporting) { exporting = false; $('#mCloseModal').disabled = true; } else $('#mModal').close(); };
   $('#mModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });
 }

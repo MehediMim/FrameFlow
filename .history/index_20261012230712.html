@@ -1,0 +1,232 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Make every frame count</title><meta name="description" content="Create motion graphics with a frame based timeline, keyframes and video export."><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="map.css"></head><body class="landing">
+<style>
+/* Support links shared by both studios and landing page. */
+.support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
+.support-link:hover{background:#b6f36e2b;border-color:#b6f36e}
+.support-link:focus-visible{outline:2px solid #b6f36e;outline-offset:3px}
+header .support-link{font-size:11px;margin-left:4px;flex:none}
+#landing .support-link{font-size:12px;color:#d9f6bc}
+@media(max-width:1200px){header .support-link{font-size:0;padding:8px 10px}header .support-link .support-icon{font-size:16px}}
+/* Interface text stays unselected during editing and dragging. */
+html,body,body *{-webkit-user-select:none;user-select:none}
+input,textarea,[contenteditable="true"],[contenteditable="true"] *{-webkit-user-select:text;user-select:text}
+#homeLink{color:inherit;text-decoration:none;flex-shrink:0}
+#homeLink:focus-visible{outline:2px solid var(--accent);outline-offset:5px}
+#landing{display:none}
+body.landing{min-width:0;height:auto;min-height:100dvh;display:block;overflow:auto;background:#101311}
+body.landing> :not(#landing):not(script):not(style){display:none!important}
+body.landing #landing{display:block}
+#landing{font-family:'DM Sans',sans-serif;color:#eef2e8;background:radial-gradient(ellipse at 75% 28%,#26361b66,transparent 55%)}
+#landing a{color:inherit;text-decoration:none}
+#landing a:focus-visible{outline:2px solid #b6f36e;outline-offset:6px}
+.home-nav{max-width:1240px;margin:auto;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff15}
+.home-brand{font:800 24px Manrope,sans-serif;letter-spacing:-1px;display:flex;gap:10px;align-items:center}
+.home-brand span{color:#b6f36e;font-size:32px}
+.home-nav-links{display:flex;gap:26px;font-size:12px;color:#b4beb1;align-items:center}
+#landing .home-nav-cta{padding:12px 18px;border:1px solid #b6f36e66;border-radius:7px;color:#d9f6bc}
+.home-hero{max-width:1240px;margin:auto;padding:80px 36px 70px;display:grid;grid-template-columns:1fr 1fr;gap:55px;align-items:center}
+.home-kicker{display:flex;align-items:center;gap:9px;font-size:10px;letter-spacing:2px;color:#b6f36e;font-weight:700}
+.home-kicker:before{content:'';width:6px;height:6px;border-radius:50%;background:#b6f36e}
+#landing h1{font:800 clamp(46px,5.3vw,76px)/1.04 Manrope,sans-serif;letter-spacing:-4px;margin:24px 0}
+#landing h1 em{font-style:normal;color:#b6f36e}
+.home-description{font-size:16px;color:#a7b0a4;line-height:1.8;max-width:450px}
+.home-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+#landing .home-button{display:inline-flex;align-items:center;justify-content:space-between;gap:24px;border:1px solid #ffffff26;padding:16px 20px;border-radius:7px;font-size:13px;font-weight:700;background:#1b201a;transition:transform .2s,background .2s}
+#landing .home-button:hover{transform:translateY(-2px);background:#2b3525}
+#landing .home-button.primary{background:#b6f36e;color:#1c2913;border-color:#b6f36e}
+.home-note{font-size:11px;color:#7d8978;line-height:1.8;margin-top:20px}
+.home-preview{border:1px solid #ffffff24;border-radius:14px;overflow:hidden;background:#1b201b;box-shadow:0 35px 100px #0006;transform:rotate(-2deg)}
+.preview-top{display:flex;justify-content:space-between;font:10px monospace;padding:15px 18px;border-bottom:1px solid #ffffff14;color:#96a08f}
+.preview-top i{font-style:normal;color:#b6f36e}
+.preview-scene{height:300px;position:relative;background:#dfe7d7;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#1d2b19}
+.preview-scene:before{content:'';position:absolute;inset:0;background:linear-gradient(#293d1c12 1px,transparent 1px),linear-gradient(90deg,#293d1c12 1px,transparent 1px);background-size:28px 28px}
+.preview-orbit{position:absolute;width:240px;height:240px;border-radius:50%;border:1px solid #4b623b55}
+.preview-orbit:before{content:'';position:absolute;inset:23px;border:1px solid #4b623b33;border-radius:50%}
+.preview-shape{position:absolute;right:20%;top:35px;width:56px;height:56px;background:#8cbc58;border-radius:14px;transform:rotate(20deg);animation:float-shape 7s ease-in-out infinite}
+.preview-word{z-index:1;font:800 62px/.92 Manrope,sans-serif;letter-spacing:-4px;text-align:center;transform:rotate(2deg)}
+.preview-word span{display:block;font-size:13px;letter-spacing:8px;margin:15px 0}
+.preview-badge{position:absolute;bottom:17px;left:18px;font:10px monospace;color:#536349;letter-spacing:1px}
+.preview-timeline{padding:17px 18px 22px;position:relative;background:#191e18}
+.preview-ruler{display:flex;justify-content:space-between;color:#73816c;font:9px monospace;margin-left:63px;margin-bottom:13px}
+.preview-row{display:flex;align-items:center;gap:14px;font-size:9px;color:#8f9a89;margin-top:9px}
+.preview-row>span{width:50px}
+.preview-track{height:18px;flex:1;background:#a6ce7820;border:1px solid #a6ce7838;border-radius:3px;position:relative}
+.preview-track b{position:absolute;top:5px;width:6px;height:6px;background:#b6f36e;transform:rotate(45deg);left:8%}
+.preview-track b:nth-child(2){left:53%}.preview-track b:nth-child(3){left:90%}
+.preview-playhead{position:absolute;top:35px;bottom:12px;width:1px;background:#e1ffc2;left:66%;animation:playhead 8s ease-in-out infinite}
+.home-workflows{max-width:1168px;margin:0 auto;padding:50px 0 70px;border-top:1px solid #ffffff16}
+.home-section-heading{display:flex;justify-content:space-between;gap:20px;align-items:baseline;margin-bottom:28px}
+#landing h2{font:700 27px Manrope,sans-serif;letter-spacing:-1px;margin:0}
+.home-section-heading>span{color:#84917e;font-size:12px}
+.home-studios{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.home-studio{padding:30px;border:1px solid #ffffff1c;border-radius:10px;background:#1a20186e;display:block;transition:border-color .2s}
+.home-studio:hover{border-color:#b6f36e88}
+.studio-number{font:11px monospace;letter-spacing:1px;color:#9aaf8b}
+#landing h3{font:700 23px Manrope,sans-serif;margin:20px 0 12px}
+.home-studio p{font-size:13px;color:#9da995;line-height:1.8;max-width:410px;margin:0}
+.studio-link{display:block;margin-top:25px;color:#b6f36e;font-size:12px;font-weight:700}
+.home-steps{display:flex;gap:30px;margin-top:34px;color:#929e8b;font-size:12px;line-height:1.8}
+.home-steps b{color:#d7e3cd;margin-right:7px;font-weight:500}
+.home-footer{max-width:1168px;margin:auto;padding:25px 0 30px;border-top:1px solid #ffffff16;color:#697761;font-size:11px;display:flex;justify-content:space-between;gap:20px}
+@keyframes float-shape{50%{transform:translate(-24px,18px) rotate(65deg)}}
+@keyframes playhead{50%{left:35%}}
+@media(prefers-reduced-motion:reduce){.preview-shape,.preview-playhead{animation:none}}
+@media(max-width:900px){.home-hero{grid-template-columns:1fr;padding-top:48px;gap:45px}.home-preview{max-width:650px;width:100%;margin:auto;transform:none}.home-workflows,.home-footer{margin:0 36px}.home-hero h1{max-width:650px}.home-description{max-width:550px}.home-nav-links>a:first-child{display:none}}
+@media(max-width:560px){.home-nav{padding:20px}.home-nav-links{gap:12px;font-size:11px}.home-brand{font-size:21px}.home-hero{padding:45px 20px}#landing h1{letter-spacing:-2.5px}.home-workflows,.home-footer{margin:0 20px}.home-section-heading{display:block}.home-section-heading>span{display:block;margin-top:12px}.home-studios{grid-template-columns:1fr}.home-steps{flex-direction:column;gap:10px}.home-footer{flex-direction:column;gap:8px}.preview-scene{height:260px}.home-studio{padding:24px}.home-nav-cta{padding:10px!important}}
+</style>
+<section id="landing" aria-label="FrameFlow home">
+  <nav class="home-nav" aria-label="Main navigation"><a class="home-brand" href="#home"><span aria-hidden="true">◈</span>FrameFlow</a><div class="home-nav-links"><a href="#studios">Explore studios</a><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer" aria-label="Buy me a coffee on SupportKori">☕ Buy me a coffee ↗</a><a class="home-nav-cta" href="#motion">Open editor ↗</a></div></nav>
+  <div class="home-hero">
+    <div><div class="home-kicker">YOUR IDEAS. IN MOTION.</div><h1>Make every<br>frame <em>count.</em></h1><p class="home-description">Turn a simple idea into moving type, animated shapes, or a journey across the map. Create it all, one frame at a time.</p><div class="home-actions"><a class="home-button primary" href="#motion">Motion Studio <span>↗</span></a><a class="home-button" href="#map">Map Studio <span>↗</span></a></div><p class="home-note">Works in your browser · No account needed<br>Projects save locally. Download a project file to keep a backup.</p></div>
+    <div class="home-preview" role="img" aria-label="Illustration of an animated title with a three-layer keyframe timeline"><div class="preview-top"><span>COMPOSITION / MAKE YOUR MOVE</span><i>● 30 FPS</i></div><div class="preview-scene"><div class="preview-orbit"></div><div class="preview-shape"></div><div class="preview-word">MAKE<span>YOUR</span>MOVE.</div><span class="preview-badge">A LITTLE MOVEMENT. A BIG IMPRESSION.</span></div><div class="preview-timeline"><div class="preview-ruler"><span>000</span><span>030</span><span>060</span><span>090</span><span>120</span></div><div class="preview-row"><span>Headline</span><div class="preview-track"><b></b><b></b><b></b></div></div><div class="preview-row"><span>Shape</span><div class="preview-track"><b></b><b></b></div></div><div class="preview-row"><span>Backdrop</span><div class="preview-track"><b></b></div></div><div class="preview-playhead"></div></div></div>
+  </div>
+  <section class="home-workflows" id="studios"><div class="home-section-heading"><h2>Two studios. Endless directions.</h2><span>Choose where your story starts.</span></div><div class="home-studios"><a class="home-studio" href="#motion"><span class="studio-number">01 / MOTION DESIGN</span><h3>Give your ideas a rhythm.</h3><p>Layer text, shapes, and images. Set keyframes, adjust easing, and build your animation on a frame-based timeline.</p><span class="studio-link">Open Motion Studio ↗</span></a><a class="home-studio" href="#map"><span class="studio-number">02 / MAP ANIMATION</span><h3>Take your story somewhere.</h3><p>Trace routes, highlight countries, and fly between places. Add camera moves, map styles, and textures, then export your journey.</p><span class="studio-link">Open Map Studio ↗</span></a></div><div class="home-steps"><span><b>01</b>Start with a demo or empty project.</span><span><b>02</b>Shape the motion on your timeline.</span><span><b>03</b>Export a video or a PNG frame.</span></div></section>
+  <div class="home-footer"><span>◈ FrameFlow — a space for things that move.</span><span><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a></span></div>
+</section>
+
+<header><a class="brand" id="homeLink" href="#home" title="Back to home" aria-label="FrameFlow home"><span class="logo">◈</span> FrameFlow <small>MOTION STUDIO</small></a><nav class="modes" aria-label="Studio mode"><button data-mode="motion" class="on">Motion</button><button data-mode="map">Map Studio</button></nav><input id="projectName" class="motion-only" aria-label="Project name" value="Make your move"><span id="saveState" class="muted motion-only">Saved locally</span><button id="undo" class="motion-only" title="Undo (Ctrl Z)">↶</button><button id="redo" class="motion-only" title="Redo (Ctrl Shift Z)">↷</button><button id="open" class="motion-only">Open</button><button id="save" class="motion-only">Save project</button><button id="export" class="primary motion-only">Export video ↗</button><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer" title="Buy me a coffee on SupportKori" aria-label="Buy me a coffee on SupportKori"><span class="support-icon">☕</span> Buy me a coffee</a><input id="mProjectName" class="map-only" aria-label="Map project name" value="Untitled map"><span id="mSaveState" class="muted map-only">Saved locally</span><button id="mUndo" class="map-only" title="Undo (Ctrl Z)">↶</button><button id="mRedo" class="map-only" title="Redo (Ctrl Shift Z)">↷</button><button id="mOpen" class="map-only">Open</button><button id="mSave" class="map-only">Save project</button><button id="mExport" class="map-only primary">Export video ↗</button></header>
+<div class="workspace motion-only"><aside class="left"><div class="section-title">CREATE <span>＋</span></div><div class="add-grid"><button data-add="text"><b>T</b>Text</button><button data-add="rect"><b>▢</b>Rectangle</button><button data-add="circle"><b>○</b>Ellipse</button><button id="image"><b>▧</b>Image</button></div><div class="section-title">LAYERS <span id="layerCount"></span></div><div id="layers"></div><div class="layer-actions"><button id="duplicate" title="Duplicate layer">Duplicate</button><button id="delete" title="Delete layer">Delete</button><button id="up" title="Move forward">↑</button><button id="down" title="Move backward">↓</button></div><div class="starter"><span class="eyebrow">START SOMETHING</span><h3>A little movement.<br>A big impression.</h3><p>Start with this composition, or make it entirely yours.</p><button id="new">＋ Empty composition</button><button id="demo">↻ Load demo</button></div><button id="help" class="help">⌘ Shortcuts & quick guide</button></aside>
+<main><div class="stagebar"><span><i class="dot"></i> Composition <b id="compLabel">1280 × 720</b></span><div><button id="grid" title="Toggle grid">▦ Grid</button><button id="snapshot">PNG ↓</button><div class="canvas-zoom"><button id="canvasZoomOut" title="Zoom out">−</button><span id="canvasZoomLabel">Fit</span><button id="canvasZoomIn" title="Zoom in">+</button><button id="canvasZoom100">100%</button><button id="canvasZoomFit">Fit all</button><button id="motionFullscreen" type="button" title="Show composition fullscreen (F)">⛶ Fullscreen</button></div></div></div><div class="stage-area"><div class="canvas-wrap"><canvas id="canvas" width="1280" height="720" aria-label="Composition canvas"></canvas></div><div class="stage-hint">Drag a layer to move it · Use ◆ to animate a property</div></div><div class="transport"><span class="time" id="timecode">00:00:00</span><div class="play-controls"><button id="start" title="First frame">|◀</button><button id="prev" title="Previous frame">‹</button><button id="play" class="play" title="Play / pause (Space)">▶</button><button id="next" title="Next frame">›</button><button id="end" title="Last frame">▶|</button><button id="loop" class="active" title="Loop playback">↻</button></div><label>TIME (s) <input id="frame" type="number" min="0" step="0.001" value="0"></label></div></main>
+<aside class="right"><div class="tabs"><b>Properties</b><span>COMPOSITION</span></div><div id="inspector"></div><div class="composition"><div class="section-title">COMPOSITION</div><label>Canvas <select id="size"><option value="1280,720">Landscape · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="1080,1920">Portrait · 1080 × 1920</option><option value="1080,1080">Square · 1080 × 1080</option></select></label><div class="two"><label>Frame rate<select id="fps"><option>24</option><option selected>30</option><option>60</option></select></label><label>Duration (seconds)<input id="duration" type="number" value="6" min="0.034" max="75" step="0.001"></label></div><label class="color-row">Background<input id="background" type="color" value="#e7e9e1"></label></div></aside></div>
+<section class="timeline motion-only"><div class="timeline-head"><div><b>Timeline</b><span class="pill" id="fpsLabel">30 FPS</span></div><div class="timeline-tools"><button id="keyAll">◇ Key transform</button><label class="auto"><input id="autoKey" type="checkbox" checked> Auto-key</label><label>Zoom <input id="zoom" type="range" min="1" max="4" step=".25" value="1"></label></div></div><div class="timeline-body"><div class="timeline-labels"><div class="ruler-label">LAYER <span>SECONDS →</span></div><div id="trackLabels"></div></div><div class="tracks-scroll" id="scroll"><div id="tracks"><div id="ruler"></div><div id="trackRows"></div><div id="playhead"><span></span></div></div></div></div><footer><span><i class="dot"></i> <span id="status">Ready to make a move</span></span><span>Space Play / pause <em>·</em> ← → Step frame <em>·</em> K Key transform</span></footer></section>
+
+<div id="mapStudio">
+<div class="workspace">
+<aside class="left">
+<div class="section-title">ANIMATE <span>＋</span></div><div class="add-grid" id="mAddGrid"></div>
+<div class="section-title">CAMERA PRESETS <span>▣</span></div><div class="m-presets" id="mPresets"></div>
+<div class="section-title">TIMELINE ITEMS <span id="mItemCount"></span></div><div id="mItems"></div>
+<div class="layer-actions"><button id="mDuplicate" title="Duplicate item">Duplicate</button><button id="mDelete" title="Delete item">Delete</button></div>
+<div class="starter m-starter"><button id="mNew">＋ Empty map</button><button id="mDemo">↻ Load demo</button></div>
+<button id="mHelp" class="help">⌘ Quick guide</button>
+</aside>
+<main>
+<div class="stagebar"><span><i class="dot"></i> Map <b id="mCompLabel">1280 × 720</b></span><div><button id="mGraticule" title="Toggle grid lines">▦ Grid lines</button><button id="mSnapshot">PNG ↓</button><button id="mapFullscreen" type="button" title="Show map fullscreen (F)">⛶ Fullscreen</button></div></div>
+<div class="stage-area"><div class="canvas-wrap"><canvas id="mCanvas" width="1280" height="720" aria-label="Map canvas"></canvas></div><div class="stage-hint" id="mHint"></div></div>
+<div class="transport"><span class="time" id="mTimecode">00:00:00</span><div class="play-controls"><button id="mStart" title="First frame">|◀</button><button id="mPrev" title="Previous frame">‹</button><button id="mPlay" class="play" title="Play / pause (Space)">▶</button><button id="mNext" title="Next frame">›</button><button id="mEnd" title="Last frame">▶|</button><button id="mLoop" class="active" title="Loop playback">↻</button></div><label>FRAME <input id="mFrame" type="number" min="0" value="0"></label></div>
+</main>
+<aside class="right">
+<div class="tabs"><b id="mInspTitle">Properties</b><span>MAP</span></div>
+<div id="mInspector"></div>
+<div class="composition"><div class="section-title">MAP SETTINGS</div>
+<label>Map style <select id="mTheme"></select></label>
+<label class="m-chk"><input type="checkbox" id="mGrat"> Grid lines</label>
+<label>Start view <select id="mRegion"></select></label>
+<div class="two"><label>Zoom<input id="mStartZoom" type="number" min="0" max="12" step=".1"></label><label>Tilt<input id="mStartPitch" type="number" min="0" max="70"></label></div>
+<label>Rotation<input id="mStartBearing" type="number" min="-180" max="180" step="5"></label>
+<label>Canvas <select id="mSize"><option value="1280,720">Landscape · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="1080,1920">Portrait · 1080 × 1920</option><option value="1080,1080">Square · 1080 × 1080</option></select></label>
+<div class="two"><label>Frame rate<select id="mFps"><option>24</option><option selected>30</option><option>60</option></select></label><label>Total frames<input id="mDuration" type="number" value="240" min="2" max="1800"></label></div>
+</div>
+</aside>
+</div>
+<section class="timeline">
+<div class="timeline-head"><div><b>Map timeline</b><span class="pill" id="mFpsLabel">30 FPS</span></div><div class="timeline-tools"><label>Zoom <input id="mZoomT" type="range" min="1" max="4" step=".25" value="1"></label></div></div>
+<div class="timeline-body"><div class="timeline-labels"><div class="ruler-label">ITEM <span>SECONDS →</span></div><div id="mTrackLabels"></div></div><div class="tracks-scroll" id="mScroll"><div class="m-tracks" id="mTracks"><div class="m-ruler" id="mRuler"></div><div id="mTrackRows"></div><div class="m-playhead" id="mPlayhead"><span></span></div></div></div></div>
+<footer><span><i class="dot"></i> <span id="mStatus">Ready to map</span></span><span>Space Play / pause <em>·</em> ← → Step frame <em>·</em> Drag bars to retime</span></footer>
+</section>
+<datalist id="mDlBorder"></datalist><datalist id="mDlCountry"></datalist><datalist id="mDlPlace"></datalist><datalist id="mDlAny"></datalist>
+<input hidden type="file" id="mProjectFile" accept="application/json,.json">
+<dialog id="mModal"><div id="mModalBody"></div><button id="mCloseModal">Close</button></dialog>
+</div>
+<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="app.js"></script><script type="module" src="map-ui.js"></script><script type="module">
+// Protect interface text, while preserving normal editing and clipboard use in fields.
+const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
+for (const name of ['copy', 'cut', 'selectstart']) {
+  document.addEventListener(name, event => {
+    if (!editable(event.target)) event.preventDefault();
+  }, true);
+}
+window.addEventListener('keydown', event => {
+  if (!editable(event.target) && (event.ctrlKey || event.metaKey) && ['a', 'c', 'x'].includes(event.key.toLowerCase())) event.preventDefault();
+  // Editor shortcuts must not run while the visitor is on the landing page.
+  if (document.body.classList.contains('landing')) event.stopImmediatePropagation();
+}, true);
+
+function routeStudio() {
+  const mode = location.hash.slice(1);
+  const studio = mode === 'motion' || mode === 'map';
+  for (const id of ['play', 'mPlay']) {
+    const button = document.getElementById(id);
+    if (button?.textContent.trim() === 'Ⅱ') button.click();
+  }
+  document.body.classList.toggle('landing', !studio);
+  if (studio) {
+    document.querySelector(`.modes [data-mode="${mode}"]`).click();
+    document.title = mode === 'map' ? 'FrameFlow — Map Studio' : 'FrameFlow — Motion Studio';
+    document.getElementById('homeLink').focus({ preventScroll: true });
+    window.dispatchEvent(new Event('resize'));
+  } else {
+    document.title = 'FrameFlow — Make every frame count';
+    if (mode !== 'studios') window.scrollTo(0, 0);
+    else document.getElementById('studios').scrollIntoView();
+  }
+}
+window.addEventListener('hashchange', routeStudio);
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.modes [data-mode]').forEach(button => {
+    button.addEventListener('click', () => {
+      const hash = '#' + button.dataset.mode;
+      if (location.hash !== hash) history.replaceState(null, '', hash);
+    });
+  });
+  routeStudio();
+}, { once: true });
+
+</script>
+<style>
+/* Shared preset palette for every color input in Motion and Map Studio. */
+.ff-color-presets{margin:0 0 15px;padding:9px 10px 10px;border:1px solid #343b37;border-radius:8px;background:#1d2321}
+.ff-color-preset-heading{color:#a9b4a9;font-size:10px;font-weight:700;letter-spacing:.4px;margin:0 0 7px}
+.ff-color-preset-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.ff-color-swatch{appearance:none;-webkit-appearance:none;width:100%;height:22px;min-width:0;padding:0;border:1px solid #ffffff33;border-radius:5px;cursor:pointer;background:var(--swatch)!important;position:relative;box-shadow:inset 0 0 0 1px #00000012;transition:transform .12s,border-color .12s}
+.ff-color-swatch:hover{transform:scale(1.1);border-color:#fff9;z-index:1}
+.ff-color-swatch[aria-pressed="true"]{outline:2px solid #b6f36e;outline-offset:2px;border-color:#121a14}
+.ff-color-swatch:focus-visible{outline:2px solid #b6f36e;outline-offset:2px}
+</style>
+<script>
+/* Compatible with the editor's own input/change handlers and dynamically rebuilt inspectors. */
+(()=>{
+  const colors = [
+    ['White','#ffffff'],['Ivory','#f6f2e7'],['Light gray','#d1d5db'],['Slate','#64748b'],
+    ['Charcoal','#262c32'],['Black','#101418'],['Cream','#f4dfb6'],['Peach','#ffbcaa'],
+    ['Coral','#ff7069'],['Red','#ef4444'],['Orange','#ff963d'],['Golden yellow','#f6cd4a'],
+    ['Lime','#b6f36e'],['Green','#44b77b'],['Teal','#28b9ad'],['Sky','#62c8f5'],
+    ['Blue','#4b87ee'],['Indigo','#6366f1'],['Violet','#a78bfa'],['Pink','#f18bc3'],
+    ['Mint pastel','#bfe8d2'],['Lilac pastel','#decaf7'],['Earth brown','#947052'],['Deep navy','#142940']
+  ];
+  const escColor = value => /^#[0-9a-f]{6}$/i.test(value||'')?value.toLowerCase():null;
+  const makePalette = input => {
+    const holder=input.closest('label');
+    if(!holder||holder.nextElementSibling?.classList.contains('ff-color-presets'))return;
+    const outer=document.createElement('div');outer.className='ff-color-presets';
+    outer.dataset.forColor=input.id||input.dataset.mf||'color';
+    const heading=document.createElement('div');heading.className='ff-color-preset-heading';heading.textContent='QUICK COLORS';
+    const grid=document.createElement('div');grid.className='ff-color-preset-grid';
+    for(const [name,hex] of colors){
+      const btn=document.createElement('button');btn.type='button';btn.className='ff-color-swatch';
+      btn.style.setProperty('--swatch',hex);btn.dataset.hex=hex;btn.title=`${name} (${hex})`;
+      btn.setAttribute('aria-label',`${name}, ${hex}`);
+      btn.setAttribute('aria-pressed',String(escColor(input.value)===hex));
+      btn.addEventListener('click',()=>{
+        if(input.disabled)return;
+        if(escColor(input.value)!==hex){
+          input.value=hex;
+          input.dispatchEvent(new Event('input',{bubbles:true}));
+          input.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+        sync();
+      });
+      grid.appendChild(btn);
+    }
+    outer.append(heading,grid);holder.after(outer);
+    const sync=()=>{const val=escColor(input.value);for(const btn of grid.children)btn.setAttribute('aria-pressed',String(btn.dataset.hex===val));outer.style.opacity=input.disabled?'.48':'1'};
+    input.addEventListener('input',sync);input.addEventListener('change',sync);sync();
+  };
+  let scheduled=false;
+  const scan=()=>{scheduled=false;document.querySelectorAll('input[type="color"]').forEach(makePalette)};
+  const observer=new MutationObserver(()=>{if(!scheduled){scheduled=true;queueMicrotask(scan)}});
+  const start=()=>{scan();observer.observe(document.body,{childList:true,subtree:true})};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+})();
+</script>
+</body></html>

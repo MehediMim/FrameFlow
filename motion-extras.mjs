@@ -68,13 +68,15 @@ export function tableProgress(table, row, rows, elapsed) {
   const t = clamp((elapsed - row*stagger)/(duration*(rows > 1 ? .35 : 1)),0,1);
   return 1-(1-t)**3;
 }
+let tableFont = '"Arial", sans-serif';
 function cellText(ctx, text, x, y, width, fontSize, color, bold = false) {
-  ctx.font = `${bold ? 700 : 400} ${fontSize}px Arial, sans-serif`;ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font = `${bold ? 700 : 400} ${fontSize}px ${tableFont}`;ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
   let value=String(text);
   if(ctx.measureText(value).width>width){while(value.length&&ctx.measureText(value+'…').width>width)value=value.slice(0,-1);value+='…';}
   ctx.fillText(value,x,y,Math.max(1,width));
 }
 export function drawTable(ctx, layer, frame) {
+  tableFont = `"${String(layer.table?.fontFamily || 'Arial').replace(/["'\\\\;{}<>\r\n]/g, '').slice(0, 60) || 'Arial'}", sans-serif`;
   const t=layer.table, W=Math.max(1,layer.w),H=Math.max(1,layer.h),u=Math.min(W/900,H/420);
   const colors=t.theme==='dark'?{bg:'#15251f',alt:'#1d3028',text:'#e8f1e4',muted:'#a8bba4',head:'#304638',headText:'#f0f7e9',line:'#3b5141'}:{bg:'#f5f7f1',alt:'#e9eee3',text:'#243324',muted:'#61735a',head:t.theme==='accent'?layer.color:'#d9e3cf',headText:'#182518',line:'#cad5c0'};
   const pad=Math.max(4,18*u),top=(t.title?52*u:0)+(t.info?28*u:0),rowH=(H-top)/t.data.length,colW=W/t.data[0].length;

@@ -135,3 +135,14 @@ html, body, * {
 .ff-audio input[type=range]{width:65px}
 .ff-export-note{font-size:11px;color:#a2adb1}
 #modal .support-link,#mModal .support-link{margin:10px 0;display:inline-flex}
+
+/* Dialog composition settings and chart editor; same modal model as export. */
+#motionSettingsPanel,#chartEditorDialog{position:fixed;inset:0;margin:auto;width:min(500px,calc(100vw - 32px));max-height:min(80vh,780px);overflow:auto;border:1px solid #4c5650;border-radius:13px;background:#1c2023;color:#e9ecef;padding:25px;box-shadow:0 32px 95px #000a;z-index:200;}
+#chartEditorDialog{width:min(580px,calc(100vw - 32px));}
+#motionSettingsPanel::backdrop,#chartEditorDialog::backdrop{background:rgba(0,0,0,.76);backdrop-filter:blur(4px);}
+#motionSettingsPanel .section-title,#chartEditorDialog>.section-title{align-items:center;font-size:12px;margin-bottom:20px;}
+#motionSettingsClose,#chartEditorClose{margin-left:auto;padding:5px 10px;font-size:16px;}
+#chartEditorDialog #chartEditorFields{padding:0 4px;}
+#chartEditorDialog textarea{min-height:150px;font-family:ui-monospace,Consolas,monospace;}
+#chartEditorDialog label{margin-bottom:13px;}
+#motionSettingsButton{font-weight:700;}

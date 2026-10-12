@@ -23,6 +23,7 @@ export const THEMES = {
   earth: { label: 'Earth vector', void: '#0b1620', ocean: '#a8d5ee', land: ['#e3ebc6', '#dbe7bc', '#e8e8c8', '#d8e5c3', '#e5e1c1'], border: '#ffffff', borderA: .9, bw: 1.1, grat: '#ffffff', gratA: .28, dim: '#06121c', vignette: .16, pill: 'rgba(12,28,40,.9)', pillText: '#ffffff' },
   dark: { label: 'Night', void: '#03060a', ocean: '#0c1a28', land: ['#1a2a3a', '#1d2e3f', '#182736', '#1b2c3b', '#203243'], border: '#3d5b75', borderA: .95, bw: 1, grat: '#6f9bbd', gratA: .12, dim: '#000000', vignette: .35, pill: 'rgba(235,242,248,.92)', pillText: '#0b1620' },
   paper: { label: 'Paper atlas', void: '#d9cfb8', ocean: '#f3eddf', land: ['#e2d6bb', '#dccfb1', '#e5dac1', '#d9ccae', '#e0d3b8'], border: '#faf5e8', borderA: .95, bw: 1.2, grat: '#b9a98a', gratA: .35, dim: '#2a2113', vignette: .1, pill: 'rgba(52,40,22,.9)', pillText: '#fbf4e2' },
+  realistic: { label: 'Natural terrain · realistic', void: '#071b27', ocean: '#246b87', land: ['#6c8c58', '#7f8e63', '#9a9577', '#7a9167', '#ad9f7e'], border: '#385d51', borderA: .35, bw: .65, grat: '#c8e5de', gratA: .10, dim: '#0a1d26', vignette: .18, pill: 'rgba(9,32,30,.9)', pillText: '#f4f5e8' },
   blueprint: { label: 'Blueprint', void: '#071a3d', ocean: '#0f2f66', land: ['#1b4b9b', '#1d4fa3', '#1a4794', '#1e53aa', '#1c4d9e'], border: '#8fb8ff', borderA: .85, bw: 1, grat: '#8fb8ff', gratA: .2, dim: '#020b1d', vignette: .25, pill: 'rgba(255,255,255,.92)', pillText: '#0a2250' },
 };
 
@@ -502,12 +503,50 @@ function headDot(ctx, x, y, r, color, alpha) {
   ctx.globalAlpha = alpha; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, r * .8, 0, Math.PI * 2); ctx.fill(); ctx.restore();
 }
 
+// Realistic terrain without animated/noisy texture.
+// Instead of overlaying grain, we create terrain-like variation from per-country
+// gradients and deterministic color shifts. This keeps the map clean while still
+// looking more physical and topographic.
+const rgbHex = hex => ({ r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) });
+const mixColor = (a, b, t) => {
+  const A = rgbHex(a), B = rgbHex(b), m = (x, y) => Math.round(x + (y - x) * clamp(t, 0, 1));
+  return `rgb(${m(A.r, B.r)}, ${m(A.g, B.g)}, ${m(A.b, B.b)})`;
+};
+const hash01 = (x, y, z = 0) => {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453123;
+  return s - Math.floor(s);
+};
+function terrainLandStyle(ctx, v, f, k, th) {
+  const base = th.land[f.tint] || th.land[0] || '#7b8f66';
+  const lat = Math.abs(f.center?.lat || 0) / 90;
+  const seed = hash01(f.cx || 0, f.cy || 0, f.tint || 0);
+  const verdant = mixColor(base, '#6f9457', .16 * (1 - lat) + .08 * seed);
+  const dry = mixColor(base, '#aa9b72', .14 * lat + .08 * (1 - seed));
+  const peak = mixColor(base, '#d1c4a1', .22 + .08 * seed);
+  const shade = mixColor(base, '#4d6841', .26 + .10 * (1 - seed));
+  const b = f.mainBox || f.bbox;
+  const p0 = project(v, b[0] + k, b[1]);
+  const p1 = project(v, b[2] + k, b[3]);
+  if (![p0.x, p0.y, p1.x, p1.y].every(Number.isFinite)) return base;
+  const g = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+  g.addColorStop(0, peak);
+  g.addColorStop(.28, verdant);
+  g.addColorStop(.62, dry);
+  g.addColorStop(1, shade);
+  return g;
+}
+function naturalWater(ctx,v) {
+  const g=ctx.createLinearGradient(0,0,0,v.H);
+  g.addColorStop(0,'#174b68');g.addColorStop(.5,'#2b7991');g.addColorStop(1,'#0a354b');
+  ctx.save(); ctx.globalAlpha=.52; ctx.fillStyle=g; ctx.fillRect(0,0,v.W,v.H);ctx.restore();
+}
 // ---------------------------------------------------------------- Base map
 function drawBase(ctx, v, geo, th, proj) {
   ctx.fillStyle = th.void; ctx.fillRect(0, 0, v.W, v.H);
   const k0 = Math.round(v.cx);
   ctx.beginPath(); loadXY(v, new Float64Array([k0 - 4, 0, k0 + 5, 0, k0 + 5, 1, k0 - 4, 1]), 4, 0); emit(ctx, v, 4, true);
   ctx.fillStyle = th.ocean; ctx.fill();
+  if (proj.theme === 'realistic') naturalWater(ctx, v);
   if (proj.graticule) {
     ctx.beginPath();
     for (let i = -48; i <= 60; i++) { const X = k0 + i / 12; if (Math.abs(X - v.cx) > 3) continue; loadXY(v, new Float64Array([X, 0, X, 1]), 2, 0); emit(ctx, v, 2, false); }
@@ -520,7 +559,8 @@ function drawBase(ctx, v, geo, th, proj) {
     if (!bboxVisible(v, f.bbox, k)) continue;
     ctx.beginPath();
     for (const r of f.rings) { loadXY(v, r.xy, r.n, k); emit(ctx, v, r.n, true); }
-    ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd');
+    ctx.fillStyle = proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint];
+    ctx.fill('evenodd');
     ctx.globalAlpha = th.borderA; ctx.stroke(); ctx.globalAlpha = 1;
   }
 }

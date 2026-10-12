@@ -51,6 +51,12 @@ On Windows, you can use `py -m http.server 8000` if `python` is unavailable. Ope
 | `style.css` | Layout, colors, and typography |
 | `app.js` | Canvas renderer, editing interactions, playback, local saving, import/export |
 | `engine.mjs` | Keyframe interpolation, easing, and project validation |
+| `map-ui.js` | Map Studio editor: animations, camera presets, timeline, export |
+| `map-engine.mjs` | Map Studio engine: vector map, camera, plane/border/highlight/pin drawing |
+| `map-places.mjs` | Built-in city list and start-view regions |
+| `map-data/` | Natural Earth country outlines (via world-atlas, public domain) |
+| `map.css` | Map Studio styles |
+| `tests/` | `npm test` checks the map engine |
 | `.nojekyll` | Serves the repository as a static site without Jekyll processing |
 | `package.json` | Optional JavaScript syntax check; no dependencies |
 
@@ -66,6 +72,25 @@ On Windows, you can use `py -m http.server 8000` if `python` is unavailable. Ope
 Drag timeline diamonds to retime all property keys on that layer at that frame. Alt-click a diamond to delete them. Property diamonds add or remove an individual property's key.
 
 Supported animated properties: position X/Y, scale, rotation, opacity, and shape/image width and height. Text content and fill color are static per layer.
+
+## Map Studio
+
+Switch to **Map Studio** with the toggle in the header. It animates a vector world map (the default Earth look; other styles: Night, Paper atlas, Blueprint).
+
+**Animations** (added at the playhead):
+
+- **Border**: draws a country outline (with glow and optional fill), or sweeps every border across the world.
+- **Plane**: flies a plane along a great-circle route from one place to another, with a trail and optional place names.
+- **Highlight**: lights up a country (optionally dimming the rest) or a place with a radius and pulse.
+- **Pin**: drops a pin on a location with ripples and a label.
+
+**Camera presets** move the camera for you: Fly to, Cinematic swoop, Back to world, Push in, Pull back, Orbit, Tilt, Pan to, Frame flight, Follow plane. Tilt and rotation give a 3D viewing angle.
+
+**Choosing places**: type a city or country, type `lat, lon`, or press the target button and click the map (Shift+click picks a whole country for camera targets).
+
+Drag bars on the map timeline to retime them; drag their edges to change length. Projects save as `.framemap.json`. Export uses the same real-time WebM/MP4 recorder as Motion mode.
+
+The map data files are loaded with `fetch`, so serve the folder over http (same as the module imports).
 
 ## Shortcuts
 

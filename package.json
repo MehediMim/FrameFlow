@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Frame based browser motion graphics editor",
   "scripts": {
-    "check": "node --check app.js && node --check engine.mjs"
+    "test": "node tests/map-engine.test.mjs",
+    "check": "node --check app.js && node --check engine.mjs && node --check map-engine.mjs && node --check map-ui.js && node --check map-places.mjs"
   }
 }

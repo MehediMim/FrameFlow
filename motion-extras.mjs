@@ -3,7 +3,7 @@ export const BACKGROUND_STYLES = { none: 'Solid color', grid: 'Drifting grid', d
 export const DEFAULT_BACKGROUND = { style: 'none', animated: true, speed: 1, spacing: 64, opacity: .25, color: '#6b9250' };
 export const TABLE_THEMES = { light: 'Clean light', dark: 'Midnight', accent: 'Accent header' };
 export const TABLE_ANIMATIONS = { rows: 'Rows slide in', fade: 'Rows fade in', wipe: 'Reveal across', none: 'No reveal' };
-export const DEFAULT_TABLE = { title: 'Project overview', info: 'Weekly progress · October', data: [['Task', 'Owner', 'Status'], ['Research', 'Mim', 'Complete'], ['Design', 'Abir', 'In progress'], ['Review', 'Team', 'Next']], theme: 'dark', animation: 'rows', duration: 60, fontSize: 26 };
+export const DEFAULT_TABLE = { title: 'Project overview', info: 'Weekly progress · October', data: [['Task', 'Owner', 'Status'], ['Research', 'Mim', 'Complete'], ['Design', 'Abir', 'In progress'], ['Review', 'Team', 'Next']], theme: 'dark', animation: 'rows', duration: 60, fontSize: 26, titleFontSize:30,infoFontSize:16,headerFontSize:26,titleWeight:700,infoWeight:400,headerWeight:700 };
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 export function parseTable(text) {
   const lines = text.trim().split(/\r?\n/).filter(line => line.trim());
@@ -23,7 +23,7 @@ export function validateExtras(project) {
     if (!t || typeof t.title !== 'string' || t.title.length > 160 || typeof t.info !== 'string' || t.info.length > 240 || !Object.hasOwn(TABLE_THEMES, t.theme) || !Object.hasOwn(TABLE_ANIMATIONS, t.animation) || !Number.isInteger(t.duration) || !number(t.duration, 1, 1800) || !number(t.fontSize, 8, 100) || !Array.isArray(t.data) || !t.data.length || t.data.length > 31) throw Error('Invalid table settings.');
     const n = t.data[0]?.length;
     if (!n || n > 8 || t.data.some(row => !Array.isArray(row) || row.length !== n || row.some(cell => typeof cell !== 'string' || cell.length > 160))) throw Error('Invalid table data.');
-    if (!color(layer.color)) throw Error('Invalid table accent color.');
+    for(const key of ['titleFontSize','infoFontSize','headerFontSize'])if(t[key]!==undefined&&!number(t[key],8,100))throw Error('Invalid table typography size.');for(const key of ['titleColor','infoColor'])if(t[key]!==undefined&&!color(t[key]))throw Error('Invalid table text color.');for(const key of ['titleFontFamily','infoFontFamily'])if(t[key]!==undefined&&(typeof t[key]!=='string'||t[key].length>60))throw Error('Invalid table font.');for(const key of ['titleWeight','infoWeight','headerWeight'])if(t[key]!==undefined&&![400,500,600,700,800].includes(Number(t[key])))throw Error('Invalid table typography weight.');if (!color(layer.color)) throw Error('Invalid table accent color.');
   }
 }
 export function drawBackgroundEffect(ctx, W, H, frame, fps, settings) {
@@ -69,8 +69,8 @@ export function tableProgress(table, row, rows, elapsed) {
   return 1-(1-t)**3;
 }
 let tableFont = '"Arial", sans-serif';
-function cellText(ctx, text, x, y, width, fontSize, color, bold = false) {
-  ctx.font = `${bold ? 700 : 400} ${fontSize}px ${tableFont}`;ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
+function cellText(ctx, text, x, y, width, fontSize, color, bold = false, family = tableFont) {
+  ctx.font = `${typeof bold==='number'?bold:(bold?700:400)} ${fontSize}px ${family}`;ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';
   let value=String(text);
   if(ctx.measureText(value).width>width){while(value.length&&ctx.measureText(value+'…').width>width)value=value.slice(0,-1);value+='…';}
   ctx.fillText(value,x,y,Math.max(1,width));
@@ -83,8 +83,8 @@ export function drawTable(ctx, layer, frame) {
   const fs=Math.max(3,Math.min(t.fontSize*W/900,rowH*.4,colW*.3));
   ctx.save();ctx.translate(-W/2,-H/2);ctx.beginPath();ctx.rect(0,0,W,H);ctx.clip();
   ctx.fillStyle=colors.bg;ctx.fillRect(0,0,W,top);
-  if(t.title)cellText(ctx,t.title,pad,26*u,W-2*pad,30*u,colors.text,true);
-  if(t.info)cellText(ctx,t.info,pad,(t.title?52*u:0)+12*u,W-2*pad,16*u,colors.muted);
+  if(t.title)cellText(ctx,t.title,pad,26*u,W-2*pad,(t.titleFontSize??30)*u,t.titleColor||colors.text,t.titleWeight??700,`"${t.titleFontFamily||t.fontFamily||'Arial'}",sans-serif`);
+  if(t.info)cellText(ctx,t.info,pad,(t.title?52*u:0)+12*u,W-2*pad,(t.infoFontSize??16)*u,t.infoColor||colors.muted,t.infoWeight??400,`"${t.infoFontFamily||t.fontFamily||'Arial'}",sans-serif`);
   t.data.forEach((row,index)=>{
     const p=index===0?1:tableProgress(t,index-1,t.data.length-1,frame-layer.in);
     if(p<=0)return;
@@ -92,7 +92,7 @@ export function drawTable(ctx, layer, frame) {
     if(index){ctx.globalAlpha*=p;if(t.animation==='rows')ctx.translate(0,(1-p)*rowH*.6);if(t.animation==='wipe'){ctx.beginPath();ctx.rect(0,top+index*rowH,W*p,rowH);ctx.clip();}}
     ctx.fillStyle=index===0?colors.head:index%2?colors.bg:colors.alt;ctx.fillRect(0,top+index*rowH,W,rowH);
     ctx.strokeStyle=colors.line;ctx.lineWidth=Math.max(.5,u);ctx.beginPath();ctx.moveTo(0,top+(index+1)*rowH);ctx.lineTo(W,top+(index+1)*rowH);ctx.stroke();
-    row.forEach((text,col)=>cellText(ctx,text,col*colW+pad,top+(index+.5)*rowH,Math.max(1,colW-2*pad),fs,index===0?colors.headText:colors.text,index===0));
+    row.forEach((text,col)=>cellText(ctx,text,col*colW+pad,top+(index+.5)*rowH,Math.max(1,colW-2*pad),index===0?(t.headerFontSize??t.fontSize)*W/900:fs,index===0?colors.headText:colors.text,index===0?(t.headerWeight??700):false));
     ctx.restore();
   });
   ctx.restore();

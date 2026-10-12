@@ -45,10 +45,10 @@ const css = `
 .ff-element-tools label{margin:0}
 .ff-element-tools input[type=color]{width:48px;height:30px}
 .ff-element-tools select{width:100%}
-.ff-element-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;max-height:58vh;overflow:auto;padding:2px}
-.ff-element-card{white-space:normal;display:flex;flex-direction:column;align-items:center;gap:4px;background:#23292b;border:1px solid #3b4646;padding:6px 2px;border-radius:6px;font-size:9px;min-width:0}
+.ff-element-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;max-height:58vh;overflow:auto;padding:2px}
+.ff-element-card{white-space:normal;display:flex;flex-direction:column;align-items:center;gap:0;background:#23292b;border:1px solid #3b4646;padding:5px 1px;border-radius:6px;font-size:9px;aspect-ratio:1;min-width:0}
 .ff-element-card:hover,.ff-element-card:focus-visible{border-color:#b6f36e;background:#303b34}
-.ff-element-card svg{width:34px;height:34px;max-width:100%}.ff-element-card span{text-align:center;line-height:1.2;overflow-wrap:anywhere}
+.ff-element-card svg{width:23px;height:23px;max-width:100%}.ff-element-card span{text-align:center;line-height:1.2;overflow-wrap:anywhere}
 .ff-element-foot{font-size:10px;color:#9ba99e;margin:12px 0 0;line-height:1.5}
 .ff-element-picker-button{width:100%;margin:8px 0 12px;text-align:left}
 `;
@@ -73,7 +73,7 @@ export function installMotionElements({ add, notify, vector=false, sanitizeSvg }
   openButton.title = 'Browse elements in the Properties sidebar'; toolbar.append(openButton);
   const library = document.createElement('section');
   library.className = 'ff-element-library'; library.hidden = true;
-  library.innerHTML = `<div class="ff-element-top"><strong>✦ Elements</strong><button type="button" id="ffElementClose" aria-label="Return to layer properties">✕</button></div>
+  library.innerHTML = `<div class="ff-element-top"><strong>✦ Elements</strong></div>
     <div class="ff-element-tools"><label>Category<select id="ffElementCategory"></select></label>
     <label>Color<input id="ffElementColor" type="color" value="#b6f36e"></label>
     <label class="m-chk"><input id="ffElementFill" type="checkbox"> Solid fill</label></div>
@@ -109,15 +109,24 @@ export function installMotionElements({ add, notify, vector=false, sanitizeSvg }
       if (category.value !== 'All' && shape[1] !== category.value) continue;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'ff-element-card';
       b.title = 'Add ' + shape[0];
-      b.innerHTML = svgFor(shape, color.value, solid.checked) + `<span>${esc(shape[0])}</span>`;
+      b.innerHTML = svgFor(shape, color.value, solid.checked);
       b.onclick = () => insert(shape, b); grid.append(b);
     }
   }
   category.onchange = render; color.oninput = render; solid.onchange = render;
   openButton.onclick = open;
-  library.querySelector('#ffElementClose').onclick = close;
-  // Return to normal inspector when selecting a layer, while allowing the library to be reopened.
-  const layers = document.querySelector('#layers');
-  layers?.addEventListener('click', close);
+
+  // Treat the element catalogue as a transient inspector view. Clicking anywhere
+  // outside it (including layer list, canvas, timeline, toolbar, settings) restores
+  // the normal Properties inspector. Never require clicking a close icon.
+  document.addEventListener('pointerdown', event => {
+    if (library.hidden || library.contains(event.target) || openButton.contains(event.target)) return;
+    close();
+  }, true);
+  document.addEventListener('focusin', event => {
+    if (library.hidden || library.contains(event.target) || openButton.contains(event.target)) return;
+    close();
+  }, true);
+  window.addEventListener('ff-motion-layer-selected', close);
   return { open, close };
 }

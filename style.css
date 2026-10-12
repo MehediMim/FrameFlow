@@ -146,3 +146,9 @@ html, body, * {
 #chartEditorDialog textarea{min-height:150px;font-family:ui-monospace,Consolas,monospace;}
 #chartEditorDialog label{margin-bottom:13px;}
 #motionSettingsButton{font-weight:700;}
+
+/* Motion animation preset controls */
+.ff-animation-preset{padding:10px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) 88px;column-gap:9px;align-items:end}
+.ff-animation-preset label{min-width:0}
+.ff-animation-preset button{grid-column:1/-1;font-size:11px;margin-bottom:5px}
+.ff-animation-preset select,.ff-animation-preset input{width:100%}

@@ -37,8 +37,80 @@ function renderUI(){ renderBackgroundSettings();$('#projectName').value=project.
 function renderLayers(){const layers=[...project.layers].reverse().sort((a,b)=>a.parentId&&!b.parentId?1:!a.parentId&&b.parentId?-1:0);$('#layers').innerHTML=layers.map(l=>`<div class="layer ${l.id===selected?'selected':''}" data-id="${esc(l.id)}"><input class="group-check" type="checkbox" data-group-check="${esc(l.id)}" ${l.parentId||l.type==='group'?'disabled':''}><span class="type">${icons[l.type]}</span><span class="name">${l.parentId?"↳ ":""}${esc(l.name)}</span><button data-visibility="${esc(l.id)}" title="${l.visible===false?'Show':'Hide'} layer">${l.visible===false?'◌':'◉'}</button></div>`).join('');$$('.layer').forEach(el=>el.onclick=e=>{if(e.target.closest('[data-visibility],.group-check'))return;select(el.dataset.id)});$$('[data-visibility]').forEach(el=>el.onclick=()=>{checkpoint();const l=project.layers.find(x=>x.id===el.dataset.visibility);l.visible=l.visible===false;changed()});['duplicate','delete','up','down','keyAll'].forEach(id=>$('#'+id).disabled=!current());$('#ungroup').disabled=current()?.type!=='group'}
 function select(id){selected=id;selectedKey=null;renderUI()}
 const labels={x:'Position X',y:'Position Y',w:'Width',h:'Height',scale:'Scale',rotation:'Rotation',opacity:'Opacity'};
-function renderInspector(){const l=current();if(!l){$('#inspector').innerHTML='<p class="muted">Select a layer to edit its properties.<br><br>Add text, a shape, an image, or a table to start.</p>';return}const props=['text','group'].includes(l.type)?['x','y','scale','rotation','opacity']:PROPS;$('#inspector').innerHTML=`<div class="inspector-title"><span>${icons[l.type]}</span> ${esc(l.name)}</div><label>Layer name<input id="layerName" value="${esc(l.name)}" maxlength="100"></label>${l.type==='group'?'<p class="mini-label">Group keyframes transform all children together. Change a group property at a new time to create its keyframe automatically. Click a child while the group is selected to move the whole group; Alt-click selects the group from a child.</p>':''}${l.type==='table'?tableInspector(l):''}${l.type==='chart'?chartInspector(l):''}${l.type==='text'?`<label>Text<textarea id="textContent">${esc(l.text)}</textarea></label>${fontPickerHtml('fontFamily','Font',l.fontFamily)}<div class="two"><label>Font size<input id="fontSize" type="number" min="8" max="800" value="${l.fontSize}"></label><label>Weight<select id="fontWeight"><option value="400">Regular</option><option value="600">Semibold</option><option value="700">Bold</option></select></label></div>`:''}<div class="section-title" style="margin-top:18px">TRANSFORM <span>◆</span></div>${props.map(prop=>{const keys=l.keys[prop]||[],at=keys.some(k=>k.f===frame),v=valueAt(l,prop,frame);return`<div class="property"><label for="p-${prop}">${labels[prop]}</label><input id="p-${prop}" data-prop="${prop}" type="number" step="${['scale','opacity'].includes(prop)?'.01':'1'}" value="${Number(v.toFixed(2))}"><button class="key ${keys.length?'animated':''} ${at?'current':''}" data-key="${prop}" title="${at?'Remove':'Add'} keyframe at frame ${frame}">${at?'◆':'◇'}</button></div>`}).join('')}<label class="color-row">${['image','group'].includes(l.type)?'':'Fill / accent color'}${['image','group'].includes(l.type)?'':`<input id="fillColor" type="color" value="${l.color}">`}</label><label>Easing from this frame<select id="easing">${Object.keys(easings).map(e=>`<option value="${e}">${({linear:'Linear',easeIn:'Ease in',easeOut:'Ease out',easeInOut:'Ease in & out',backOut:'Overshoot',hold:'Hold'})[e]}</option>`).join('')}</select></label><div class="two"><label>In time (s)<input id="inFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.in/project.fps).toFixed(3)}"></label><label>Out time (s)<input id="outFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.out/project.fps).toFixed(3)}"></label></div><p class="mini-label">◆ A filled diamond marks a keyframe here. Auto-key adds keys to animated properties when you edit.</p>`;
-if(l.type==='table')bindTableInspector(l);if(l.type==='chart')bindChartInspector(l);
+// Reusable frame-accurate presets. Generated as editable ordinary keyframes.
+const MOTION_PRESETS = {
+  in: [['none','None'],['fade','Fade in'],['slide-left','Slide from left'],['slide-right','Slide from right'],['slide-up','Slide from bottom'],['slide-down','Slide from top'],['zoom','Zoom in'],['pop','Pop in'],['spin','Spin in']],
+  out: [['none','None'],['fade','Fade out'],['slide-left','Slide left'],['slide-right','Slide right'],['slide-up','Slide up'],['slide-down','Slide down'],['zoom','Zoom out'],['pop','Shrink out'],['spin','Spin out']],
+  loop: [['none','None'],['pulse','Pulse'],['float','Float'],['bounce','Bounce'],['sway','Sway'],['rotate','Rotate'],['breathe','Breathe']]
+};
+const presetOptions = type => MOTION_PRESETS[type].map(([key,name])=>`<option value="${key}">${name}</option>`).join('');
+function animationInspector(l){const settings=l.animationPresets||{};return `<div class="section-title" style="margin-top:18px">ANIMATION PRESETS <span>✦</span></div><p class="mini-label">Apply reusable In, Out and Loop animations as editable keyframes. Applying a preset replaces keyframes for the affected properties in that time range.</p>${['in','out','loop'].map(type=>{const s=settings[type]||{};return `<div class="ff-animation-preset"><label>${type==='in'?'Entrance':type==='out'?'Exit':'Loop'}<select data-preset-kind="${type}">${presetOptions(type)}</select></label><label>${type==='loop'?'Cycle (seconds)':'Duration (seconds)'}<input type="number" min="0.1" max="30" step="0.1" data-preset-duration="${type}" value="${s.duration|| (type==='loop'?2:0.7)}"></label><button type="button" class="ff-apply-preset" data-apply-preset="${type}">Apply ${type==='in'?'In':type==='out'?'Out':'Loop'}</button></div>`}).join('')}`}
+function applyMotionPreset(l,kind,name,seconds){
+  if(name==='none')return notify('Choose an animation first');
+  const length=Math.max(1,Math.round(seconds*project.fps));
+  const start=kind==='out'?Math.max(l.in,l.out-length):l.in;
+  const end=kind==='in'?Math.min(l.out,l.in+length):l.out;
+  if(end<=start)return notify('Layer is too short for this animation');
+  const base={x:l.x,y:l.y,scale:l.scale,rotation:l.rotation,opacity:l.opacity};
+  const offset=Math.max(45,Math.min(project.width,project.height)*.12);
+  let changes={};
+  if(kind==='loop'){
+    const amount=name==='bounce'?offset*.5:name==='float'?offset*.3:0;
+    changes=name==='pulse'?{scale:[base.scale,base.scale*1.12,base.scale]}:
+      name==='breathe'?{opacity:[base.opacity,Math.max(.15,base.opacity*.55),base.opacity]}:
+      name==='float'||name==='bounce'?{y:[base.y,base.y-amount,base.y]}:
+      name==='sway'?{rotation:[base.rotation-8,base.rotation+8,base.rotation-8]}:
+      name==='rotate'?{rotation:[base.rotation,base.rotation+180,base.rotation+360]}:{};
+  }else{
+    const beginning=kind==='in';
+    const movement=name==='slide-left'?[-offset,0]:name==='slide-right'?[offset,0]:name==='slide-up'?[0,offset]:name==='slide-down'?[0,-offset]:[0,0];
+    if(name==='fade')changes={opacity:beginning?[0,base.opacity]:[base.opacity,0]};
+    else if(name.startsWith('slide-')){
+      changes={opacity:beginning?[0,base.opacity]:[base.opacity,0]};
+      if(movement[0])changes.x=beginning?[base.x+movement[0],base.x]:[base.x,base.x-movement[0]];
+      if(movement[1])changes.y=beginning?[base.y+movement[1],base.y]:[base.y,base.y-movement[1]];
+    }else if(name==='zoom'||name==='pop'){
+      const small=name==='pop'?.25:.7;
+      changes={scale:beginning?[base.scale*small,base.scale]:[base.scale,base.scale*small],opacity:beginning?[0,base.opacity]:[base.opacity,0]};
+    }else if(name==='spin')changes={rotation:beginning?[base.rotation-90,base.rotation]:[base.rotation,base.rotation+90],opacity:beginning?[0,base.opacity]:[base.opacity,0]};
+  }
+  if(!Object.keys(changes).length)return;
+  checkpoint();
+  for(const [prop,values] of Object.entries(changes)){
+    const a=kind==='loop'?l.in:start,b=kind==='loop'?l.out:end;
+    const keys=l.keys[prop]||[];
+    l.keys[prop]=keys.filter(k=>k.f<a||k.f>b);
+    if(kind==='loop'){
+      const cycle=Math.max(2,length);let cycleIndex=0;
+      for(let t=a;t<=b;t+=cycle){
+        const last=Math.min(b,t+cycle),mid=Math.min(last,t+Math.round((last-t)/2));
+        const vals=name==='rotate'?[base.rotation+cycleIndex*360,base.rotation+(cycleIndex+.5)*360,base.rotation+(cycleIndex+1)*360]:values;
+        putKey(l,prop,t,vals[0],'easeInOut');
+        if(mid>t&&mid<last)putKey(l,prop,mid,vals[1],'easeInOut');
+        if(last>t)putKey(l,prop,last,vals[2],'easeInOut');
+        cycleIndex++;
+      }
+    }else{
+      putKey(l,prop,a,values[0],name==='pop'&&kind==='in'?'backOut':'easeInOut');
+      putKey(l,prop,b,values[1],'easeInOut');
+      // Exit/entrance keys preserve a neutral transform outside their window.
+      if(kind==='in'&&b<l.out)putKey(l,prop,Math.min(b+1,l.out),values[1]);
+      if(kind==='out'&&a>l.in)putKey(l,prop,Math.max(l.in,a-1),values[0]);
+    }
+  }
+  l.animationPresets ||= {};
+  l.animationPresets[kind]={name,duration:seconds};
+  changed();notify(`${kind.toUpperCase()} · ${name.replaceAll('-',' ')} applied`);
+}
+function bindAnimationInspector(l){
+ for(const kind of ['in','out','loop']){
+   const s=l.animationPresets?.[kind];const picker=$(`[data-preset-kind="${kind}"]`);
+   if(s)picker.value=s.name;
+   $(`[data-apply-preset="${kind}"]`).onclick=()=>applyMotionPreset(l,kind,picker.value,Math.max(.1,+$(`[data-preset-duration="${kind}"]`).value||.7));
+ }
+}
+function renderInspector(){const l=current();if(!l){$('#inspector').innerHTML='<p class="muted">Select a layer to edit its properties.<br><br>Add text, a shape, an image, or a table to start.</p>';return}const props=['text','group'].includes(l.type)?['x','y','scale','rotation','opacity']:PROPS;$('#inspector').innerHTML=`<div class="inspector-title"><span>${icons[l.type]}</span> ${esc(l.name)}</div><label>Layer name<input id="layerName" value="${esc(l.name)}" maxlength="100"></label>${l.type==='group'?'<p class="mini-label">Group keyframes transform all children together. Change a group property at a new time to create its keyframe automatically. Click a child while the group is selected to move the whole group; Alt-click selects the group from a child.</p>':''}${l.type==='table'?tableInspector(l):''}${l.type==='chart'?chartInspector(l):''}${animationInspector(l)}${l.type==='text'?`<label>Text<textarea id="textContent">${esc(l.text)}</textarea></label>${fontPickerHtml('fontFamily','Font',l.fontFamily)}<div class="two"><label>Font size<input id="fontSize" type="number" min="8" max="800" value="${l.fontSize}"></label><label>Weight<select id="fontWeight"><option value="400">Regular</option><option value="600">Semibold</option><option value="700">Bold</option></select></label></div>`:''}<div class="section-title" style="margin-top:18px">TRANSFORM <span>◆</span></div>${props.map(prop=>{const keys=l.keys[prop]||[],at=keys.some(k=>k.f===frame),v=valueAt(l,prop,frame);return`<div class="property"><label for="p-${prop}">${labels[prop]}</label><input id="p-${prop}" data-prop="${prop}" type="number" step="${['scale','opacity'].includes(prop)?'.01':'1'}" value="${Number(v.toFixed(2))}"><button class="key ${keys.length?'animated':''} ${at?'current':''}" data-key="${prop}" title="${at?'Remove':'Add'} keyframe at frame ${frame}">${at?'◆':'◇'}</button></div>`}).join('')}<label class="color-row">${['image','group'].includes(l.type)?'':'Fill / accent color'}${['image','group'].includes(l.type)?'':`<input id="fillColor" type="color" value="${l.color}">`}</label><label>Easing from this frame<select id="easing">${Object.keys(easings).map(e=>`<option value="${e}">${({linear:'Linear',easeIn:'Ease in',easeOut:'Ease out',easeInOut:'Ease in & out',backOut:'Overshoot',hold:'Hold'})[e]}</option>`).join('')}</select></label><div class="two"><label>In time (s)<input id="inFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.in/project.fps).toFixed(3)}"></label><label>Out time (s)<input id="outFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.out/project.fps).toFixed(3)}"></label></div><p class="mini-label">◆ A filled diamond marks a keyframe here. Auto-key adds keys to animated properties when you edit.</p>`;
+if(l.type==='table')bindTableInspector(l);if(l.type==='chart')bindChartInspector(l);bindAnimationInspector(l);
 $$('[data-prop]').forEach(el=>el.onchange=()=>{let v=Number(el.value);if(!Number.isFinite(v))return;const prop=el.dataset.prop;if(prop==='opacity')v=Math.max(0,Math.min(1,v));if(prop==='scale')v=Math.max(.01,Math.min(20,v));if(prop==='w'||prop==='h')v=Math.max(1,Math.min(10000,v));checkpoint();editProp(l,prop,v);changed()});$$('[data-key]').forEach(el=>el.onclick=()=>{pause();checkpoint();const prop=el.dataset.key,keys=l.keys[prop]||[],at=keys.findIndex(k=>k.f===frame),v=valueAt(l,prop,frame);if(at>=0){keys.splice(at,1);if(!keys.length)l[prop]=v}else putKey(l,prop,frame,v,$('#easing').value);changed()});$('#layerName').onchange=e=>{checkpoint();l.name=e.target.value||'Untitled layer';changed()};if(l.type==='text'){$('#fontWeight').value=l.fontWeight;$('#textContent').onchange=e=>{checkpoint();l.text=e.target.value;changed()};$('#fontSize').onchange=e=>{checkpoint();l.fontSize=Math.max(8,Math.min(800,+e.target.value||80));changed()};$('#fontWeight').onchange=e=>{checkpoint();l.fontWeight=+e.target.value;changed()};bindFontPicker('fontFamily',n=>{checkpoint();l.fontFamily=n;changed()})}if($('#fillColor'))$('#fillColor').onchange=e=>{checkpoint();l.color=e.target.value;changed()};const anyKey=Object.values(l.keys).flat().find(k=>k.f===frame);$('#easing').value=anyKey?.e||'easeInOut';$('#easing').onchange=e=>{const ks=Object.values(l.keys).flat().filter(k=>k.f===frame);if(!ks.length){notify('Add a keyframe here before changing easing');return}checkpoint();ks.forEach(k=>k.e=e.target.value);changed()};$('#inFrame').onchange=e=>{checkpoint();l.in=Math.max(0,Math.min(l.out,Math.round(+e.target.value*project.fps)||0));changed()};$('#outFrame').onchange=e=>{checkpoint();l.out=Math.max(l.in,Math.min(project.frames-1,Math.round(+e.target.value*project.fps)||0));changed()}}
 function editProp(l,prop,v){const keys=l.keys[prop]||[],at=keys.find(k=>k.f===frame);if(at)at.v=v;else if(keys.length&&($('#autoKey').checked||l.type==='group'))putKey(l,prop,frame,v);else if(keys.length){const delta=v-valueAt(l,prop,frame);keys.forEach(k=>k.v+=delta);l[prop]+=delta}else l[prop]=v}
 function renderTimeline(){

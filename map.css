@@ -47,3 +47,11 @@ body.mode-map #mapStudio{display:flex}
 .m-playhead span{position:absolute;top:0;left:-5px;width:11px;height:13px;background:var(--accent);clip-path:polygon(0 0,100% 0,100% 65%,50% 100%,0 65%)}
 .stagebar button.active{color:var(--accent)}
 #mCanvas{cursor:default}
+
+/* Separate, dismissible map settings drawer */
+#mapStudio .right{position:relative}
+#mSettingsPanel{position:fixed;inset:0;margin:auto;width:min(480px,calc(100vw - 36px));max-width:480px;max-height:min(85vh,750px);overflow-y:auto;background:#202529;border:1px solid #505c47;border-radius:12px;box-shadow:0 20px 90px #0009;padding:28px}
+#mSettingsPanel::backdrop{background:#0009}
+#mSettingsPanel .section-title{align-items:center}
+#mSettingsClose{font-size:14px;padding:3px 8px}
+#mapStudio .right>.tabs{min-height:55px}

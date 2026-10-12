@@ -96,12 +96,13 @@ function setFrame(n) {
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
+  window.dispatchEvent(new CustomEvent("ff-frame",{detail:{studio:"map",frame,fps:proj.fps,playing}}));
 }
-function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; }
+function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
 function play() {
   if (playing) { pause(); return; }
   if (frame >= proj.frames - 1) frame = 0;
-  playing = true; startTime = performance.now(); startFrame = frame; $('#mPlay').textContent = 'Ⅱ';
+  playing = true; startTime = performance.now(); startFrame = frame; $('#mPlay').textContent = 'Ⅱ'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:true,frame,fps:proj.fps}}));
   const tick = t => {
     let f = startFrame + Math.floor((t - startTime) / 1000 * proj.fps);
     if (f >= proj.frames) { if (loop) f %= proj.frames; else { setFrame(proj.frames - 1); pause(); return; } }
@@ -420,7 +421,7 @@ async function exportVideo() {
   pause();
   if (!geo) { notify('Map data is still loading'); return; }
   const snapshot = clone(proj), exportName = fileBase();
-  modal(`<h2>Export your map.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Detailed maps may take longer than the video duration. Format: WebM.</p><progress id="mProgress" max="${snapshot.frames}" value="0"></progress><p id="mExportStatus">Preparing…</p>`);
+  modal(`<h2>Export your map.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Detailed maps may take longer than the video duration. Format: WebM.</p><p class="ff-export-note">Audio reference tracks are preview-only and will not appear in this video.</p><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a><progress id="mProgress" max="${snapshot.frames}" value="0"></progress><p id="mExportStatus">Preparing…</p>`);
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
   const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height;
   const ec = c.getContext('2d');
@@ -537,3 +538,23 @@ buildStaticUI(); buildLists(); bindSettings(); bindToolbar(); $('#mHint').textCo
 renderAll();
 let startMode = 'motion'; try { startMode = localStorage.getItem('frameflow-mode') === 'map' ? 'map' : 'motion'; } catch { /* ignore */ }
 setMode(startMode)
+// Independent map-settings drawer: keep item properties visible in the inspector.
+{
+  const open = document.querySelector('#mSettingsButton');
+  const panel = document.querySelector('#mSettingsPanel');
+  const close = document.querySelector('#mSettingsClose');
+  if (open && panel && close) {
+    const setOpen = enabled => {
+      if (enabled && !panel.open) panel.showModal();
+      else if (!enabled && panel.open) panel.close();
+      open.setAttribute('aria-expanded', String(panel.open));
+    };
+    open.addEventListener('click', () => setOpen(!panel.open));
+    close.addEventListener('click', () => setOpen(false));
+    panel.addEventListener('close', () => open.setAttribute('aria-expanded', 'false'));
+    panel.addEventListener('click', e => {
+      const rect = panel.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) setOpen(false);
+    });
+  }
+}

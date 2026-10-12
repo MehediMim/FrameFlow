@@ -838,9 +838,10 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   drawBase(ctx, v, geo, th, proj);
-  drawTexture(ctx, W, H, proj.texture);
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
   for (const a of proj.actions) if (a.type === 'highlight') tag(a, () => drawHighlight(ctx, v, geo, th, a, frame, labels));
+  // Composite texture over country highlights, underneath borders and labels.
+  drawTexture(ctx, W, H, proj.texture);
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
   for (const a of proj.actions) if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels));
   for (const a of proj.actions) if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));

@@ -124,3 +124,14 @@ html, body, * {
 }
 #mapStudio:fullscreen .transport,
 #mapStudio:-webkit-full-screen .transport {flex:0 0 52px!important;}
+
+/* Audio reference panel */
+.ff-audio-slot{padding:6px 12px;background:#1b1f22;border-top:1px solid #34383d}
+.ff-audio{display:flex;align-items:center;gap:10px;min-height:43px;min-width:0}
+.ff-audio button{padding:6px 9px;font-size:11px}
+.ff-audio span{font-size:10px;color:#a6adb3;white-space:nowrap}
+.ff-audio .ff-audio-name{max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.ff-audio-wave{height:37px;flex:1;min-width:70px;cursor:crosshair;background:#14191d;border-radius:4px}
+.ff-audio input[type=range]{width:65px}
+.ff-export-note{font-size:11px;color:#a2adb1}
+#modal .support-link,#mModal .support-link{margin:10px 0;display:inline-flex}

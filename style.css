@@ -36,3 +36,11 @@ html, body, * {
 }
 ::-webkit-scrollbar-thumb:hover { background: #65716a; }
 ::-webkit-scrollbar-corner { background: #171b1d; }
+
+/* Editable motion timeline clips */
+.clip.clip-editable{pointer-events:auto;cursor:grab;display:flex;align-items:center;justify-content:space-between;overflow:visible;touch-action:none;z-index:1;min-width:5px}
+.clip.clip-editable:active{cursor:grabbing}
+.clip-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#c8d7b9;padding:0 9px;pointer-events:none;opacity:.85}
+.clip-handle{height:100%;width:8px;flex:none;cursor:ew-resize;background:#b6f36e22;border-radius:3px;transition:background .15s}
+.clip-handle:hover{background:#b6f36eaa}
+.track-row .diamond{z-index:3}

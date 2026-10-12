@@ -26,6 +26,56 @@ export const THEMES = {
   blueprint: { label: 'Blueprint', void: '#071a3d', ocean: '#0f2f66', land: ['#1b4b9b', '#1d4fa3', '#1a4794', '#1e53aa', '#1c4d9e'], border: '#8fb8ff', borderA: .85, bw: 1, grat: '#8fb8ff', gratA: .2, dim: '#020b1d', vignette: .25, pill: 'rgba(255,255,255,.92)', pillText: '#0a2250' },
 };
 
+// Texture tiles are seeded and cached: no per-frame noise or flickering in exports.
+export const TEXTURES = { none: 'None', paper: 'Paper grain', grain: 'Film grain', linen: 'Linen', dots: 'Halftone dots' };
+export const DEFAULT_TEXTURE = { type: 'none', strength: .3, scale: 1 };
+const textureTiles = new Map();
+function textureTile(type) {
+  if (textureTiles.has(type)) return textureTiles.get(type);
+  const tile = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(256, 256) : document.createElement('canvas');
+  tile.width = tile.height = 256;
+  const c = tile.getContext('2d');
+  let seed = 72139;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  if (type === 'paper' || type === 'grain') {
+    const image = c.createImageData(256, 256);
+    for (let i = 0; i < image.data.length; i += 4) {
+      const light = random() > .5;
+      const rgb = type === 'paper' ? (light ? [255, 244, 214] : [65, 44, 20]) : (light ? [255, 255, 255] : [0, 0, 0]);
+      image.data.set([...rgb, Math.round(random() * (type === 'paper' ? 100 : 150))], i);
+    }
+    c.putImageData(image, 0, 0);
+    if (type === 'paper') {
+      c.strokeStyle = 'rgba(77,53,24,.13)'; c.lineWidth = .7;
+      for (let i = 0; i < 450; i++) {
+        const x = random() * 256, y = random() * 256;
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + random() * 6 - 3, y + random() * 2); c.stroke();
+      }
+    }
+  } else if (type === 'linen') {
+    for (let i = 0; i < 256; i += 4) {
+      c.fillStyle = 'rgba(35,25,15,.3)'; c.fillRect(i, 0, 1, 256); c.fillRect(0, i, 256, 1);
+      c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(i + 1, 0, 1, 256); c.fillRect(0, i + 1, 256, 1);
+    }
+  } else if (type === 'dots') {
+    c.fillStyle = 'rgba(0,0,0,.5)';
+    for (let y = 4; y < 256; y += 8) for (let x = 4; x < 256; x += 8) {
+      c.beginPath(); c.arc(x, y, 1.2, 0, Math.PI * 2); c.fill();
+    }
+  }
+  textureTiles.set(type, tile); return tile;
+}
+export function drawTexture(ctx, W, H, texture) {
+  const t = { ...DEFAULT_TEXTURE, ...texture };
+  if (t.type === 'none' || !Object.hasOwn(TEXTURES, t.type) || t.strength <= 0) return;
+  const pattern = ctx.createPattern(textureTile(t.type), 'repeat');
+  if (!pattern) return;
+  // Scale with output size so preview, PNG and video share the same appearance.
+  const scale = Math.max(.1, Math.min(W, H) / 720 * t.scale);
+  ctx.save(); ctx.globalAlpha = t.strength; ctx.scale(scale, scale);
+  ctx.fillStyle = pattern; ctx.fillRect(0, 0, W / scale, H / scale); ctx.restore();
+}
+
 // ---------------------------------------------------------------- Geometry data
 function buildSet(topo) {
   const [sx, sy] = topo.transform.scale, [tx, ty] = topo.transform.translate;
@@ -619,6 +669,7 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   drawBase(ctx, v, geo, th, proj);
+  drawTexture(ctx, W, H, proj.texture);
   for (const a of proj.actions) if (a.type === 'highlight') drawHighlight(ctx, v, geo, th, a, frame, labels);
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
   for (const a of proj.actions) if (a.type === 'plane') drawPlane(ctx, v, geo, th, a, frame, labels);
@@ -667,7 +718,7 @@ export function makeShot(preset, start, extra = {}) {
 }
 
 export function newMapProject() {
-  return { version: 1, kind: 'map', name: 'Untitled map', width: 1280, height: 720, fps: 30, frames: 240, theme: 'earth', graticule: true, camera: { init: { ...DEFAULT_CAM } }, shots: [], actions: [] };
+  return { version: 1, kind: 'map', name: 'Untitled map', width: 1280, height: 720, fps: 30, frames: 240, theme: 'earth', texture: { ...DEFAULT_TEXTURE }, graticule: true, camera: { init: { ...DEFAULT_CAM } }, shots: [], actions: [] };
 }
 export function demoMapProject() {
   const p = newMapProject(); p.name = 'Across the Atlantic'; p.frames = 330;
@@ -700,6 +751,7 @@ export function validateMapProject(p) {
   if (![24, 30, 60].includes(p.fps) || !Number.isInteger(p.frames) || p.frames < 2 || p.frames > 1800) throw Error('Invalid frame settings.');
   if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || p.width < 100 || p.height < 100 || p.width > 3840 || p.height > 3840) throw Error('Invalid canvas size.');
   if (!ENUMS.theme.includes(p.theme)) throw Error('Unknown map theme.');
+  if (p.texture !== undefined && (!p.texture || !Object.hasOwn(TEXTURES, p.texture.type) || !num(p.texture.strength, 0, 1) || !num(p.texture.scale, .5, 3))) throw Error('Invalid map texture.');
   const i = p.camera?.init;
   if (!i || !num(i.lon, -540, 540) || !num(i.lat, -90, 90) || !num(i.zoom, 0, 14) || !num(i.bearing ?? 0, -3600, 3600) || !num(i.pitch ?? 0, 0, 75)) throw Error('Invalid start view.');
   const ids = new Set();

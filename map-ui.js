@@ -1,6 +1,7 @@
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
 import { THEMES, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY } from './map-engine.mjs';
 import { CITIES, REGIONS } from './map-places.mjs';
+import { exportMapVideo } from './map-video-export.mjs';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -51,7 +52,7 @@ async function ensureGeo() {
 }
 const cityKey = c => (geo && geo.byName.has(c[0]) ? `${c[0]} (city)` : c[0]);
 function buildLists() {
-  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = CITIES.map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
+  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = CITIES.map(c => opt(cityKey(c), `City Â· ${c[3]}`)).join('');
   $('#mDlBorder').innerHTML = opt('All countries', 'Every border') + countries; $('#mDlCountry').innerHTML = countries;
   $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + countries;
 }
@@ -78,7 +79,7 @@ function draw() {
   if (!geo) {
     ctx.fillStyle = '#0d1b2a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#9fb3c4'; ctx.textAlign = 'center'; ctx.font = `600 ${Math.round(canvas.height / 30)}px Arial, sans-serif`;
-    const msg = geoState === 'error' ? 'Map data could not be loaded' : 'Loading map…';
+    const msg = geoState === 'error' ? 'Map data could not be loaded' : 'Loading mapâ€¦';
     ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
     if (geoState === 'error') { ctx.font = `${Math.round(canvas.height / 44)}px Arial, sans-serif`; ctx.fillText('Serve this folder over http (for example: python -m http.server 8000) and reload.', canvas.width / 2, canvas.height / 2 + canvas.height / 20); }
     return;
@@ -92,11 +93,11 @@ function setFrame(n) {
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
 }
-function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; }
+function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = 'â–¶'; }
 function play() {
   if (playing) { pause(); return; }
   if (frame >= proj.frames - 1) frame = 0;
-  playing = true; startTime = performance.now(); startFrame = frame; $('#mPlay').textContent = 'Ⅱ';
+  playing = true; startTime = performance.now(); startFrame = frame; $('#mPlay').textContent = 'â…¡';
   const tick = t => {
     let f = startFrame + Math.floor((t - startTime) / 1000 * proj.fps);
     if (f >= proj.frames) { if (loop) f %= proj.frames; else { setFrame(proj.frames - 1); pause(); return; } }
@@ -155,7 +156,7 @@ const F = {
   loc: (k, label, v, kinds) => {
     const dl = { border: 'mDlBorder', country: 'mDlCountry', place: 'mDlPlace', any: 'mDlAny' }[kinds];
     const hint = kinds === 'border' ? 'Country or All countries' : kinds === 'country' ? 'Country' : 'City or lat, lon';
-    return `<div class="m-loc"><label>${label}<input data-mf="${k}" data-t="loc" data-kinds="${kinds}" list="${dl}" value="${esc(locText(v))}" placeholder="${hint}" autocomplete="off"></label><button type="button" data-mpick="${k}" data-kinds="${kinds}" title="Click the map to choose${kinds === 'any' ? ' (hold Shift for a whole country)' : ''}">⌖</button></div>`;
+    return `<div class="m-loc"><label>${label}<input data-mf="${k}" data-t="loc" data-kinds="${kinds}" list="${dl}" value="${esc(locText(v))}" placeholder="${hint}" autocomplete="off"></label><button type="button" data-mpick="${k}" data-kinds="${kinds}" title="Click the map to choose${kinds === 'any' ? ' (hold Shift for a whole country)' : ''}">âŒ–</button></div>`;
   },
 };
 
@@ -180,7 +181,7 @@ function actionFields(a) {
       const country = a.target.kind === 'country';
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? 'Country' : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
-    case 'pin': return F.loc('place', 'Location', a.place, 'place') + F.color('color', 'Pin color', a.color) + F.range('size', 'Pin size', a.size, .5, 3, .1, x => x + '×') + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+    case 'pin': return F.loc('place', 'Location', a.place, 'place') + F.color('color', 'Pin color', a.color) + F.range('size', 'Pin size', a.size, .5, 3, .1, x => x + 'Ã—') + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
   }
   return '';
 }
@@ -189,11 +190,11 @@ function shotFields(s) {
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
   if (has('autoFit') && s.target.kind === 'country') h += F.chk('autoFit', 'Fit the whole country in view', s.autoFit);
-  if (has('planeId')) h += F.sel('planeId', 'Plane', s.planeId, [['', 'Choose a plane…'], ...planes().map(a => [a.id, `${a.name} (${a.from.name} → ${a.to.name})`])]);
+  if (has('planeId')) h += F.sel('planeId', 'Plane', s.planeId, [['', 'Choose a planeâ€¦'], ...planes().map(a => [a.id, `${a.name} (${a.from.name} â†’ ${a.to.name})`])]);
   if (has('zoom') && !(has('autoFit') && s.autoFit && s.target.kind === 'country')) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
-  if (has('pitch')) h += F.range('pitch', 'Tilt', s.pitch, 0, 70, 1, x => x + '°');
+  if (has('pitch')) h += F.range('pitch', 'Tilt', s.pitch, 0, 70, 1, x => x + 'Â°');
   if (has('bearing')) h += F.num('bearing', 'Rotation (degrees)', s.bearing, -180, 180, 5);
   if (has('lockHeading')) h += F.chk('lockHeading', 'Turn with the plane', s.lockHeading);
   return h;
@@ -208,7 +209,7 @@ function bindInspector(it) {
       el.oninput = () => {
         if (!gesture) { checkpoint(); gesture = true; }
         const v = t === 'range' ? Number(el.value) : el.value; it[key] = v;
-        const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + '°' : key === 'size' ? v + '×' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
+        const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + 'Â°' : key === 'size' ? v + 'Ã—' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
         draw();
       };
       el.onchange = () => { gesture = false; changed(); };
@@ -239,11 +240,11 @@ function centerLonLat() { const l = screenToLonLat(lastView, proj.width / 2, pro
 
 // ------------------------------------------------------------------ pick a location on the map
 function startPick(key, kinds) {
-  pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click the map to choose a location · Esc to cancel';
+  pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click the map to choose a location Â· Esc to cancel';
   notify(kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : 'Click a country');
 }
 function cancelPick() { pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; }
-const HINT = 'Add animations on the left · camera presets move the view for you · scrub the timeline to preview';
+const HINT = 'Add animations on the left Â· camera presets move the view for you Â· scrub the timeline to preview';
 canvas.onpointerdown = e => {
   if (!pick || !lastView || !geo) return;
   const b = canvas.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * proj.width, sy = (e.clientY - b.top) / b.height * proj.height, ll = screenToLonLat(lastView, sx, sy);
@@ -270,7 +271,7 @@ canvas.onpointerdown = e => {
 // ------------------------------------------------------------------ project settings
 function renderSettings() {
   $('#mProjectName').value = proj.name; $('#mFps').value = proj.fps; $('#mFpsLabel').textContent = proj.fps + ' FPS';
-  $('#mDuration').value = proj.frames; $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} × ${proj.height}`;
+  $('#mDuration').value = proj.frames; $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} Ã— ${proj.height}`;
   $('#mTheme').value = proj.theme; $('#mGrat').checked = !!proj.graticule;
   const i = proj.camera.init, match = Object.entries(REGIONS).find(([, r]) => r.lon === i.lon && r.lat === i.lat && r.zoom === i.zoom);
   $('#mRegion').value = match ? match[0] : 'custom'; $('#mStartZoom').value = i.zoom; $('#mStartPitch').value = i.pitch; $('#mStartBearing').value = i.bearing;
@@ -300,7 +301,7 @@ function renderTimeline() {
   let ticks = ''; for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${f}</span>`;
   $('#mRuler').innerHTML = ticks;
   $('#mTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-mtl="${esc(it.id)}"><span>${iconOf(it)}</span>${esc(it.name)}</div>`).join('');
-  $('#mTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-mrow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-mclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div></div>`).join('');
+  $('#mTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-mrow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-mclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} Â· frame ${it.start}â€“${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div></div>`).join('');
   $('#mTrackLabels').style.transform = `translateY(-${$('#mScroll').scrollTop}px)`;
   $$('[data-mtl]').forEach(el => el.onclick = () => select(el.dataset.mtl));
   $$('[data-mclip]').forEach(el => el.onpointerdown = e => {
@@ -334,35 +335,29 @@ const fileBase = () => (proj.name || 'map').replace(/[^a-z0-9 _-]/gi, '').trim()
 function modal(html) { $('#mModalBody').innerHTML = html; $('#mCloseModal').textContent = 'Close'; $('#mModal').showModal(); }
 
 async function exportVideo() {
+  if (exporting) return;
   pause();
   if (!geo) { notify('Map data is still loading'); return; }
-  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { modal('<h2>Video export unavailable</h2><p>This browser does not support canvas video recording. Use a recent Chrome or Edge, or save PNG frames.</p>'); return; }
-  const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find(t => MediaRecorder.isTypeSupported(t));
-  if (!mime) { notify('No supported video encoder is available'); return; }
-  modal(`<h2>Export your map.</h2><p>${proj.width} × ${proj.height} · ${proj.fps} FPS · ${(proj.frames / proj.fps).toFixed(2)} seconds</p><p>Export records playback in real time. Keep this tab visible. Format: ${mime.includes('mp4') ? 'MP4' : 'WebM'}.</p><progress id="mProgress" max="${proj.frames}" value="0"></progress><p id="mExportStatus">Preparing…</p>`);
+  const snapshot = clone(proj), exportName = fileBase();
+  modal(`<h2>Export your map.</h2><p>${snapshot.width} Ã— ${snapshot.height} Â· ${snapshot.fps} FPS Â· ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Detailed maps may take longer than the video duration. Format: WebM.</p><progress id="mProgress" max="${snapshot.frames}" value="0"></progress><p id="mExportStatus">Preparingâ€¦</p>`);
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
-  const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height;
-  const ec = c.getContext('2d'); drawMap(ec, c.width, c.height, proj, 0, geo);
-  const stream = c.captureStream(proj.fps); let recorder, cancelled = false; const chunks = [];
+  const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height;
+  const ec = c.getContext('2d');
   try {
-    recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 });
-    const done = new Promise((res, rej) => { recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); }; recorder.onstop = res; recorder.onerror = e => rej(Error(e.error?.message || 'Recording failed')); });
-    recorder.start(); const t0 = performance.now();
-    await new Promise(resolve => {
-      const next = t => {
-        if (!exporting) { cancelled = true; resolve(); return; }
-        const f = Math.floor((t - t0) * proj.fps / 1000);
-        if (f >= proj.frames) { resolve(); return; }
-        drawMap(ec, c.width, c.height, proj, f, geo);
-        $('#mProgress').value = f + 1; $('#mExportStatus').textContent = `Rendering frame ${f + 1} of ${proj.frames}`;
-        requestAnimationFrame(next);
-      };
-      requestAnimationFrame(next);
+    await document.fonts.ready;
+    const video = await exportMapVideo({ canvas: c, fps: snapshot.fps, frames: snapshot.frames,
+      draw: f => drawMap(ec, c.width, c.height, snapshot, f, geo),
+      cancelled: () => !exporting,
+      progress: n => { $('#mProgress').value = n; $('#mExportStatus').textContent = `Rendering frame ${n} of ${snapshot.frames}`; }
     });
-    recorder.stop(); await done;
-    if (!cancelled) { download(new Blob(chunks, { type: mime }), fileBase() + '.' + (mime.includes('mp4') ? 'mp4' : 'webm')); $('#mProgress').value = proj.frames; $('#mExportStatus').textContent = 'Your video is ready. Download started.'; notify('Video exported'); } else $('#mExportStatus').textContent = 'Export cancelled.';
-  } catch (e) { $('#mExportStatus').textContent = 'Export failed: ' + e.message; if (recorder?.state === 'recording') recorder.stop(); }
-  finally { stream.getTracks().forEach(t => t.stop()); exporting = false; $('#mCloseModal').disabled = false; $('#mCloseModal').textContent = 'Close'; }
+    if (!exporting) { $('#mExportStatus').textContent = 'Export cancelled.'; return; }
+    download(video, exportName + '.webm');
+    $('#mExportStatus').textContent = 'All frames encoded. Download started.'; notify('Video exported');
+  } catch (e) {
+    $('#mExportStatus').textContent = e.name === 'AbortError' ? 'Export cancelled.' : 'Export failed: ' + e.message;
+  } finally {
+    exporting = false; $('#mCloseModal').disabled = false; $('#mCloseModal').textContent = 'Close';
+  }
 }
 
 function bindToolbar() {
@@ -394,7 +389,7 @@ function bindToolbar() {
   };
   $('#mNew').onclick = () => { if (!confirm('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); sel = null; frame = 0; saveLocal(); renderAll(); };
   $('#mDemo').onclick = () => { if (!confirm('Load the demo map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = demoMapProject(); sel = null; frame = 0; saveLocal(); renderAll(); };
-  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Plane</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change its length.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
+  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Plane</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>âŒ–</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow planeâ€¦). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change its length.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause Â· â† â†’ one frame Â· Shift + arrows ten frames Â· Delete remove item Â· Ctrl/Cmd Z undo Â· Esc cancel map picking.</p>`);
   $('#mCloseModal').onclick = () => { if (exporting) { exporting = false; $('#mCloseModal').disabled = true; } else $('#mModal').close(); };
   $('#mModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });
 }

@@ -25,6 +25,7 @@ export const FONTS = [
   { n: 'Abril Fatface', g: 'serif', c: 3, w: '400' }, { n: 'Lobster', g: 'cursive', c: 3, w: '400' }, { n: 'Pacifico', g: 'cursive', c: 3, w: '400' },
   { n: 'Caveat', g: 'cursive', c: 3, w: '400;600;700' }, { n: 'Permanent Marker', g: 'cursive', c: 3, w: '400' }, { n: 'Bangers', g: 'cursive', c: 3, w: '400' },
   { n: 'Roboto Mono', g: 'monospace', c: 4, w: '400;700' }, { n: 'JetBrains Mono', g: 'monospace', c: 4, w: '400;700;800' },
+  { n: 'Headline Bangla Regular Unicode', g: 'sans-serif', c: 5, css: 'https://db.onlinewebfonts.com/c/34f489006eb9119cd72ec882cf0f41a8?family=Headline+Bangla+Regular+Unicode' },
   { n: 'Hind Siliguri', g: 'sans-serif', c: 5, w: '400;600;700' }, { n: 'Noto Sans Bengali', g: 'sans-serif', c: 5, w: '400;600;700;800' }, { n: 'Noto Serif Bengali', g: 'serif', c: 5, w: '400;600;700;800' },
   { n: 'Baloo Da 2', g: 'sans-serif', c: 5, w: '400;600;700;800' }, { n: 'Anek Bangla', g: 'sans-serif', c: 5, w: '400;600;700;800' }, { n: 'Tiro Bangla', g: 'serif', c: 5, w: '400' },
   { n: 'Mina', g: 'sans-serif', c: 5, w: '400;700' }, { n: 'Galada', g: 'cursive', c: 5, w: '400' },
@@ -49,9 +50,9 @@ export function loadFont(name) {
     const fam = encodeURIComponent(n).replace(/%20/g, '+');
     const attempt = spec => {
       const link = document.createElement('link');
-      link.rel = 'stylesheet'; link.href = `https://fonts.googleapis.com/css2?family=${fam}${spec}&display=swap`;
-      link.onload = () => Promise.all([400, 600, 700, 800].map(w => document.fonts.load(`${w} 24px "${n}"`, 'AaBb অআকখ 0123'))).then(() => resolve(true), () => resolve(false));
-      link.onerror = () => { link.remove(); if (spec) attempt(''); else resolve(false); };
+      link.rel = 'stylesheet'; link.href = f?.css || `https://fonts.googleapis.com/css2?family=${fam}${spec}&display=swap`;
+      link.onload = () => Promise.all((f?.css ? [400] : [400, 600, 700, 800]).map(w => document.fonts.load(`${w} 24px "${n}"`, 'অআকখ বাংলা ১২৩'))).then(() => resolve(true), () => resolve(false));
+      link.onerror = () => { link.remove(); if (!f?.css && spec) attempt(''); else resolve(false); };
       document.head.appendChild(link);
     };
     attempt(f?.w ? `:wght@${f.w}` : ':wght@400;600;700;800');

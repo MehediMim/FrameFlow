@@ -1,0 +1,17 @@
+/* Shared Illustrator-style collapsible inspector: Motion, Map and Paper. */
+.ff-inspector-accordion{padding-top:14px!important}
+.ff-inspector-accordion>.inspector-title{margin-bottom:12px}
+.ff-inspector-section{border:1px solid #343d40;border-radius:8px;background:#1b2023;margin:0 0 9px;overflow:visible}
+.ff-inspector-summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 12px;cursor:pointer;color:#d9e3d3;font-size:10px;letter-spacing:1.1px;font-weight:750;user-select:none;transition:background .15s;border-radius:7px}
+.ff-inspector-summary::-webkit-details-marker{display:none}
+.ff-inspector-summary::marker{content:''}
+.ff-inspector-summary:hover{background:#2b3433}
+.ff-inspector-summary:focus-visible{outline:2px solid var(--accent,#b6f36e);outline-offset:-2px}
+.ff-inspector-section[open]>.ff-inspector-summary{background:#222c29;color:var(--accent,#b6f36e);border-radius:7px 7px 0 0;border-bottom:1px solid #36433a}
+.ff-inspector-chevron{color:#9aa8a0;font-size:16px;line-height:1;transform:rotate(-90deg);transition:transform .15s}
+.ff-inspector-section[open] .ff-inspector-chevron{transform:rotate(0deg)}
+.ff-inspector-content{padding:13px 11px 10px;min-width:0}
+.ff-inspector-content> :last-child{margin-bottom:0}
+.ff-inspector-content .section-title{margin-top:10px!important;margin-bottom:10px!important}
+.ff-inspector-content .two{min-width:0}
+.ff-inspector-content input,.ff-inspector-content textarea,.ff-inspector-content select{max-width:100%}

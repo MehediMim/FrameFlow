@@ -1,0 +1,69 @@
+/* Consistent collapsible tools and items in the three FrameFlow studios. */
+.ff-left-accordion{display:flex;flex-direction:column;gap:8px;min-height:0;align-items:stretch}
+.ff-left-section{flex:0 0 auto;border:1px solid #343d40;border-radius:8px;background:#1b2023;min-width:0}
+.ff-left-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;list-style:none;cursor:pointer;padding:12px;color:#d9e3d3;letter-spacing:1.1px;font-size:10px;font-weight:750;user-select:none;border-radius:7px}
+.ff-left-summary::-webkit-details-marker{display:none}
+.ff-left-summary::marker{content:''}
+.ff-left-summary:hover{background:#2b3433}
+.ff-left-summary:focus-visible{outline:2px solid var(--accent,#b6f36e);outline-offset:-2px}
+.ff-left-section[open]>.ff-left-summary{color:var(--accent,#b6f36e);background:#222c29;border-radius:7px 7px 0 0;border-bottom:1px solid #36433a}
+.ff-left-chevron{font-size:16px;line-height:1;color:#9aa8a0;transform:rotate(-90deg);transition:transform .15s}
+.ff-left-section[open] .ff-left-chevron{transform:rotate(0)}
+.ff-left-content{padding:10px 9px 12px;min-width:0}
+.ff-left-content>.add-grid,.ff-left-content>.m-presets{margin-bottom:5px}
+.ff-left-content>.layer-actions{flex-wrap:wrap}
+.ff-left-content>.starter{margin-top:10px;padding:12px 3px 4px}
+.ff-left-content>.help{margin-top:8px}
+.ff-left-content>.section-title{margin-top:0!important;margin-bottom:10px}
+.ff-left-content>.ff-camera-controls>.section-title{display:none}
+.ff-left-content button,.ff-left-content input{max-width:100%}
+
+/* Fix: accordion padding must not squeeze the two-column studio tool grids. */
+.workspace.motion-only,
+#mapStudio .workspace,
+#paperStudio .workspace {
+  grid-template-columns: minmax(260px, 260px) minmax(0,1fr) 255px;
+}
+.workspace.motion-only > .left,
+#mapStudio .workspace > .left,
+#paperStudio .workspace > .left {
+  min-width:0;
+  overflow-x:hidden;
+  padding:12px 10px;
+}
+.ff-left-accordion,
+.ff-left-accordion > .ff-left-section,
+.ff-left-summary,
+.ff-left-content { width:100%; max-width:100%; box-sizing:border-box; min-width:0; }
+.ff-left-content { padding:9px 8px 11px; overflow-x:hidden; }
+.ff-left-content .add-grid,
+.ff-left-content .m-presets,
+.ff-left-content .p-presets {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  width:100%; max-width:100%; min-width:0; gap:6px;
+}
+.ff-left-content .add-grid > button,
+.ff-left-content .m-presets > button,
+.ff-left-content .p-presets > button {
+  box-sizing:border-box;
+  width:100%; max-width:100%; min-width:0;
+  padding:8px 6px;
+  gap:6px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-align:left;
+  align-items:center;
+}
+.ff-left-content .add-grid > button b,
+.ff-left-content .m-presets > button b,
+.ff-left-content .p-presets > button b {flex:0 0 19px; width:19px; min-width:0;}
+.ff-left-content .ff-element-grid {grid-template-columns:repeat(5,minmax(0,1fr));max-width:100%;}
+.ff-left-content > *, .ff-left-content .layer, .ff-left-content .m-item {min-width:0;max-width:100%;}
+/* Keep tool labels readable and avoid a horizontal scrollbar. */
+.ff-left-accordion {overflow-x:hidden;}
+@media (max-width:1200px) {
+  .workspace.motion-only,
+  #mapStudio .workspace,
+  #paperStudio .workspace {grid-template-columns: 240px minmax(0,1fr) 245px;}
+}

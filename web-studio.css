@@ -1,0 +1,71 @@
+/* Fourth independent editor: Web Studio */
+body.mode-web .motion-only,body.mode-web .map-only,body.mode-web .paper-only{display:none!important}
+body:not(.mode-web) .web-only{display:none!important}
+#webStudio{display:none;flex:1 1 0;min-height:0;flex-direction:column}
+body.mode-web #webStudio{display:flex}
+#webStudio .workspace{height:calc(100vh - 330px)}
+#webStudio .right{padding-bottom:24px}
+#webStudio .left{min-width:0}
+#webStudio .stage-area{overflow:hidden}
+#webStudio .stage-area canvas{max-height:100%;max-width:100%;width:auto;height:auto;aspect-ratio:16/9}
+#wAddGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#wAddGrid button{display:flex;align-items:center;gap:8px;white-space:normal;text-align:left;line-height:1.25;padding:11px 8px}
+#wAddGrid button span{font-size:10px}
+#wLayers{max-height:33vh;overflow-y:auto}
+.w-layer{display:flex;width:100%;align-items:center;gap:7px;min-width:0;text-align:left;margin-bottom:5px}
+.w-layer span{font-size:9px;color:var(--accent);width:74px;flex:none}.w-layer strong{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}.w-layer small{color:#8a98a3}
+.w-layer.selected{outline:1px solid var(--accent);background:#2a3526}
+#wInspector{padding:15px 14px}#wInspector h3{margin:5px 0 16px}#wInspector input,#wInspector textarea,#wInspector select{max-width:100%}
+#wInspector .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.w-timeline-scroll{height:185px;overflow:auto;position:relative;background:#161a1d}
+#wTimelineRuler{position:relative;height:29px;background:#1d2225;border-bottom:1px solid #41464a}
+#wTimelineRuler span{position:absolute;top:6px;border-left:1px solid #48524b;padding-left:5px;color:#a0a9a6;font:10px monospace;height:18px}
+#wTimelineRows{position:relative;min-height:80px}
+.w-track{height:43px;position:relative;border-bottom:1px solid #2c3438;background:repeating-linear-gradient(90deg,transparent 0,transparent 59px,#263033 60px)}
+.w-track-name{position:sticky;z-index:2;left:5px;top:5px;background:#141d1cbb;color:#c9d1cb;font-size:9px;padding:2px 4px;pointer-events:none}
+.w-clip{position:absolute;top:13px;height:24px;border-radius:5px;overflow:hidden;background:#547c4c88;border:1px solid #a2e473;color:#eefadf;cursor:grab;font-size:10px;padding:4px 13px 4px 6px;white-space:nowrap;text-overflow:ellipsis;touch-action:none}
+.w-clip.on{outline:2px solid #d1fa93}.w-clip i{position:absolute;right:0;top:0;width:10px;height:100%;background:#b6f36e77;cursor:ew-resize}
+#wHead{position:absolute;top:0;width:2px;background:#a4ed68;pointer-events:none;z-index:4}
+#wHead:before{content:'';position:absolute;top:-9px;left:-5px;width:12px;height:12px;background:#a4ed68;border-radius:2px}
+.w-template-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:15px 0}
+.w-template-list button{white-space:normal;text-align:left;min-height:75px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.w-template-list span{font-size:10px;color:#a3b1a9}
+#wTemplateModal{background:#202629;color:white;border:1px solid #536251;border-radius:10px;width:min(700px,90vw);padding:25px}
+#wTemplateModal::backdrop{background:#000a}
+#webStudio:fullscreen{width:100vw;height:100vh;background:#111315}
+#webStudio:fullscreen .stage-area{flex:1;min-height:0}
+#webStudio:fullscreen .workspace{height:calc(100vh - 260px)}
+.modes{flex-shrink:0}.modes button{padding:6px 9px}
+
+/* Use the exact shared Map/Paper timeline structure and row metrics. */
+#webStudio .timeline{display:flex;flex-direction:column;min-height:0}
+#webStudio .timeline-body{display:flex;flex:1;min-height:0}
+#webStudio .timeline-labels{flex:0 0 215px;overflow:hidden;background:#191c1f;border-right:1px solid #363b40}
+#webStudio #wTrackLabels{overflow:hidden}
+#webStudio .w-label-row{display:flex;align-items:center;gap:8px;height:36px;min-height:36px;padding:0 12px;border-bottom:1px solid #30363b;cursor:pointer;font-size:10px;color:#c6cdd0}
+#webStudio .w-label-row.selected{background:#2c3729;color:#eaf1e9}
+#webStudio .w-label-row .type{width:17px;color:var(--accent);flex-shrink:0}
+#webStudio .w-label-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#webStudio #wTimelineScroll{flex:1;min-width:0;overflow:auto;height:auto;background:#171a1e}
+#webStudio #wTracks{position:relative;min-height:100%}
+#webStudio #wTimelineRuler{height:30px;position:relative;min-width:100%;cursor:ew-resize}
+#webStudio .w-tick{position:absolute;top:9px;color:#8b949c;font:10px 'DM Sans',sans-serif;transform:translateX(4px);pointer-events:none}
+#webStudio #wTimelineRows{position:relative;min-width:100%}
+#webStudio .w-track{height:36px;position:relative;border-bottom:1px solid #2d3236;background:transparent}
+#webStudio .w-clip{top:6px;bottom:6px;height:auto;min-width:8px;background:#547c4c77;border:1px solid #b6f36e;color:#e9f8de;padding:0 9px;display:flex;align-items:center;font-size:9px}
+#webStudio .w-clip.selected{box-shadow:0 0 0 1.5px #ffffff88;outline:0}
+#webStudio .w-clip .m-h.r{position:absolute;right:0;top:0;bottom:0;width:8px;height:auto;background:#b6f36e44;cursor:ew-resize}
+#webStudio #wHead{top:0;bottom:0;z-index:4;background:var(--accent);width:1px}
+#webStudio #wHead::before{display:none}
+#webStudio #wHead span{display:block}
+#webStudio #wAddGrid{grid-template-columns:1fr 1fr;gap:7px;margin-bottom:25px}
+#webStudio #wAddGrid button{background:#202428;font-size:10px;padding:10px 8px}
+#webStudio .w-layer.layer{background:transparent;border:1px solid transparent;padding:10px 8px;margin:2px 0;border-radius:5px}
+#webStudio .w-layer.layer.selected{background:#2c3729;border-color:#4f6140;outline:none}
+#webStudio .w-layer.layer .type{width:17px;flex:none;color:#a7b2b6}
+#webStudio .w-layer.layer .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#webStudio .stagebar label{display:inline-flex;gap:5px;align-items:center;margin:0}
+#webStudio .stagebar label input,#webStudio .stagebar label select{margin:0}
+#webStudio .stagebar #wBg{width:35px;height:27px}
+#webStudio .stagebar #wFps{width:65px}
+#webStudio .stagebar #wDuration{width:60px}

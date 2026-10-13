@@ -321,7 +321,8 @@ function renderTimeline() {
     e.preventDefault(); e.stopPropagation(); pause();
     const id = el.dataset.pclip, it = items().find(i => i.id === id); if (!it) return;
     if (sel !== id) { sel = id; renderItems(); renderInspector(); }
-    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moved: false }; renderTimeline();
+    // Selecting a timeline clip should not create an undo entry. Only a real drag does.
+    drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moved: false, checkpointed: false }; renderTimeline();
   });
   $$('[data-prow]').forEach(el => el.onpointerdown = e => { if (e.target.closest('[data-pclip]')) return; select(el.dataset.prow); scrub(e); });
   audioUI?.renderTimeline();
@@ -363,7 +364,7 @@ window.addEventListener('pointermove', e => {
     draw(); for (const k of ['x', 'y', 'w', 'h']) { const f = $(`#pInspector [data-pf="${k}"]`); if (f) f.value = it[k]; } return;
   }
   const it = items().find(i => i.id === drag.id); if (!it) return;
-  const d = frameFromEvent(e) - drag.x0; if (d !== 0) drag.moved = true;
+  const d = frameFromEvent(e) - drag.x0; if (d !== 0) { if (!drag.checkpointed) { checkpoint(); drag.checkpointed = true; } drag.moved = true; } else return;
   let s = drag.start, l = drag.dur;
   if (drag.mode === 'move') s = clamp(drag.start + d, 0, proj.frames - 1); else if (drag.mode === 'r') l = clamp(drag.dur + d, 1, 1800); else { const ns = clamp(drag.start + d, 0, drag.start + drag.dur - 1); l = drag.start + drag.dur - ns; s = ns; }
   setTiming(it, s, l); ensureLength(s + l); renderTimeline(); draw();
@@ -371,7 +372,7 @@ window.addEventListener('pointermove', e => {
 });
 window.addEventListener('pointerup', () => {
   if (!drag) return;
-  if (drag.kind === 'clip' || drag.kind === 'move' || drag.kind === 'resize') { if (!drag.moved) undoStack.pop(); changed(); updateHistory(); if (drag.moved && drag.kind !== 'clip') renderInspector(); }
+  if (drag.kind === 'clip' || drag.kind === 'move' || drag.kind === 'resize') { if (!drag.moved && drag.kind !== 'clip') undoStack.pop(); if (drag.moved) changed(); else renderTimeline(); updateHistory(); if (drag.moved && drag.kind !== 'clip') renderInspector(); }
   drag = null;
 });
 
@@ -451,7 +452,7 @@ function bindToolbar() {
 
 // ------------------------------------------------------------------ mode, shortcuts, fullscreen
 const active = () => document.body.classList.contains('mode-paper');
-const typing = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+const typing = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
 window.addEventListener('keydown', e => {
   if (!active() || $('#pModal').open || $('#pSettingsPanel').open || typing()) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); history(e.shiftKey ? 'redo' : 'undo'); return; }

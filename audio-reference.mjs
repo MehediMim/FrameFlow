@@ -65,7 +65,7 @@ export function registerAudioStudio(studio, host) {
   function renderList(){
     const box=$(host.list);box.querySelectorAll('[data-audio-layer]').forEach(n=>n.remove());
     if(state.layers.length)box.querySelector('.m-empty')?.remove();
-    for(const l of state.layers){const row=document.createElement('div');row.className=`${studio==='map'?'m-item':'layer'} ${current()?.id===l.id?'selected':''}`;row.dataset.audioLayer=l.id;
+    for(const l of state.layers){const row=document.createElement('div');row.className=`${studio==='motion'?'layer':'m-item'} ${current()?.id===l.id?'selected':''}`;row.dataset.audioLayer=l.id;
       row.innerHTML=`<span class="type">♫</span><span class="name">${esc(l.name)}</span><button type="button" title="${l.muted?'Unmute':'Mute'} audio layer">${l.muted?'🔇':'🔊'}</button>`;
       row.onclick=()=>host.select(l.id);row.querySelector('button').onclick=e=>{e.stopPropagation();checkpoint();l.muted=!l.muted;refresh(l.id);};box.append(row);
     }

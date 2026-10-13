@@ -27,6 +27,9 @@ export const FONTS = [
   { n: 'Hind Siliguri', g: 'sans-serif', c: 5, w: '400;600;700' }, { n: 'Noto Sans Bengali', g: 'sans-serif', c: 5, w: '400;600;700;800' }, { n: 'Noto Serif Bengali', g: 'serif', c: 5, w: '400;600;700;800' },
   { n: 'Baloo Da 2', g: 'sans-serif', c: 5, w: '400;600;700;800' }, { n: 'Anek Bangla', g: 'sans-serif', c: 5, w: '400;600;700;800' }, { n: 'Tiro Bangla', g: 'serif', c: 5, w: '400' },
   { n: 'Mina', g: 'sans-serif', c: 5, w: '400;700' }, { n: 'Galada', g: 'cursive', c: 5, w: '400' },
+  // Newspaper faces (used by Paper Studio)
+  { n: 'UnifrakturCook', g: 'serif', c: 3, w: '700' }, { n: 'Old Standard TT', g: 'serif', c: 2, w: '400;700' }, { n: 'Libre Baskerville', g: 'serif', c: 2, w: '400;700' },
+  { n: 'Special Elite', g: 'monospace', c: 4, w: '400' }, { n: 'DM Serif Display', g: 'serif', c: 3, w: '400' }, { n: 'Rozha One', g: 'serif', c: 3, w: '400' },
 ];
 const FONT_BY = Object.fromEntries(FONTS.map(f => [f.n, f]));
 /** Strips characters that could break a CSS font string; falls back to Arial. */

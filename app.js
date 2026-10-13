@@ -537,7 +537,7 @@ window.addEventListener('keydown',event=>{
 
   if(event.key.toLowerCase()!=='f'||event.repeat||event.ctrlKey||event.altKey||event.metaKey)return;
 
-  if(document.body.classList.contains('mode-map')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+  if(document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
 
   event.preventDefault();toggleMotionFullscreen();
 
@@ -621,7 +621,7 @@ $('#export').onclick=async()=>{
 
 };
 
-window.addEventListener('keydown',e=>{if(document.body.classList.contains('mode-map')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(e.shiftKey?'redo':'undo');return}if(e.code==='Space'){e.preventDefault();play()}else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();pause();setFrame(frame+(e.key==='ArrowRight'?1:-1)*(e.shiftKey?10:1))}else if(e.key.toLowerCase()==='k')$('#keyAll').click();else if(e.key==='Delete'||e.key==='Backspace'){$('#delete').click();e.preventDefault()}});
+window.addEventListener('keydown',e=>{if(document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(e.shiftKey?'redo':'undo');return}if(e.code==='Space'){e.preventDefault();play()}else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();pause();setFrame(frame+(e.key==='ArrowRight'?1:-1)*(e.shiftKey?10:1))}else if(e.key.toLowerCase()==='k')$('#keyAll').click();else if(e.key==='Delete'||e.key==='Backspace'){$('#delete').click();e.preventDefault()}});
 
 audioUI = registerAudioStudio('motion', {
  getSelected:()=>selected, getFrame:()=>frame, getFps:()=>project.fps, getFrames:()=>project.frames,

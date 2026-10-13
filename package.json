@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Frame based browser motion graphics editor",
+  "description": "Frame based browser motion graphics editor (Motion, Map and Paper studios)",
   "scripts": {
-    "test": "node tests/map-engine.test.mjs",
-    "check": "node --check app.js && node --check engine.mjs && node --check map-engine.mjs && node --check map-ui.js && node --check map-places.mjs"
+    "test": "node tests/map-engine.test.mjs && node tests/paper-engine.test.mjs",
+    "check": "node --check app.js && node --check engine.mjs && node --check map-engine.mjs && node --check map-ui.js && node --check map-places.mjs && node --check paper-engine.mjs && node --check paper-templates.mjs && node --check paper-ui.js"
   }
 }

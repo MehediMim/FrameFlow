@@ -1,0 +1,100 @@
+/* Paper Studio: mode switch + styles for the newspaper section. Shared editor styles live in style.css and map.css. */
+body.mode-paper .motion-only{display:none!important}
+body:not(.mode-paper) .paper-only{display:none!important}
+#paperStudio{display:none;flex:1 1 0;min-height:0;flex-direction:column}
+body.mode-paper #paperStudio{display:flex}
+#pProjectName{background:transparent;border:0;border-left:1px solid #393e42;border-radius:0;margin-left:18px;padding-left:20px;width:210px;font-weight:500}
+#pSaveState{margin-right:auto;font-size:10px}
+#pInspector{padding:17px}
+#pInspector textarea{width:100%;resize:vertical;min-height:54px;line-height:1.45;font-size:11px}
+#pInspector .p-warn{color:#ffb35c}
+#pInspector button[data-pupload],#pInspector button[data-pclearimg],#pInspector button[data-pcam]{width:100%}
+#paperStudio .right{position:relative}
+#paperStudio .right>.tabs{min-height:55px}
+#pCanvas{cursor:default;touch-action:none}
+.stagebar button.active{color:var(--accent)}
+/* timeline colors: one per kind of item */
+.c-sheet{color:#d9c27f}.c-headline{color:#f4a259}.c-text{color:#e9c46a}.c-masthead{color:#e76f51}.c-columns{color:#8ab17d}.c-photo{color:#7aa2f7}.c-banner{color:#ef476f}.c-stamp{color:#e5383b}.c-ticker{color:#ff9f1c}.c-marker{color:#ffd166}.c-rule{color:#a1a8ae}.c-deco{color:#c77dff}
+.m-clip.t-sheet{background:#d9c27f55;border-color:#d9c27f}.m-clip.t-headline{background:#f4a25955;border-color:#f4a259}.m-clip.t-text{background:#e9c46a55;border-color:#e9c46a}.m-clip.t-masthead{background:#e76f5155;border-color:#e76f51}.m-clip.t-columns{background:#8ab17d55;border-color:#8ab17d}.m-clip.t-photo{background:#7aa2f755;border-color:#7aa2f7}.m-clip.t-banner{background:#ef476f55;border-color:#ef476f}.m-clip.t-stamp{background:#e5383b55;border-color:#e5383b}.m-clip.t-ticker{background:#ff9f1c55;border-color:#ff9f1c}.m-clip.t-marker{background:#ffd16655;border-color:#ffd166}.m-clip.t-rule{background:#a1a8ae55;border-color:#a1a8ae}.m-clip.t-deco{background:#c77dff55;border-color:#c77dff}
+/* templates gallery */
+#pModal:has(.p-tpl-grid){width:min(920px,calc(100vw - 36px));max-width:920px}
+.p-tpl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+.p-tpl{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:6px;padding:10px;background:#202428;border:1px solid #363b40;border-radius:9px;white-space:normal}
+.p-tpl:hover{border-color:var(--accent);background:#262c27}
+.p-tpl canvas{width:100%;height:auto;aspect-ratio:16/9;border-radius:5px;background:#14171a;display:block}
+.p-tpl b{font-size:12px}.p-tpl span{font-size:10px;line-height:1.5;color:#98a1a8}
+@media(max-width:760px){.p-tpl-grid{grid-template-columns:1fr 1fr}}
+#pModal .support-link{margin:10px 0;display:inline-flex}
+/* video settings drawer */
+#pSettingsPanel{position:fixed;inset:0;margin:auto;width:min(480px,calc(100vw - 36px));max-width:480px;max-height:min(85vh,750px);overflow-y:auto;background:#202529;border:1px solid #505c47;border-radius:12px;box-shadow:0 20px 90px #0009;padding:28px}
+#pSettingsPanel::backdrop{background:#0009}
+#pSettingsPanel .section-title{align-items:center}
+#pSettingsClose{font-size:14px;padding:3px 8px}
+/* landing page: three studios */
+#landing .home-studios{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){#landing .home-studios{grid-template-columns:1fr}}
+/* The Map Studio preview uses the same fullscreen layout as Motion Studio. */
+#paperStudio .workspace main:fullscreen {
+  display:flex;flex-direction:column;width:100vw;height:100vh;
+  min-width:0;min-height:0;background:#101315;color:var(--text);
+}
+#paperStudio .workspace main:fullscreen .stagebar {flex:0 0 47px;}
+#paperStudio .workspace main:fullscreen .stage-area {
+  flex:1 1 auto;min-height:0;min-width:0;overflow:hidden!important;
+  display:flex!important;align-items:center;justify-content:center;
+}
+#paperStudio .workspace main:fullscreen .canvas-wrap {
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;min-width:0;min-height:0;
+}
+#paperStudio .workspace main:fullscreen #pCanvas {
+  max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
+}
+#paperStudio .workspace main:fullscreen .transport {flex:0 0 auto;}
+/* Map Studio fullscreen: root fullscreen ensures the grid cannot clip the preview. */
+#paperStudio:fullscreen,
+#paperStudio:-webkit-full-screen {
+  width:100vw!important;height:100vh!important;min-width:0!important;
+  min-height:0!important;background:#101315!important;
+  display:flex!important;flex-direction:column!important;overflow:hidden!important;
+}
+#paperStudio:fullscreen > .timeline,
+#paperStudio:fullscreen > footer,
+#paperStudio:fullscreen > .workspace > .left,
+#paperStudio:fullscreen > .workspace > .right,
+#paperStudio:-webkit-full-screen > .timeline,
+#paperStudio:-webkit-full-screen > footer,
+#paperStudio:-webkit-full-screen > .workspace > .left,
+#paperStudio:-webkit-full-screen > .workspace > .right {display:none!important;}
+#paperStudio:fullscreen > .workspace,
+#paperStudio:-webkit-full-screen > .workspace {
+  flex:1 1 auto!important;width:100%!important;height:100%!important;
+  display:flex!important;grid-template-columns:none!important;
+  min-height:0!important;overflow:hidden!important;
+}
+#paperStudio:fullscreen > .workspace > main,
+#paperStudio:-webkit-full-screen > .workspace > main {
+  display:flex!important;flex:1 1 auto!important;flex-direction:column!important;
+  width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;
+}
+#paperStudio:fullscreen .stagebar,
+#paperStudio:-webkit-full-screen .stagebar {flex:0 0 47px!important;}
+#paperStudio:fullscreen .stage-area,
+#paperStudio:-webkit-full-screen .stage-area {
+  flex:1 1 auto!important;min-width:0!important;min-height:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  overflow:hidden!important;padding:12px!important;
+}
+#paperStudio:fullscreen .canvas-wrap,
+#paperStudio:-webkit-full-screen .canvas-wrap {
+  width:100%!important;height:100%!important;min-width:0!important;
+  min-height:0!important;display:flex!important;align-items:center!important;
+  justify-content:center!important;margin:0!important;
+}
+#paperStudio:fullscreen #pCanvas,
+#paperStudio:-webkit-full-screen #pCanvas {
+  display:block!important;width:auto!important;height:auto!important;
+  max-width:100%!important;max-height:100%!important;object-fit:contain!important;
+}
+#paperStudio:fullscreen .transport,
+#paperStudio:-webkit-full-screen .transport {flex:0 0 52px!important;}

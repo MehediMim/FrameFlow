@@ -1,7 +1,7 @@
 // FrameFlow Motion Studio — textured text. Deterministic textures are punched out
 // of the glyph alpha, revealing the real composition background through the ink.
 const clamp = (n,a,b) => Math.max(a,Math.min(b,Number(n)||0));
-export const TEXT_TEXTURES = {none:'None',grain:'Fine noise',rough:'Rough grain',speckle:'Ink speckles',lines:'Hatched lines',paper:'Paper fibers',vectorHatch:'Vector · diagonal hatch',vectorCross:'Vector · crosshatch',vectorDots:'Vector · halftone dots',vectorStripes:'Vector · parallel stripes',vectorGrid:'Vector · grid',vectorChevrons:'Vector · chevrons'};
+export const TEXT_TEXTURES = {none:'None',grain:'Fine noise',rough:'Rough grain',speckle:'Ink speckles',lines:'Hatched lines',paper:'Paper fibers',vectorHatch:'Vector · diagonal hatch',vectorCross:'Vector · crosshatch',vectorDots:'Vector · halftone dots',vectorStripes:'Vector · parallel stripes',vectorGrid:'Vector · grid',vectorChevrons:'Vector · chevrons',abstract:'Abstract blotches',brush:'Brush strokes'};
 const TILE_SIZE=256, tiles=new Map(), glyphCache=new Map();
 const VECTOR_TYPES=new Set(['vectorHatch','vectorCross','vectorDots','vectorStripes','vectorGrid','vectorChevrons']);
 function createCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
@@ -36,6 +36,28 @@ function noiseTile(kind){
    const a=rnd()*256,b=rnd()*256;x.beginPath();x.moveTo(a,b);x.lineTo(a+rnd()*9,b+rnd()*3);x.stroke();}
   x.globalAlpha=1;
  }
+if(kind==='abstract'||kind==='brush'){
+ // Seamless alpha tiles: drawn at 9 wrapped offsets. Alpha = how much ink is removed.
+ const wrap=f=>{for(const ox of [-256,0,256])for(const oy of [-256,0,256])f(ox,oy);};
+ if(kind==='abstract'){
+  for(let i=0;i<26;i++){
+   const px=rnd()*256,py=rnd()*256,r=14+rnd()*50,a=.35+rnd()*.5;
+   wrap((ox,oy)=>{const g=x.createRadialGradient(px+ox,py+oy,0,px+ox,py+oy,r);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(px+ox-r,py+oy-r,r*2,r*2);});
+  }
+  x.lineWidth=1.4;
+  for(let i=0;i<10;i++){const px=rnd()*256,py=rnd()*256,r=8+rnd()*36,a0=rnd()*6.28,a1=a0+1+rnd()*3.2,al=.5+rnd()*.4;
+   wrap((ox,oy)=>{x.strokeStyle=`rgba(0,0,0,${al})`;x.beginPath();x.arc(px+ox,py+oy,r,a0,a1);x.stroke();});}
+ }else{
+  x.lineCap='round';
+  for(let i=0;i<40;i++){
+   const px=rnd()*256,py=rnd()*256,len=80+rnd()*140,ang=(rnd()-.5)*.35-.15;
+   const nb=6+Math.floor(rnd()*10),bristles=Array.from({length:nb},(_,b)=>({off:(b-nb/2)*1.8,start:rnd()*len*.2,l:len*(.5+rnd()*.5),drift:(rnd()-.5)*1.6,a:.35+rnd()*.55,w:1+rnd()*1.1}));
+   wrap((ox,oy)=>{x.save();x.translate(px+ox,py+oy);x.rotate(ang);
+    for(const b of bristles){x.strokeStyle=`rgba(0,0,0,${b.a})`;x.lineWidth=b.w;x.beginPath();x.moveTo(b.start,b.off);x.lineTo(b.start+b.l,b.off+b.drift);x.stroke();}
+    x.restore();});
+  }
+ }
+}
  tiles.set(kind,c);return c;
 }
 // Vector patterns are rendered as paths, not raster noise. Spacing and stroke width

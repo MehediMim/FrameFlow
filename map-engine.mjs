@@ -28,7 +28,7 @@ export const THEMES = {
 };
 
 // Texture tiles are seeded and cached: no per-frame noise or flickering in exports.
-export const TEXTURES = { none: 'None', paper: 'Paper grain', grain: 'Film grain', linen: 'Linen', dots: 'Halftone dots' };
+export const TEXTURES = { none: 'None', paper: 'Paper grain', grain: 'Film grain', linen: 'Linen', dots: 'Halftone dots', abstract: 'Abstract blotches', brush: 'Brush strokes' };
 export const DEFAULT_TEXTURE = { type: 'none', strength: .3, scale: 1 };
 const textureTiles = new Map();
 function textureTile(type) {
@@ -62,6 +62,36 @@ function textureTile(type) {
     c.fillStyle = 'rgba(0,0,0,.5)';
     for (let y = 4; y < 256; y += 8) for (let x = 4; x < 256; x += 8) {
       c.beginPath(); c.arc(x, y, 1.2, 0, Math.PI * 2); c.fill();
+    }
+  }
+  else if (type === 'abstract' || type === 'brush') {
+    // Seamless: every shape is drawn at 9 wrapped offsets so the 256px tile repeats without seams.
+    const wrap = draw => { for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) draw(ox, oy); };
+    if (type === 'abstract') {
+      for (let i = 0; i < 70; i++) {
+        const x = random() * 256, y = random() * 256, r = 7 + random() * 34, rgb = random() > .5 ? '40,28,16' : '255,246,226', a = .08 + random() * .18;
+        wrap((ox, oy) => {
+          const g = c.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+          g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+          c.fillStyle = g; c.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+        });
+      }
+      c.lineWidth = 1.1;
+      for (let i = 0; i < 12; i++) {
+        const x = random() * 256, y = random() * 256, r = 10 + random() * 40, a0 = random() * 6.28, a1 = a0 + 1 + random() * 3.2, rgb = random() > .5 ? '40,28,16' : '255,246,226', al = .18 + random() * .2;
+        wrap((ox, oy) => { c.strokeStyle = `rgba(${rgb},${al})`; c.beginPath(); c.arc(x + ox, y + oy, r, a0, a1); c.stroke(); });
+      }
+    } else {
+      c.lineCap = 'round';
+      for (let i = 0; i < 36; i++) {
+        const x = random() * 256, y = random() * 256, len = 70 + random() * 120, ang = (random() - .5) * .5 - .3, rgb = random() > .45 ? '40,28,16' : '255,248,232';
+        const nb = 5 + Math.floor(random() * 9), bristles = Array.from({ length: nb }, (_, b) => ({ off: (b - nb / 2) * 1.5, start: random() * len * .15, l: len * (.55 + random() * .45), drift: (random() - .5) * 1.4, a: .06 + random() * .22, w: .8 + random() * .9 }));
+        wrap((ox, oy) => {
+          c.save(); c.translate(x + ox, y + oy); c.rotate(ang);
+          for (const b of bristles) { c.strokeStyle = `rgba(${rgb},${b.a})`; c.lineWidth = b.w; c.beginPath(); c.moveTo(b.start, b.off); c.lineTo(b.start + b.l, b.off + b.drift); c.stroke(); }
+          c.restore();
+        });
+      }
     }
   }
   textureTiles.set(type, tile); return tile;

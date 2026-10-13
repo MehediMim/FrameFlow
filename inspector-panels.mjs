@@ -18,6 +18,9 @@ function isSectionHeading(node) {
     !node.matches('summary') && !node.closest('details');
 }
 function needsArrangement(panel) {
+  // A panel holding only its title has nothing to group; rewriting it would retrigger
+  // the observer forever (a microtask loop that freezes the page).
+  if (![...panel.childNodes].some(n => !(n.nodeType === Node.ELEMENT_NODE && n.matches('.inspector-title')))) return false;
   return [...panel.children].some(child => isSectionHeading(child)) ||
     ([...panel.children].some(child => child.classList.contains('inspector-title')) &&
       !panel.querySelector(`:scope > .${CSS_SECTION}`));
@@ -74,6 +77,7 @@ function arrange(panel) {
     } else group.push(node);
   }
   flush();
+  if (!fragment.childNodes.length) return;
   // Avoid triggering expensive studio rerenders, only replace this panel's children.
   panel.replaceChildren(...pinned, fragment);
 }

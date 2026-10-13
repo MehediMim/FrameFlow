@@ -64,7 +64,7 @@ const requestDraw = () => { if (drawQueued) return; drawQueued = true; requestAn
 function draw() {
   syncFonts();
   if (canvas.width !== proj.width || canvas.height !== proj.height) { canvas.width = proj.width; canvas.height = proj.height; }
-  canvas.style.aspectRatio = `${proj.width}/${proj.height}`;
+  const ratio = `${proj.width} / ${proj.height}`; if (canvas.style.aspectRatio !== ratio) canvas.style.aspectRatio = ratio;
   lastView = PE.drawPaper(ctx, proj.width, proj.height, proj, frame, { onImage: requestDraw });
   if (!playing && !exporting) overlay();
 }
@@ -93,7 +93,7 @@ function play() {
   const tick = t => {
     let f = startFrame + Math.floor((t - startTime) / 1000 * proj.fps);
     if (f >= proj.frames) { if (loop) f %= proj.frames; else { setFrame(proj.frames - 1); pause(); return; } }
-    setFrame(f); raf = requestAnimationFrame(tick);
+    if (f !== frame) if(f!==frame)setFrame(f); raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
 }

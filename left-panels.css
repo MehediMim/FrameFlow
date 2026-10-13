@@ -67,3 +67,7 @@
   #mapStudio .workspace,
   #paperStudio .workspace {grid-template-columns: 240px minmax(0,1fr) 245px;}
 }
+
+/* Counter (e.g. layer count) kept inside the section header. */
+.ff-left-summary>span:first-child{flex:1}
+.ff-left-summary [id]{color:#8a98a3;font-weight:500;letter-spacing:0;font-variant-numeric:tabular-nums}

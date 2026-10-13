@@ -9,12 +9,12 @@ const memory = new Map();
 
 function titleOf(el) {
   const clone=el.cloneNode(true);
-  clone.querySelectorAll('button,input,select').forEach(x=>x.remove());
+  clone.querySelectorAll('button,input,select,[id]').forEach(x=>x.remove());
   return (clone.textContent||'Section').replace(/[＋▣◉]/g,'').trim().replace(/\s+/g,' ')||'Section';
 }
 function isHeading(el) { return el?.nodeType===1 && el.matches('.section-title'); }
 function isCamera(el) { return el?.nodeType===1 && el.matches('.ff-camera-controls'); }
-function section(aside, name, nodes, index) {
+function section(aside, name, nodes, index, keep=[]) {
   const details=document.createElement('details');
   details.className='ff-left-section';
   const key=aside.dataset.ffLeftStudio+':'+name.toLowerCase()+':'+index;
@@ -24,7 +24,7 @@ function section(aside, name, nodes, index) {
   summary.className='ff-left-summary';
   const txt=document.createElement('span');txt.textContent=name;
   const icon=document.createElement('span');icon.className='ff-left-chevron';icon.textContent='⌄';icon.setAttribute('aria-hidden','true');
-  summary.append(txt,icon);
+  summary.append(txt,...keep,icon);
   const body=document.createElement('div');body.className='ff-left-content';body.append(...nodes);
   details.append(summary,body);
   details.addEventListener('toggle',()=>memory.set(key,details.open));
@@ -34,14 +34,17 @@ function organize(aside) {
   const children=[...aside.children];
   // Only operate when a studio changed its top-level content, not after our own grouping.
   if (!children.some(c=>isHeading(c)||isCamera(c))) return;
-  let current=[],title='TOOLS',number=0;
+  let current=[],title='TOOLS',number=0,keep=[];
   const output=document.createDocumentFragment();
-  const flush=()=>{if(current.length){output.append(section(aside,title,current,number++));current=[];}};
+  const flush=()=>{if(current.length){output.append(section(aside,title,current,number++,keep));current=[];}keep=[];};
   for(const child of children){
     if(isHeading(child)){
       flush(); title=titleOf(child);
       // A heading's existing button is preserved; the heading itself becomes part of the section.
       if(child.querySelector('button,input,select')) current.push(child);
+      // Counters such as #layerCount live inside headings. app.js writes to them on
+      // every render, so they must stay in the document (shown in the summary).
+      else keep=[...child.querySelectorAll('[id]')];
     } else if(isCamera(child)) {
       flush();
       const heading=child.querySelector(':scope > .section-title');

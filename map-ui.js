@@ -82,7 +82,7 @@ function syncFonts() { for (const n of mapFontsUsed(proj)) { if (seenFonts.has(n
 function draw() {
   syncFonts();
   if (canvas.width !== proj.width || canvas.height !== proj.height) { canvas.width = proj.width; canvas.height = proj.height; }
-  canvas.style.aspectRatio = `${proj.width}/${proj.height}`;
+  const ratio = `${proj.width} / ${proj.height}`; if (canvas.style.aspectRatio !== ratio) canvas.style.aspectRatio = ratio;
   if (!geo) {
     ctx.fillStyle = '#0d1b2a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#9fb3c4'; ctx.textAlign = 'center'; ctx.font = `600 ${Math.round(canvas.height / 30)}px Arial, sans-serif`;
@@ -109,7 +109,7 @@ function play() {
   const tick = t => {
     let f = startFrame + Math.floor((t - startTime) / 1000 * proj.fps);
     if (f >= proj.frames) { if (loop) f %= proj.frames; else { setFrame(proj.frames - 1); pause(); return; } }
-    setFrame(f); raf = requestAnimationFrame(tick);
+    if (f !== frame) if(f!==frame)setFrame(f); raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
 }

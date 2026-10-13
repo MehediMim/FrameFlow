@@ -1,8 +1,9 @@
 // FrameFlow Motion Studio — textured text. Deterministic textures are punched out
 // of the glyph alpha, revealing the real composition background through the ink.
 const clamp = (n,a,b) => Math.max(a,Math.min(b,Number(n)||0));
-export const TEXT_TEXTURES = {none:'None',grain:'Fine noise',rough:'Rough grain',speckle:'Ink speckles',lines:'Hatched lines',paper:'Paper fibers'};
+export const TEXT_TEXTURES = {none:'None',grain:'Fine noise',rough:'Rough grain',speckle:'Ink speckles',lines:'Hatched lines',paper:'Paper fibers',vectorHatch:'Vector · diagonal hatch',vectorCross:'Vector · crosshatch',vectorDots:'Vector · halftone dots',vectorStripes:'Vector · parallel stripes',vectorGrid:'Vector · grid',vectorChevrons:'Vector · chevrons'};
 const TILE_SIZE=256, tiles=new Map(), glyphCache=new Map();
+const VECTOR_TYPES=new Set(['vectorHatch','vectorCross','vectorDots','vectorStripes','vectorGrid','vectorChevrons']);
 function createCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
 function noiseTile(kind){
  if(tiles.has(kind))return tiles.get(kind);
@@ -37,6 +38,26 @@ function noiseTile(kind){
  }
  tiles.set(kind,c);return c;
 }
+// Vector patterns are rendered as paths, not raster noise. Spacing and stroke width
+// are measured in composition pixels; they stay sharp when the text is scaled.
+function drawVectorPattern(ctx,kind,w,h,spacing,weight,color="#000"){
+ const step=Math.max(3,spacing),lw=Math.max(.5,weight);
+ ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=lw;
+ const stroke=(x1,y1,x2,y2)=>{ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);};
+ if(kind==='vectorDots'){
+  const radius=Math.max(.6,lw*.72);
+  ctx.beginPath();for(let y=step/2;y<h;y+=step)for(let x=step/2;x<w;x+=step){ctx.moveTo(x+radius,y);ctx.arc(x,y,radius,0,Math.PI*2);}ctx.fill();return;
+ }
+ ctx.beginPath();
+ if(kind==='vectorStripes'||kind==='vectorGrid')for(let x=0;x<=w+step;x+=step)stroke(x,0,x,h);
+ if(kind==='vectorGrid')for(let y=0;y<=h+step;y+=step)stroke(0,y,w,y);
+ if(kind==='vectorHatch'||kind==='vectorCross'){
+  for(let x=-h;x<w+h;x+=step)stroke(x,0,x+h,h);
+  if(kind==='vectorCross')for(let x=0;x<w+h*2;x+=step)stroke(x,0,x-h,h);
+ }
+ if(kind==='vectorChevrons')for(let y=-step;y<h+step;y+=step)for(let x=-step;x<w+step;x+=step*2){stroke(x,y,x+step,y+step);stroke(x+step,y+step,x+step*2,y);}
+ ctx.stroke();
+}
 function geometry(ctx,l,fontStack){
  const size=clamp(l.fontSize||80,1,2000),lines=String(l.text??'').split('\n');
  const font=`${l.fontWeight||700} ${size}px ${fontStack(l.fontFamily)}`;
@@ -49,34 +70,112 @@ export function drawTextTexture(ctx,l,fontStack){
  const {size,lines,font,step,width,height}=geometry(ctx,l,fontStack);
  const kind=Object.hasOwn(TEXT_TEXTURES,l.textTexture)?l.textTexture:'none';
  const amount=clamp(l.textNoise??.3,0,1);
- if(kind==='none'||amount<=0){lines.forEach((s,i)=>ctx.fillText(s,0,(i-(lines.length-1)/2)*step));return;}
- // Render only as large as needed, but cap memory for very large editable text.
- const max=4096, scale=Math.min(1,max/Math.max(width+size*.4,height+size*.4));
- const w=Math.max(1,Math.ceil((width+size*.4)*scale));
- const h=Math.max(1,Math.ceil((height+size*.4)*scale));
- // Cache source glyphs by typography; changing intensity does not rebuild them.
- const key=JSON.stringify([l.text,l.fontFamily,l.fontWeight,size,l.color,w,h,scale]);
- let base=glyphCache.get(key);
- if(!base){
-  base=createCanvas(w,h);const b=base.getContext('2d');b.scale(scale,scale);
-  b.font=font;b.textAlign='center';b.textBaseline='middle';b.fillStyle=l.color||'#ffffff';
-  for(let i=0;i<lines.length;i++)b.fillText(lines[i],w/(2*scale),h/(2*scale)+(i-(lines.length-1)/2)*step);
-  glyphCache.set(key,base);if(glyphCache.size>20)glyphCache.delete(glyphCache.keys().next().value);
+ const strokeWidth=clamp(l.textStrokeWidth??0,0,60);
+ const strokeColor=l.textStrokeColor||'#111111';
+ const shadow=l.textShadowEnabled===true,extrude=l.textFullShadow===true;
+ const shadowColor=l.textShadowColor||'#000000';
+ const dx=clamp(l.textShadowX??12,-150,150),dy=clamp(l.textShadowY??12,-150,150);
+ const blur=clamp(l.textShadowBlur??16,0,100),depth=clamp(l.textFullShadowDepth??18,0,120);
+ const mirror=l.textMirror===true;
+ // Native Canvas glyph drawing is vector-rasterized at the destination resolution.
+ // Do not introduce a temporary bitmap when there are no effects to composite.
+ if(kind==='none' && strokeWidth===0 && !shadow && !extrude && !mirror){
+  ctx.font=font;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=l.color||'#ffffff';
+  lines.forEach((txt,i)=>ctx.fillText(txt,0,(i-(lines.length-1)/2)*step));
+  return;
  }
- const out=createCanvas(w,h),b=out.getContext('2d');b.drawImage(base,0,0);
- b.globalCompositeOperation='destination-out';
- b.globalAlpha=Math.min(1,amount*(kind==='grain'?.85:kind==='paper'?1:kind==='speckle'?1.85:1.2));
- const pat=b.createPattern(noiseTile(kind),'repeat');
- if(pat){b.fillStyle=pat;b.fillRect(0,0,w,h);}
- b.globalAlpha=1;b.globalCompositeOperation='source-over';
- ctx.drawImage(out,-w/(2*scale),-h/(2*scale),w/scale,h/scale);
+ // Include stroke, shadow and reflection in the temporary render bounds.
+ const pad=size*.3+strokeWidth+Math.max(Math.abs(dx),Math.abs(dy))+depth+blur*2+10;
+ const rawW=width+pad*2,rawH=height+pad*2;
+ // Rasterize AFTER accounting for the context's actual transformation scale.
+ // Otherwise text becomes a stretched low-resolution picture at large layer scales.
+ const m=ctx.getTransform();
+ const sx=Math.hypot(m.a,m.b),sy=Math.hypot(m.c,m.d);
+ const desired=Math.max(1,Math.min(16,Math.max(sx,sy)));
+ // Browser canvas limits: prefer sharpness but bound the bitmap to ~32 MP and
+ // at most 8192px per side so large compositions do not exhaust GPU memory.
+ const limit=Math.min(8192/Math.max(rawW,rawH),Math.sqrt(32000000/(rawW*rawH)));
+ const scale=Math.max(.01,Math.min(desired,limit));
+ const w=Math.max(1,Math.ceil(rawW*scale)),h=Math.max(1,Math.ceil(rawH*scale));
+ const base=createCanvas(w,h),b=base.getContext('2d');
+ b.scale(scale,scale);b.font=font;b.textAlign='center';b.textBaseline='middle';
+ const cx=rawW/2,cy=rawH/2;
+ const drawLines=(c,mode)=>lines.forEach((txt,i)=>{const y=cy+(i-(lines.length-1)/2)*step;if(mode==='stroke')c.strokeText(txt,cx,y);else c.fillText(txt,cx,y);});
+ b.fillStyle=l.color||'#ffffff';drawLines(b,'fill');
+ if(kind!=='none'&&amount>0){
+  const pattern=createCanvas(w,h),t=pattern.getContext('2d');
+  if(VECTOR_TYPES.has(kind)){
+   t.scale(scale,scale);t.globalAlpha=amount;
+   drawVectorPattern(t,kind,rawW,rawH,clamp(l.vectorTextureSpacing??13,4,90),clamp(l.vectorTextureWidth??2.4,.5,15),l.vectorTextureColor||'#ffffff');
+  }else{
+   t.globalAlpha=clamp(amount*(kind==='grain'?.85:kind==='paper'?1:kind==='speckle'?1.85:1.2),0,1);
+   const pat=t.createPattern(noiseTile(kind),'repeat');
+   if(pat){ // Texture repeats in composition units, not stretched bitmap units.
+    if(pat.setTransform && typeof DOMMatrix!=='undefined')pat.setTransform(new DOMMatrix().scale(scale));
+    t.fillStyle=pat;t.fillRect(0,0,w,h);
+   }
+  }
+  // Preserve the base text color; paint vectors over the text rather than erasing its ink.
+  b.save();b.setTransform(1,0,0,1,0,0);b.globalCompositeOperation=VECTOR_TYPES.has(kind)?'source-atop':'destination-out';b.drawImage(pattern,0,0);b.restore();
+ }
+ if(strokeWidth>0){b.strokeStyle=strokeColor;b.lineWidth=strokeWidth;b.lineJoin='round';drawLines(b,'stroke');}
+ const rendered=createCanvas(w,h),r=rendered.getContext('2d');
+ // Shadow is composited behind the finished glyphs, not on top of the texture.
+ if(extrude&&depth>0){
+  r.save();r.scale(scale,scale);r.font=font;r.textAlign='center';r.textBaseline='middle';
+  r.fillStyle=shadowColor;r.strokeStyle=shadowColor;r.lineWidth=Math.max(1,strokeWidth);
+  const count=Math.max(1,Math.ceil(depth/2));
+  for(let i=count;i>=1;i--){const t=i/count;r.save();r.translate(dx*t,dy*t);drawLines(r,'fill');if(strokeWidth>0)drawLines(r,'stroke');r.restore();}
+  r.restore();
+ }
+ if(shadow){r.save();r.shadowColor=shadowColor;r.shadowBlur=blur*scale;r.shadowOffsetX=dx*scale;r.shadowOffsetY=dy*scale;r.drawImage(base,0,0);r.restore();}
+ r.drawImage(base,0,0);
+ ctx.drawImage(rendered,-rawW/2,-rawH/2,rawW,rawH);
+ if(mirror){
+  const gap=clamp(l.textMirrorGap??12,0,120),strength=clamp(l.textMirrorOpacity??.35,0,1);
+  const reflectionTop=height/2+gap,reflectionHeight=Math.max(1,height);
+  ctx.save();ctx.beginPath();ctx.rect(-rawW/2,reflectionTop,rawW,reflectionHeight);ctx.clip();
+  // Reflect around the original glyph bounding box's bottom edge.
+  ctx.translate(0,height+gap);ctx.scale(1,-1);ctx.globalAlpha*=strength;
+  ctx.drawImage(rendered,-rawW/2,-rawH/2,rawW,rawH);ctx.restore();
+  // Fade reflection away from the baseline using destination-out on a bounded mask
+  // would erase underlying scene pixels, so use a separate translucent overlay only.
+ }
 }
-export function textTextureInspector(l){return `<div class="section-title" style="margin-top:18px">TEXT TEXTURE & NOISE</div><label>Texture overlay<select id="textTexture">${Object.entries(TEXT_TEXTURES).map(([k,v])=>`<option value="${k}" ${k===(l.textTexture||'none')?'selected':''}>${v}</option>`).join('')}</select></label><label>Texture intensity <span id="textNoiseValue">${Math.round((l.textNoise??.3)*100)}%</span><input id="textNoise" type="range" min="0" max="100" step="1" value="${Math.round((l.textNoise??.3)*100)}"></label><p class="mini-label">Texture removes tiny areas of ink so the composition background shows through. Works with any text color. Select text and drag the ↘ corner handle to scale.</p>`;}
+export function textTextureInspector(l){
+ const kind=l.textTexture||'none';
+ const color=(id,label,value)=>`<label>${label}<input id="${id}" type="color" value="${value}"></label>`;
+ const check=(id,label,value)=>`<label class="m-chk"><input id="${id}" type="checkbox" ${value?'checked':''}> ${label}</label>`;
+ const slider=(id,label,value,min,max,step=1)=>`<label>${label} <span id="${id}Value">${value}</span><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
+ return `<div class="section-title" style="margin-top:18px">TEXT TEXTURE & NOISE</div>
+ <label>Texture overlay<select id="textTexture">${Object.entries(TEXT_TEXTURES).map(([k,v])=>`<option value="${k}" ${k===kind?'selected':''}>${v}</option>`).join('')}</select></label>
+ ${slider('textNoise','Texture intensity (%)',Math.round((l.textNoise??.3)*100),0,100)}
+ <div id="vectorTextureOptions" style="display:${VECTOR_TYPES.has(kind)?'block':'none'}">
+ ${color('vectorTextureColor','Vector pattern color',l.vectorTextureColor||'#ffffff')}
+ ${slider('vectorTextureSpacing','Vector spacing (px)',l.vectorTextureSpacing??13,4,90)}
+ ${slider('vectorTextureWidth','Vector line / dot width (px)',l.vectorTextureWidth??2.4,.5,15,.5)}
+ </div>
+ <div class="section-title" style="margin-top:18px">TEXT OUTLINE & EFFECTS</div>
+ <div class="two">${color('textStrokeColor','Stroke color',l.textStrokeColor||'#111111')}${slider('textStrokeWidth','Stroke width',l.textStrokeWidth??0,0,60)}</div>
+ ${check('textShadowEnabled','Soft shadow',l.textShadowEnabled)}
+ ${check('textFullShadow','Full shadow / solid extrusion',l.textFullShadow)}
+ ${color('textShadowColor','Shadow color',l.textShadowColor||'#000000')}
+ <div class="two">${slider('textShadowX','Shadow X',l.textShadowX??12,-150,150)}${slider('textShadowY','Shadow Y',l.textShadowY??12,-150,150)}</div>
+ <div class="two">${slider('textShadowBlur','Shadow blur',l.textShadowBlur??16,0,100)}${slider('textFullShadowDepth','Extrusion depth',l.textFullShadowDepth??18,0,120)}</div>
+ ${check('textMirror','Mirror / reflection',l.textMirror)}
+ <div class="two">${slider('textMirrorGap','Mirror gap',l.textMirrorGap??12,0,120)}${slider('textMirrorOpacity','Mirror opacity (%)',Math.round((l.textMirrorOpacity??.35)*100),0,100)}</div>
+ <p class="mini-label">Vector textures overlay the fill color. Noise wears away the ink. Stroke, shadows and reflection are applied in the same layer.</p>`;
+}
 export function bindTextTextureInspector(l,{checkpoint,changed,draw}){
- document.getElementById('textTexture').onchange=e=>{checkpoint();l.textTexture=e.target.value;changed();};
- const s=document.getElementById('textNoise');
- // Record undo before editing, not after overwriting the previous value.
- s.onpointerdown=()=>checkpoint();
- s.oninput=e=>{document.getElementById('textNoiseValue').textContent=e.target.value+'%';l.textNoise=+e.target.value/100;draw();};
- s.onchange=e=>{l.textNoise=+e.target.value/100;changed();};
+ const select=document.getElementById('textTexture');if(select)select.onchange=e=>{checkpoint();l.textTexture=e.target.value;changed();};
+ for(const [id,field] of [['vectorTextureColor','vectorTextureColor'],['textStrokeColor','textStrokeColor'],['textShadowColor','textShadowColor']]){
+  const el=document.getElementById(id);if(el)el.onchange=e=>{checkpoint();l[field]=e.target.value;changed();};
+ }
+ for(const id of ['textShadowEnabled','textFullShadow','textMirror']){const el=document.getElementById(id);if(el)el.onchange=e=>{checkpoint();l[id]=e.target.checked;changed();};}
+ const ranges={textNoise:['textNoise',v=>v/100,v=>Math.round(v*100)],vectorTextureSpacing:['vectorTextureSpacing',Number],vectorTextureWidth:['vectorTextureWidth',Number],textStrokeWidth:['textStrokeWidth',Number],textShadowX:['textShadowX',Number],textShadowY:['textShadowY',Number],textShadowBlur:['textShadowBlur',Number],textFullShadowDepth:['textFullShadowDepth',Number],textMirrorGap:['textMirrorGap',Number],textMirrorOpacity:['textMirrorOpacity',v=>v/100,v=>Math.round(v*100)]};
+ for(const [id,[field,conv,display]] of Object.entries(ranges)){
+  const el=document.getElementById(id);if(!el)continue;
+  el.onpointerdown=()=>checkpoint();el.oninput=e=>{l[field]=conv(+e.target.value);document.getElementById(id+'Value').textContent=display?display(l[field]):String(l[field]);draw();};
+  el.onchange=e=>{l[field]=conv(+e.target.value);changed();};
+ }
 }

@@ -1,3 +1,5 @@
+import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
+let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
 import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY } from './map-engine.mjs';
 import { CITIES, REGIONS } from './map-places.mjs';
@@ -28,10 +30,11 @@ function notify(s) {
   clearTimeout(notify.timer); notify.timer = setTimeout(() => t.classList.remove('show'), 2600); $('#mStatus').textContent = s;
 }
 function checkpoint() { undoStack.push(JSON.stringify(proj)); if (undoStack.length > 80) undoStack.shift(); redoStack = []; updateHistory(); }
-function updateHistory() { $('#mUndo').disabled = !undoStack.length; $('#mRedo').disabled = !redoStack.length; }
+function updateHistory() { const a=audioUI?.historyState(); $('#mUndo').disabled = a?!a.undo:!undoStack.length; $('#mRedo').disabled = a?!a.redo:!redoStack.length; }
 function saveLocal() { try { localStorage.setItem(STORE, JSON.stringify(proj)); $('#mSaveState').textContent = 'Saved locally'; } catch { $('#mSaveState').textContent = 'Save project to keep changes'; } }
 function changed() { saveLocal(); renderItems(); renderTimeline(); draw(); }
 function history(dir) {
+  if (audioUI?.handlesHistory()) { audioUI.history(dir); return; }
   pause();
   const from = dir === 'undo' ? undoStack : redoStack, to = dir === 'undo' ? redoStack : undoStack;
   if (!from.length) return;
@@ -39,7 +42,7 @@ function history(dir) {
   if (!items().some(i => i.id === sel)) sel = null;
   frame = Math.min(frame, proj.frames - 1); saveLocal(); renderAll(); updateHistory();
 }
-function ensureLength(end) { if (end > proj.frames) { proj.frames = Math.min(1800, Math.ceil(end + 15)); $('#mDuration').value = proj.frames; } }
+function ensureLength(end) { if (end > proj.frames) { proj.frames = Math.min(1800, Math.ceil(end + 15)); syncMapDuration(); } }
 
 // ------------------------------------------------------------------ map data
 async function ensureGeo() {
@@ -154,6 +157,7 @@ function renderItems() {
   $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Nothing yet. Add an animation or a camera preset above.</p>';
   $$('[data-mid]').forEach(el => el.onclick = () => select(el.dataset.mid));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current();
+  audioUI?.renderList();
 }
 function select(id) { sel = id; renderItems(); renderInspector(); renderTimeline(); }
 
@@ -173,6 +177,7 @@ const F = {
 };
 
 function renderInspector() {
+  if (audioUI?.renderInspector()) return;
   const it = current(), box = $('#mInspector');
   if (!it) { box.innerHTML = '<p class="muted">Select an item in the timeline to edit it.<br><br>Add a <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>, then pick a camera preset. Presets move the camera for you.</p>'; $('#mInspTitle').textContent = 'Properties'; return; }
   const shot = isShot(it);
@@ -332,9 +337,18 @@ canvas.onpointerdown = e => {
 };
 
 // ------------------------------------------------------------------ project settings
+function syncMapDuration() {
+  const input = $('#mDuration');
+  const label = input.closest('label');
+  if (label?.firstChild?.nodeType === 3) label.firstChild.textContent = 'Duration (seconds)';
+  input.min = +(2 / proj.fps).toFixed(3);
+  input.max = +(1800 / proj.fps).toFixed(3);
+  input.step = '0.001';
+  input.value = +(proj.frames / proj.fps).toFixed(3);
+}
 function renderSettings() {
   $('#mProjectName').value = proj.name; $('#mFps').value = proj.fps; $('#mFpsLabel').textContent = proj.fps + ' FPS';
-  $('#mDuration').value = proj.frames; $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} × ${proj.height}`;
+  syncMapDuration(); $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} × ${proj.height}`;
   $('#mTheme').value = proj.theme; $('#mGrat').checked = !!proj.graticule;
   const texture = { ...DEFAULT_TEXTURE, ...proj.texture };
   $('#mTexture').value = texture.type;
@@ -352,7 +366,7 @@ function bindSettings() {
   const edit = fn => e => { pause(); checkpoint(); fn(e.target); saveLocal(); renderAll(); };
   $('#mProjectName').onchange = edit(el => proj.name = el.value.trim().slice(0, 100) || 'Untitled map');
   $('#mFps').onchange = edit(el => proj.fps = +el.value);
-  $('#mDuration').onchange = edit(el => { proj.frames = clamp(Math.round(+el.value) || 240, 2, 1800); frame = Math.min(frame, proj.frames - 1); });
+  $('#mDuration').onchange = edit(el => { const seconds = Number(el.value); if (el.value.trim() && Number.isFinite(seconds)) proj.frames = clamp(Math.round(seconds * proj.fps), 2, 1800); frame = Math.min(frame, proj.frames - 1); });
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   $('#mTheme').onchange = edit(el => proj.theme = el.value);
   $('#mTexture').onchange = edit(el => { proj.texture = { ...DEFAULT_TEXTURE, ...proj.texture, type: el.value }; });
@@ -394,6 +408,7 @@ function renderTimeline() {
     renderTimeline();
   });
   $$('[data-mrow]').forEach(el => el.onpointerdown = e => { if (e.target.closest('[data-mclip]')) return; select(el.dataset.mrow); scrub(e); });
+  audioUI?.renderTimeline();
 }
 function scrub(e) { pause(); setFrame(frameFromEvent(e)); drag = { kind: 'scrub' }; }
 window.addEventListener('pointermove', e => {
@@ -421,13 +436,13 @@ async function exportVideo() {
   pause();
   if (!geo) { notify('Map data is still loading'); return; }
   const snapshot = clone(proj), exportName = fileBase();
-  modal(`<h2>Export your map.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Detailed maps may take longer than the video duration. Format: WebM.</p><p class="ff-export-note">Audio reference tracks are preview-only and will not appear in this video.</p><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a><progress id="mProgress" max="${snapshot.frames}" value="0"></progress><p id="mExportStatus">Preparing…</p>`);
+  modal(`<h2>Export your map.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Detailed maps may take longer than the video duration. Format: WebM.</p><p class="ff-export-note">Retained audio parts are included, with your volume and mute settings. Deleted parts stay silent.</p><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a><progress id="mProgress" max="${snapshot.frames}" value="0"></progress><p id="mExportStatus">Preparing…</p>`);
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
   const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height;
   const ec = c.getContext('2d');
   try {
     await loadFonts(mapFontsUsed(snapshot)); await document.fonts.ready;
-    const video = await exportMapVideo({ canvas: c, fps: snapshot.fps, frames: snapshot.frames,
+    const video = await exportMapVideo({ audio: getAudioSnapshot('map'), canvas: c, fps: snapshot.fps, frames: snapshot.frames,
       draw: f => drawMap(ec, c.width, c.height, snapshot, f, geo),
       cancelled: () => !exporting,
       progress: n => { $('#mProgress').value = n; $('#mExportStatus').textContent = `Rendering frame ${n} of ${snapshot.frames}`; }
@@ -448,7 +463,7 @@ function bindToolbar() {
   $('#mOpen').onclick = () => $('#mProjectFile').click();
   $('#mProjectFile').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
-    try { if (f.size > 5e6) throw Error('Project is larger than 5 MB.'); const p = validateMapProject(JSON.parse(await f.text())); pause(); checkpoint(); proj = p; sel = null; frame = 0; saveLocal(); renderAll(); notify('Map project opened'); } catch (err) { notify(err.message); }
+    try { if (f.size > 5e6) throw Error('Project is larger than 5 MB.'); const p = validateMapProject(JSON.parse(await f.text())); pause(); checkpoint(); proj = p; audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); notify('Map project opened'); } catch (err) { notify(err.message); }
     e.target.value = '';
   };
   $('#mExport').onclick = exportVideo;
@@ -459,18 +474,20 @@ function bindToolbar() {
   $('#mFrame').onchange = e => { pause(); setFrame(+e.target.value); };
   $('#mZoomT').oninput = () => { renderTimeline(); setFrame(frame); };
   $('#mDuplicate').onclick = () => {
+    if (audioUI?.duplicate()) return;
     const it = current(); if (!it) return; checkpoint();
     const c = clone(it); c.id = crypto.randomUUID(); c.name += ' copy'; c.start = Math.min(proj.frames - 1, it.start + 10); ensureLength(c.start + c.dur);
     (isShot(it) ? proj.shots : proj.actions).push(c); sel = c.id; saveLocal(); renderAll();
   };
   $('#mDelete').onclick = () => {
+    if (audioUI?.remove()) return;
     const it = current(); if (!it) return; checkpoint();
     proj.shots = proj.shots.filter(s => s.id !== it.id); proj.actions = proj.actions.filter(a => a.id !== it.id);
     for (const s of proj.shots) if (s.planeId === it.id) s.planeId = '';
     sel = null; saveLocal(); renderAll();
   };
-  $('#mNew').onclick = () => { if (!confirm('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); sel = null; frame = 0; saveLocal(); renderAll(); };
-  $('#mDemo').onclick = () => { if (!confirm('Load the demo map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = demoMapProject(); sel = null; frame = 0; saveLocal(); renderAll(); };
+  $('#mNew').onclick = () => { if (!confirm('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
+  $('#mDemo').onclick = () => { if (!confirm('Load the demo map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = demoMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
   $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change its length.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
   $('#mCloseModal').onclick = () => { if (exporting) { exporting = false; $('#mCloseModal').disabled = true; } else $('#mModal').close(); };
   $('#mModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });
@@ -535,6 +552,12 @@ window.addEventListener('keydown', event => {
 // ------------------------------------------------------------------ boot
 try { const saved = localStorage.getItem(STORE); proj = saved ? validateMapProject(JSON.parse(saved)) : demoMapProject(); } catch { proj = demoMapProject(); }
 buildStaticUI(); buildLists(); bindSettings(); bindToolbar(); $('#mHint').textContent = HINT;
+audioUI = registerAudioStudio('map', {
+ getSelected:()=>sel, getFrame:()=>frame, getFps:()=>proj.fps, getFrames:()=>proj.frames,
+ select, pause, seek:setFrame, notify, updateHistory, visualCount:()=>items().length,
+ addGrid:'#mAddGrid', list:'#mItems', counter:'#mItemCount', inspector:'#mInspector', inspectorTitle:'#mInspTitle',
+ trackLabels:'#mTrackLabels', trackRows:'#mTrackRows', tracks:'#mTracks', actionButtons:['#mDuplicate','#mDelete']
+});
 renderAll();
 let startMode = 'motion'; try { startMode = localStorage.getItem('frameflow-mode') === 'map' ? 'map' : 'motion'; } catch { /* ignore */ }
 setMode(startMode)

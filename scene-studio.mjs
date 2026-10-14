@@ -1,6 +1,6 @@
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
 // clip timeline below. Gestures and camera shots are clips you place on the timeline.
-import { defaultScene, makeObject, makeClip, makeCameraClip, renderScene, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS } from './scene-engine.mjs';
+import { defaultScene, makeObject, makeClip, makeCameraClip, renderScene, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
 const $ = s => document.querySelector(s), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const STORE = 'frameflow-scene-v2', OLD_STORE = 'frameflow-scene-v1';
@@ -33,6 +33,8 @@ const section = (name, content) => `<details class="ff-inspector-section" data-n
 const grid = (attr, items, disabled = false) => `<div class="add-grid">${items.map(([id, icon, label, tip]) => `<button ${attr}="${id}" title="${esc(tip || label)}" ${disabled ? 'disabled' : ''}><b>${icon}</b><span>${label}</span></button>`).join('')}</div>`;
 const subjectOptions = () => [['', 'Auto (first human / car / bus)'], ...p.objects.filter(o => ['human', 'car', 'bus'].includes(o.type)).map(o => [o.id, o.name])];
 
+const swatches = (attr, colors, current) => `<div class="sc-swatches">${colors.map(c => `<button type="button" class="sc-swatch ${String(current).toLowerCase() === c ? 'selected' : ''}" ${attr}="${c}" style="--sw:${c}" title="${c}" aria-label="${c}"></button>`).join('')}</div>`;
+
 // ------------------------------------------------------------------ selection helpers
 function findClip(id) {
   if (!id) return null;
@@ -64,7 +66,7 @@ function renderLeft() {
     + [...p.cameraClips].sort((a, b) => a.start - b.start).map(c => `<div class="sc-item ${selClip === c.id ? 'selected' : ''}" data-cam-item="${esc(c.id)}"><span class="type c-shot">◉</span><span class="name">${esc(CAMERA_MODES[c.mode])} shot</span><span class="when">${c.start.toFixed(1)}s</span></div>`).join('');
   const hasSel = !!(selClip || selected);
   $('#scLeft').innerHTML =
-    group('ADD OBJECT', grid('data-add-sc', [['human', '♙', 'Human'], ['car', '▰', 'Car'], ['bus', '▤', 'Bus'], ['tree', '♧', 'Tree'], ['building', '▥', 'Building']]))
+    group('ADD OBJECT', grid('data-add-sc', [['human', '♙', 'Character'], ['car', '▰', 'Car'], ['bus', '▤', 'Bus'], ['tree', '♧', 'Tree'], ['building', '▥', 'Building']]))
     + group('GESTURES', `<p class="mini-label sc-note">${human ? `Adds a clip at the playhead (${time.toFixed(1)}s) for <b>${esc(human.name)}</b>.` : 'Select a human to add gestures.'}</p>` + grid('data-add-g', Object.entries(GESTURES).map(([id, name]) => [id, GESTURE_ICON[id], name, `${name} · ${GESTURE_DURATION[id]}s`]), !human))
     + group('CAMERA SHOTS', `<p class="mini-label sc-note">Adds a shot at the playhead. Outside shots the default camera is used (Scene settings).</p>` + grid('data-add-cam', Object.entries(CAMERA_PRESETS).map(([id, c]) => [id, c.icon, c.label])))
     + group('ITEMS', `<p class="mini-label sc-note">${p.objects.length + p.cameraClips.length} items</p>${items || '<p class="muted sc-empty">Nothing yet. Add an object above.</p>'}<div class="sc-actions"><button data-action="duplicate" ${hasSel ? '' : 'disabled'}>Duplicate</button><button data-action="delete" ${hasSel ? '' : 'disabled'}>Delete</button></div>`);
@@ -93,8 +95,17 @@ function renderInspector() {
   } else if (o) {
     title = `${esc(o.type[0].toUpperCase() + o.type.slice(1))} <em>${esc(o.name)}</em>`;
     const mobile = ['human', 'car', 'bus'].includes(o.type), human = o.type === 'human';
-    body = section('GENERAL', field('object.name', 'Name', o.name, 'text'))
-      + section('APPEARANCE', select('object.material', 'Surface', o.material, [['inherit', 'Use scene surface'], ['white', 'White model'], ['color', 'Solid color'], ['texture', 'Textured / colored']]) + field('object.color', human ? 'Shirt / object color' : 'Object color', o.color, 'color') + field('object.scale', 'Scale', o.scale))
+    const lk = human ? humanLook(o) : null, shows = ['color', 'texture'].includes(o.material) || (o.material === 'inherit' && p.material === 'texture');
+    const character = !human ? '' : section('CHARACTER', select('look.body', 'Character', lk.body, Object.entries(BODIES).map(([id, b]) => [id, b.label]))
+      + select('look.outfit', 'Clothes', lk.outfit, Object.entries(OUTFITS).map(([id, f]) => [id, f.label]))
+      + select('look.hair', 'Hair style', lk.hair, Object.entries(HAIR_STYLES))
+      + `<span class="mini-label">Hair color</span>` + swatches('data-look-hair', HAIR_COLORS, lk.hairColor)
+      + `<span class="mini-label">Skin tone</span>` + swatches('data-look-skin', SKIN_TONES, lk.skin)
+      + (lk.body === 'man' ? select('look.facial', 'Facial hair', lk.facial, Object.entries(FACIAL)) : '')
+      + (lk.outfit === 'dress' ? '' : field('look.bottomColor', 'Trousers / shorts color', lk.bottomColor, 'color'))
+      + (shows ? '' : '<p class="mini-label">Colors, skin and hair show once Surface (below) is Solid color or Textured.</p>'));
+    body = section('GENERAL', field('object.name', 'Name', o.name, 'text')) + character
+      + section('APPEARANCE', select('object.material', 'Surface', o.material, [['inherit', 'Use scene surface'], ['white', 'White model'], ['color', 'Solid color'], ['texture', 'Textured / colored']]) + field('object.color', human ? (humanLook(o).outfit === 'dress' ? 'Dress color' : 'Top / jacket color') : 'Object color', o.color, 'color') + field('object.scale', 'Scale', o.scale))
       + section(mobile ? 'POSITION & PATH' : 'POSITION', `<div class="two">${field('object.x', 'Start X (m)', o.x)}${field('object.z', 'Start Z (m)', o.z)}${mobile ? field('object.endX', human ? 'Toward X (m)' : 'End X (m)', o.endX) + field('object.endZ', human ? 'Toward Z (m)' : 'End Z (m)', o.endZ) : ''}</div>`
         + `<p class="mini-label">X moves across the road, Z along it.${human ? ' A human only moves during Walk and Run clips, heading toward this point.' : ''}</p>`)
       + section('TIMING', `<div class="two">${field('object.start', 'Appears at (s)', o.start)}${field('object.duration', mobile && !human ? 'Travel time (s)' : 'Visible for (s)', o.duration)}</div>${mobile && !human ? select('object.easing', 'Path movement', o.easing, [['linear', 'Constant speed'], ['smooth', 'Ease in and out']]) : ''}`)
@@ -143,12 +154,15 @@ function targetFor(key) {
   if (rootKey === 'object') return [currentObject(), prop];
   if (rootKey === 'clip' || rootKey === 'cam') return [findClip(selClip)?.clip, prop];
   if (rootKey === 'camera') return [p.camera, prop];
+  if (rootKey === 'look') { const o = currentObject(); if (o?.type === 'human') o.look = humanLook(o); return [o?.look, prop]; }
   return [p, key];
 }
 root.addEventListener('change', e => {
   if (busy) return; const key = e.target.dataset.field; if (!key) return; pause();
   const previous = JSON.stringify(p), [obj, prop] = targetFor(key); if (!obj) return;
   obj[prop] = (e.target.type === 'number' || key === 'fps') ? Number(e.target.value) : (prop === 'target' && e.target.value === '' ? null : e.target.value);
+  if (key === 'look.outfit') obj.bottomColor = OUTFITS[obj.outfit].bottom;
+  if (key === 'look.body') { obj.hair = defaultLook(obj.body).hair; if (obj.body !== 'man') obj.facial = 'none'; }
   if (key === 'object.x' || key === 'object.z') { if (['tree', 'building'].includes(obj.type)) { obj.endX = obj.x; obj.endZ = obj.z; } }
   if (key === 'duration') { const cap = Math.max(0, p.duration - .1); p.objects.forEach(o => { o.start = Math.min(o.start, cap); (o.clips || []).forEach(c => { c.start = Math.min(c.start, cap); }); }); p.cameraClips.forEach(c => { c.start = Math.min(c.start, cap); }); }
   try { validateScene(p); undo.push(previous); redo = []; time = clamp(time, 0, p.duration - 1 / p.fps); } catch (err) { p = JSON.parse(previous); alert(err.message); }
@@ -168,9 +182,10 @@ function addCameraShot(id) {
   let start = time, dur = Math.min(3, p.duration - start); if (dur < .1) { dur = Math.min(3, p.duration); start = p.duration - dur; }
   insertClip(p.cameraClips, makeCameraClip(id, snap(start), snap(dur) || dur, target)); selected = null; sync();
 }
-function addObject(type) {
+function addObject(spec) {
   if (p.objects.length >= 80) { alert('This scene supports up to 80 objects.'); return; }
-  checkpoint(); const o = makeObject(type, p.objects.length); o.duration = p.duration;
+  const [type, body] = spec.split(':'); checkpoint(); const o = makeObject(type, p.objects.length); o.duration = p.duration;
+  if (type === 'human') { o.look = defaultLook(body || 'man'); o.name = BODIES[o.look.body].label; if (o.look.body === 'woman' || o.look.body === 'girl') o.color = '#f08fa8'; if (o.look.body === 'boy') o.color = '#4cc9f0'; }
   if (['tree', 'building'].includes(type)) { o.x = 10; o.endX = 10; o.endZ = o.z; }
   p.objects.push(o); selected = o.id; selClip = null; sync();
 }
@@ -197,7 +212,7 @@ const actions = {
     const f = findClip(selClip);
     if (f) { checkpoint(); const list = f.kind === 'gesture' ? f.owner.clips : p.cameraClips, c = { ...f.clip, id: uid(), start: clamp(snap(f.clip.start + f.clip.dur), 0, p.duration - .1) }; list.push(c); selClip = c.id; sync(); return; }
     const o = currentObject(); if (!o || p.objects.length >= 80) return; checkpoint();
-    const n = { ...o, id: uid(), name: o.name + ' copy', x: clamp(o.x + 2, -100, 150), endX: clamp(o.endX + 2, -100, 150), clips: (o.clips || []).map(c => ({ ...c, id: uid() })) }; p.objects.push(n); selected = n.id; sync();
+    const n = { ...o, id: uid(), name: o.name + ' copy', x: clamp(o.x + 2, -100, 150), endX: clamp(o.endX + 2, -100, 150), clips: (o.clips || []).map(c => ({ ...c, id: uid() })), ...(o.look ? { look: { ...o.look } } : {}) }; p.objects.push(n); selected = n.id; sync();
   },
   visibility: () => { const o = currentObject(); if (o) { checkpoint(); o.visible = !o.visible; sync(); } },
   export: async () => {
@@ -210,6 +225,7 @@ function handleSceneClick(e) {
   if (busy) return; const b = e.target.closest('button,[data-object],[data-item],[data-cam-item]'); if (!b || b.disabled) return;
   if (b.dataset.action) { actions[b.dataset.action]?.(); return; }
   if (b.dataset.addSc) return addObject(b.dataset.addSc);
+  if (b.dataset.lookHair || b.dataset.lookSkin) { const o = currentObject(); if (o?.type !== 'human') return; checkpoint(); o.look = humanLook(o); if (b.dataset.lookHair) o.look.hairColor = b.dataset.lookHair; else o.look.skin = b.dataset.lookSkin; sync(); return; }
   if (b.dataset.addG) return addGesture(b.dataset.addG);
   if (b.dataset.addCam) return addCameraShot(b.dataset.addCam);
   const objectId = b.dataset.item || b.dataset.object;

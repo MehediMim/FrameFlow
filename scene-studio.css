@@ -99,3 +99,10 @@ body.mode-scene #scToolbar{display:contents}
 #sceneStudio .right>.tabs{min-height:55px}
 @media(max-width:1200px){.sc-workspace{grid-template-columns:240px minmax(0,1fr) 245px}#scName{width:150px;margin-left:10px;padding-left:12px}#scStatus{display:none}#scToolbar>[data-action="undo"]{margin-left:auto}#scToolbar>button{padding:7px 9px;font-size:10px}}
 @media(max-height:760px){.sc-timeline{height:200px;flex-basis:200px}}
+
+/* ---- Character options (hair, skin) ---- */
+.sc-swatches{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 12px}
+#scInspector .ff-inspector-content>.mini-label{display:block;margin-top:4px}
+.sc-swatch{appearance:none;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;padding:0!important;margin:0!important;border-radius:50%!important;border:1px solid #ffffff55!important;background:var(--sw)!important;cursor:pointer;transition:transform .1s}
+.sc-swatch:hover{transform:scale(1.14)}
+.sc-swatch.selected{outline:2px solid var(--accent,#b6f36e);outline-offset:2px}

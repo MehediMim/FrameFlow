@@ -1,5 +1,6 @@
 // FrameFlow Scene Studio engine (v2).
 // Dependency-free perspective renderer. World units: metres; Y up; road runs along +Z.
+// Characters: boy / girl / man / woman bodies, hair, facial hair, outfits and skin tones (object.look).
 // v2 changes: gesture clips per human, camera clips, detailed human/car/bus models, lit + culled polygons.
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -24,12 +25,36 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const norm = a => { const n = Math.hypot(...a) || 1; return a.map(x => x / n); };
 const avg = pts => { const n = pts.length; return [0, 1, 2].map(i => pts.reduce((s, p) => s + p[i], 0) / n); };
 
+// ---------------------------------------------------------------- characters
+// Body proportions are multipliers on the adult-man reference model (h = overall height).
+export const BODIES = {
+  man:   { label: 'Man',   h: 1,    head: 1,    torso: 1,    leg: 1,    limb: 1,    hip: 1,    waist: 1,    chest: 1,    sw: 1,    neck: 1,    bust: 0, arm: 1,    foot: 1,    hair: 'short' },
+  woman: { label: 'Woman', h: .94,  head: .96,  torso: .98,  leg: 1.02, limb: .86,  hip: 1.1,  waist: .8,   chest: .92,  sw: .84,  neck: .84,  bust: 1, arm: .93,  foot: .87,  hair: 'long' },
+  boy:   { label: 'Boy',   h: .72,  head: 1.22, torso: .92,  leg: .88,  limb: .8,   hip: .92,  waist: 1.02, chest: .88,  sw: .78,  neck: .86,  bust: 0, arm: .88,  foot: .84,  hair: 'short' },
+  girl:  { label: 'Girl',  h: .7,   head: 1.22, torso: .9,   leg: .88,  limb: .78,  hip: .94,  waist: .96,  chest: .86,  sw: .76,  neck: .82,  bust: 0, arm: .86,  foot: .8,   hair: 'ponytail' }
+};
+export const OUTFITS = {
+  casual: { label: 'T-shirt & jeans',   bottom: '#3c4757', shoe: '#ecece7', sole: '#c5c5be', sleeve: 'short', bottomType: 'long' },
+  hoodie: { label: 'Hoodie & trousers', bottom: '#4a4f57', shoe: '#2d3138', sole: '#e5e5e0', sleeve: 'long',  bottomType: 'long', hood: true },
+  formal: { label: 'Suit & tie',        bottom: '#272b34', shoe: '#241d1a', sole: '#14110f', sleeve: 'long',  bottomType: 'long', jacket: true },
+  sporty: { label: 'Sports kit',        bottom: '#2a2f3a', shoe: '#e8f0f5', sole: '#9aa7b0', sleeve: 'short', bottomType: 'shorts' },
+  dress:  { label: 'Dress',             bottom: '#3c4757', shoe: '#4a3329', sole: '#2a1c15', sleeve: 'short', bottomType: 'skirt' }
+};
+export const HAIR_STYLES = { short: 'Short', buzz: 'Buzz cut', curly: 'Curly', bob: 'Bob', long: 'Long', ponytail: 'Ponytail', bun: 'Bun', bald: 'Bald' };
+export const FACIAL = { none: 'Clean shaven', stubble: 'Stubble', beard: 'Beard' };
+export const SKIN_TONES = ['#f6d7c0', '#ebbf98', '#d4a173', '#b07a4f', '#80532f', '#53341f'];
+export const HAIR_COLORS = ['#17120f', '#38291f', '#6b4423', '#a56b32', '#d8b26a', '#b8432f', '#8f8f94', '#e8e6e0'];
+export const defaultLook = (body = 'man') => ({ body, outfit: body === 'girl' || body === 'woman' ? 'casual' : 'casual', hair: BODIES[body]?.hair || 'short', hairColor: '#38291f', skin: '#ebbf98', bottomColor: OUTFITS.casual.bottom, facial: 'none' });
+export const humanLook = o => { const l = o.look || {}; return { ...defaultLook(l.body), ...l }; };
+export const heightOf = o => o.type === 'human' ? (BODIES[humanLook(o).body]?.h ?? 1) : 1;
+const mixHex = (a, b, k) => { const x = a.slice(1).match(/../g).map(v => parseInt(v, 16)), y = b.slice(1).match(/../g).map(v => parseInt(v, 16)); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
+
 // ---------------------------------------------------------------- objects, clips, scenes
 export const makeClip = (gesture = 'walk', start = 0, dur = GESTURE_DURATION[gesture] || 2, speed = 1) => ({ id: newId(), gesture, start, dur, speed });
 export function makeCameraClip(preset = 'third', start = 0, dur = 3, target = null) { const { mode, move, yaw, height, distance, fov } = CAMERA_PRESETS[preset]; return { id: newId(), mode, move, yaw, height, distance, fov, start, dur, blend: .5, target }; }
 export function makeObject(type, i = 0) {
   return { id: newId(), type, name: type[0].toUpperCase() + type.slice(1), x: type === 'human' ? 5 : 0, z: i * 3, endX: type === 'human' ? 5 : 0, endZ: 35 + i * 3,
-    start: 0, duration: 12, scale: 1, color: type === 'human' ? '#b6f36e' : '#db795b', material: 'inherit', easing: 'linear', visible: true, clips: [] };
+    start: 0, duration: 12, scale: 1, color: type === 'human' ? '#b6f36e' : '#db795b', material: type === 'human' ? 'color' : 'inherit', easing: 'linear', visible: true, clips: [], ...(type === 'human' ? { look: defaultLook('man') } : {}) };
 }
 export function defaultScene() {
   const human = { ...makeObject('human'), name: 'Human', clips: [makeClip('walk', 0, 4), makeClip('wave', 4, 2.5), makeClip('run', 6.5, 3), makeClip('bow', 9.5, 2.5)] };
@@ -108,7 +133,7 @@ export function humanPose(o, t) {
 const subjectOf = (p, id) => p.objects.find(o => o.id === id) || p.objects.find(o => ['human', 'car', 'bus'].includes(o.type));
 function rawCamera(p, c, t, t0) {
   const o = subjectOf(p, c.target), rig = o ? actorPosition(o, c.move === 'static' ? t0 : t) : [0, 0, 15], live = o ? actorPosition(o, t) : [0, 0, 15];
-  const dir = o ? headingOf(o) : [0, 0, 1], eye = o?.type === 'human' ? 1.62 * o.scale : 1.4 * (o?.scale || 1);
+  const dir = o ? headingOf(o) : [0, 0, 1], eye = o?.type === 'human' ? 1.62 * o.scale * heightOf(o) : 1.4 * (o?.scale || 1);
   let pos, look;
   if (c.mode === 'first') { pos = [rig[0] + dir[0] * .12, eye, rig[2] + dir[2] * .12]; look = [pos[0] + dir[0] * 10, eye - .1, pos[2] + dir[2] * 10]; }
   else if (c.mode === 'second') { pos = [rig[0] + dir[0] * c.distance, c.height, rig[2] + dir[2] * c.distance]; look = [live[0], 1.1, live[2]]; }
@@ -173,7 +198,7 @@ export function renderScene(canvas, p, t) {
     for (let i = 0; i < rings; i++) { const l0 = -Math.PI / 2 + i / rings * Math.PI, l1 = -Math.PI / 2 + (i + 1) / rings * Math.PI;
       for (let k = 0; k < segs; k++) { const o0 = k / segs * 2 * Math.PI, o1 = (k + 1) / segs * 2 * Math.PI, lm = (l0 + l1) / 2, om = (o0 + o1) / 2;
         const color = colorFn ? colorFn(Math.sin(lm), Math.cos(lm) * Math.sin(om), Math.cos(lm) * Math.cos(om)) : col;
-        lit([P(l0, o0), P(l0, o1), P(l1, o1), P(l1, o0)], color, c, bias); } }
+        if (color == null) continue; lit([P(l0, o0), P(l0, o1), P(l1, o1), P(l1, o0)], color, c, bias); } }
   }
   const sphereFrame = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   const shadow = (cx, cz, rx, rz, yaw) => { const keep = [layer, group]; layer = 2.5; group = null;
@@ -204,7 +229,7 @@ export function renderScene(canvas, p, t) {
   // ---- actors
   for (const o of p.objects) {
     if (!o.visible || t < o.start || t > o.start + o.duration || o.id === cam.hide) continue;
-    const [x, , z] = actorPosition(o, t), colored = o.material === 'texture' || o.material === 'color' || (o.material === 'inherit' && !white), col = colored ? o.color : '#f5f5f2', s = o.scale;
+    const [x, , z] = actorPosition(o, t), colored = o.material === 'texture' || o.material === 'color' || (o.material === 'inherit' && !white), col = colored ? o.color : '#f5f5f2', s = o.scale * heightOf(o);
     const yaw = Math.hypot(o.endX - o.x, o.endZ - o.z) < .1 ? 0 : Math.atan2(o.endX - o.x, o.endZ - o.z);
     const loc = (a, b, c) => [x + (a * Math.cos(yaw) + c * Math.sin(yaw)) * s, b * s, z + (-a * Math.sin(yaw) + c * Math.cos(yaw)) * s];
     const O = loc(0, 0, 0), dirW = (a, b, c) => norm(sub(loc(a, b, c), O));
@@ -220,40 +245,101 @@ export function renderScene(canvas, p, t) {
     group = null;
 
     function drawHuman() {
-      const P = humanPose(o, t), C = colored ? { shirt: col, pants: '#3c4757', skin: '#dcb590', hair: '#38291f', shoe: '#24272a', dark: '#1d1f22', chair: '#8a6f55' }
-        : { shirt: '#f5f5f2', pants: '#e2e5e4', skin: '#f5f5f2', hair: '#dcdedd', shoe: '#d1d4d3', dark: '#b4b9bb', chair: '#eceeed' };
-      const L1 = .41, L2 = .41, FH = .07, th = [P.lt, P.rt], kb = [P.lk, P.rk];
+      const look = humanLook(o), B = BODIES[look.body] || BODIES.man, OF = OUTFITS[look.outfit] || OUTFITS.casual, P = humanPose(o, t);
+      const C = colored
+        ? { top: col, bottom: look.bottomColor, skin: look.skin, hair: look.hairColor, shoe: OF.shoe, sole: OF.sole, dark: '#1d1f22', chair: '#8a6f55', white: '#f4f4f0', tie: '#8c2f39',
+            lip: mixHex(look.skin, B.bust || look.body === 'girl' ? '#c0505a' : '#8a3d35', B.bust || look.body === 'girl' ? .55 : .35), brow: look.hairColor }
+        : { top: '#f5f5f2', bottom: '#e2e5e4', skin: '#f5f5f2', hair: '#dcdedd', shoe: '#d1d4d3', sole: '#eceeed', dark: '#b4b9bb', chair: '#eceeed', white: '#ffffff', tie: '#d4d8d9', lip: '#e6e8e7', brow: '#d0d3d2' };
+      const k = s * B.limb, hs = s * B.head, tl = B.torso, shorts = OF.bottomType === 'shorts', skirt = OF.bottomType === 'skirt';
+      const L1 = .41 * B.leg, L2 = .41 * B.leg, FH = .07, th = [P.lt, P.rt], kb = [P.lk, P.rk];
       const py = Math.max(...[0, 1].map(i => L1 * Math.cos(th[i]) + L2 * Math.cos(th[i] - kb[i]))) + FH + P.hop;
-      const w = (a, b, c) => loc(a, b, c), vadd = (base, dirv, k) => add(base, mul(dirv, k));
-      // legs and shoes
-      [-1, 1].forEach((sd, i) => { const hip = [sd * .09, py, 0], knee = add(hip, [0, -L1 * Math.cos(th[i]), L1 * Math.sin(th[i])]), a = th[i] - kb[i], ankle = add(knee, [0, -L2 * Math.cos(a), L2 * Math.sin(a)]);
-        ball(w(...hip), .078 * s, .078 * s, .078 * s, sphereFrame, C.pants, seg, rings);
-        tube(w(...hip), w(...knee), .076 * s, .06 * s, C.pants, limb, 0, 0, false); ball(w(...knee), .06 * s, .06 * s, .06 * s, sphereFrame, C.pants, seg, rings);
-        tube(w(...knee), w(...ankle), .058 * s, .043 * s, C.pants, limb, 0, 0, true);
-        lbox(ankle[0], ankle[1] - FH, ankle[2] + .065, .105, .07, .27, C.shoe); });
-      // torso (lofted rings along the leaned spine)
+      const w = (a, b, c) => loc(a, b, c), vadd = (base, dirv, q) => add(base, mul(dirv, q)), wd = v => dirW(...v);
+      // legs, trousers / shorts / bare legs, shoes
+      [-1, 1].forEach((sd, i) => {
+        const hip = [sd * .09 * B.hip, py, 0], knee = add(hip, [0, -L1 * Math.cos(th[i]), L1 * Math.sin(th[i])]), a = th[i] - kb[i], ankle = add(knee, [0, -L2 * Math.cos(a), L2 * Math.sin(a)]);
+        const bare = shorts || skirt, mid = add(hip, mul(sub(knee, hip), .62));
+        ball(w(...hip), .078 * k, .078 * k, .078 * k, sphereFrame, skirt ? C.top : C.bottom, seg, rings);
+        if (shorts) { tube(w(...hip), w(...mid), .076 * k, .07 * k, C.bottom, limb, 0, 0, true); tube(w(...mid), w(...knee), .068 * k, .06 * k, C.skin, limb, 0, 0, false); }
+        else tube(w(...hip), w(...knee), .076 * k, .06 * k, skirt ? C.skin : C.bottom, limb, 0, 0, false);
+        ball(w(...knee), .06 * k, .06 * k, .06 * k, sphereFrame, bare ? C.skin : C.bottom, seg, rings);
+        tube(w(...knee), w(...ankle), .058 * k, .043 * k, bare ? C.skin : C.bottom, limb, 0, 0, true);
+        const fx = ankle[0], fy = ankle[1] - FH, fz = ankle[2] + .065 * B.foot;
+        lbox(fx, fy, fz, .105 * B.limb, .07, .27 * B.foot, C.shoe);
+        if (C.sole) lbox(fx, fy, fz, .112 * B.limb, .022, .285 * B.foot, C.sole);
+      });
+      // torso: lofted rings shaped by body type (waist, bust, shoulders) and outfit (jacket, hoodie, skirt)
       const l = P.lean, U = [0, Math.cos(l), Math.sin(l)], F = [0, -Math.sin(l), Math.cos(l)], base = [0, py, 0];
-      const R = [{ h: -.07, rx: .15, rz: .10 }, { h: .03, rx: .16, rz: .105 }, { h: .14, rx: .145, rz: .095 }, { h: .30, rx: .165, rz: .105 }, { h: .42, rx: .19, rz: .115 }, { h: .495, rx: .205, rz: .10 }, { h: .55, rx: .085, rz: .07 }]
-        .map(r => { const c = vadd(base, U, r.h); return Array.from({ length: sides }, (_, k) => { const q = k / sides * 2 * Math.PI; return w(...add(c, add(mul([1, 0, 0], Math.cos(q) * r.rx), mul(F, Math.sin(q) * r.rz)))); }); });
-      const body = avg(R.flat());
-      for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < sides; k++) { const k2 = (k + 1) % sides; lit([R[i][k], R[i][k2], R[i + 1][k2], R[i + 1][k]], i === 0 ? C.pants : C.shirt, body); }
-      lit(R[0], C.pants, body); lit(R.at(-1), C.shirt, body);
+      const spec = [
+        { h: -.08, rx: .150 * B.hip, rz: .100 }, { h: 0, rx: .168 * B.hip, rz: .112 }, { h: .12, rx: .140 * B.waist, rz: .095 }, { h: .24, rx: .150 * B.chest, rz: .100 },
+        { h: .36, rx: .168 * B.chest, rz: .108 + .03 * B.bust, fo: .012 * B.bust }, { h: .44, rx: .188 * B.sw, rz: .104 }, { h: .50, rx: .205 * B.sw, rz: .094 },
+        { h: .535, rx: .115 * B.neck, rz: .08 }, { h: .555, rx: .075 * B.neck, rz: .065 }];
+      const drop = skirt ? [{ h: -.36, rx: .27 * B.hip, rz: .2 }, { h: -.22, rx: .21 * B.hip, rz: .155 }]
+        : OF.jacket ? [{ h: -.2, rx: .175 * B.hip, rz: .118 }] : OF.hood ? [{ h: -.14, rx: .172 * B.hip, rz: .116 }] : [];
+      spec.unshift(...drop); const longTop = drop.length > 0;
+      const centers = spec.map(r => vadd(vadd(base, U, r.h * tl), F, r.fo || 0));
+      const R = spec.map((r, ri) => Array.from({ length: sides }, (_, q) => { const a = q / sides * 2 * Math.PI; return w(...add(centers[ri], add(mul([1, 0, 0], Math.cos(a) * r.rx), mul(F, Math.sin(a) * r.rz)))); }));
+      const cw = centers.map(c => w(...c));
+      for (let i = 0; i < R.length - 1; i++) for (let q = 0; q < sides; q++) { const q2 = (q + 1) % sides;
+        lit([R[i][q], R[i][q2], R[i + 1][q2], R[i + 1][q]], (!longTop && i === 0) ? C.bottom : C.top, avg([cw[i], cw[i + 1]])); }
+      lit(R[0], longTop ? C.top : C.bottom, cw[1]); lit(R.at(-1), C.top, cw.at(-2));
+      const tf = [wd([1, 0, 0]), wd(U), wd(F)];
+      if (lod < 2) {
+        const front = .112 + .042 * B.bust, onTorso = (h, f) => w(...vadd(vadd(base, U, h * tl), F, f));
+        if (OF.jacket) {   // white shirt V, tie and knot
+          ball(onTorso(.38, front), .052 * s, .12 * s * tl, .01 * s, tf, C.white, 6, 3, null, .04);
+          ball(onTorso(.34, front + .006), .02 * s, .1 * s * tl, .01 * s, tf, C.tie, 6, 3, null, .06);
+          ball(onTorso(.44, front - .004), .026 * s, .022 * s, .014 * s, tf, C.tie, 6, 3, null, .06);
+        }
+        if (OF.hood) ball(onTorso(.56, -.07), .115 * s * B.neck, .08 * s, .085 * s, tf, C.top, seg, rings, null, .02);
+      }
       // neck and head
-      const neckA = w(...vadd(base, U, .52)), neckB = w(...vadd(base, U, .64)); tube(neckA, neckB, .05 * s, .045 * s, C.skin, limb, 0, 0, false);
-      const hc = vadd(base, U, .745), cy = Math.cos(P.hy), sy = Math.sin(P.hy), f1 = add(mul(F, cy), mul([1, 0, 0], sy)), r1 = sub(mul([1, 0, 0], cy), mul(F, sy));
+      const neckH = .635 * tl;
+      tube(w(...vadd(base, U, .52 * tl)), w(...vadd(base, U, neckH + .01)), .052 * s * B.neck, .046 * s * B.neck, C.skin, limb, 0, 0, false);
+      const hc = vadd(base, U, neckH + .105 * B.head), cy = Math.cos(P.hy), sy = Math.sin(P.hy), f1 = add(mul(F, cy), mul([1, 0, 0], sy)), r1 = sub(mul([1, 0, 0], cy), mul(F, sy));
       const f2 = add(mul(f1, Math.cos(P.hp)), mul(U, -Math.sin(P.hp))), u2 = add(mul(U, Math.cos(P.hp)), mul(f1, Math.sin(P.hp)));
-      const wd = v => dirW(...v), hf = [wd(r1), wd(u2), wd(f2)], hcw = w(...hc);
-      const hair = (y, xx, zz) => (y > .5 || (zz < -.1 && y > -.4) || (y > .25 && zz < .35)) ? C.hair : C.skin;
-      ball(hcw, .095 * s, .115 * s, .105 * s, hf, C.skin, seg, rings, colored ? hair : null);
-      if (lod < 2) { const at = (a, b, c) => hcw.map((v, i) => v + (hf[0][i] * a + hf[1][i] * b + hf[2][i] * c) * s);
-        ball(at(0, -.012, .105), .017 * s, .02 * s, .02 * s, hf, C.skin, 5, 3); for (const e of [-1, 1]) { ball(at(e * .038, .02, .097), .011 * s, .011 * s, .008 * s, hf, C.dark, 5, 3); ball(at(e * .097, 0, 0), .014 * s, .028 * s, .02 * s, hf, C.skin, 5, 3); } }
-      // arms
+      const hf = [wd(r1), wd(u2), wd(f2)], hcw = w(...hc), at = (a, b, c) => hcw.map((v, i) => v + (hf[0][i] * a + hf[1][i] * b + hf[2][i] * c) * hs);
+      const style = look.hair, hairOn = style !== 'bald', hairShade = style === 'buzz' ? mixHex(C.skin, C.hair, .78) : C.hair;
+      const capMask = (y, x, z) => z > .38 ? y > .66 : (y > .22 || (z < -.1 && y > -.45) || (Math.abs(x) > .8 && y > -.05));
+      const beardMask = (y, x, z) => y < -.2 && y > -.92 && z > -.15 && (z > .12 || Math.abs(x) > .72);
+      const beardOn = colored && look.body === 'man' && look.facial !== 'none', beardColor = look.facial === 'beard' ? C.hair : mixHex(C.skin, C.hair, .4);
+      ball(hcw, .095 * hs, .115 * hs, .105 * hs, hf, C.skin, seg, rings, (y, x, z) => hairOn && capMask(y, x, z) ? hairShade : beardOn && beardMask(y, x, z) ? beardColor : C.skin);
+      const hv = (c, rx, ry, rz, mask, bias = .03) => ball(at(...c), rx * hs, ry * hs, rz * hs, hf, hairShade, seg, rings, mask ? (y, x, z) => mask(y, x, z) ? hairShade : null : null, bias);
+      if (hairOn && style !== 'buzz') {
+        hv([0, .012, -.014], .1015, .1215, .1125, capMask);
+        if (style === 'long') { hv([0, -.13, -.055], .104, .2, .08, (y, x, z) => z < .25); for (const e of [-1, 1]) hv([e * .098, -.12, .012], .028, .15, .052, null); }
+        else if (style === 'ponytail') {
+          const a = at(0, .045, -.105), b = at(0, -.03, -.185), c = at(0, -.17, -.2), d = at(0, -.31, -.185);
+          tube(a, b, .05 * hs, .05 * hs, hairShade, limb, .02, .02, false); tube(b, c, .05 * hs, .046 * hs, hairShade, limb, .02, .02, false); tube(c, d, .046 * hs, .02 * hs, hairShade, limb, .02, .02, true);
+          ball(b, .056 * hs, .056 * hs, .056 * hs, sphereFrame, hairShade, seg, rings, null, .03);
+        }
+        else if (style === 'bun') hv([0, .125, -.05], .056, .052, .052, null);
+        else if (style === 'bob') hv([0, -.045, -.012], .112, .105, .108, (y, x, z) => z < .25 ? true : y > .66);
+        else if (style === 'curly') {
+          hv([0, .035, -.012], .132, .126, .126, (y, x, z) => z > .5 ? y > .66 : y > -.45);
+          for (const [a, b, c] of [[.105, .07, .02], [-.105, .07, .02], [.07, .115, 0], [-.07, .115, 0], [0, .14, -.02], [.1, -.03, -.06], [-.1, -.03, -.06], [0, -.04, -.115]]) hv([a, b, c], .055, .055, .055, null);
+        }
+      }
+      if (lod < 2) {
+        ball(at(0, -.012, .105), .017 * hs, .02 * hs, .02 * hs, hf, C.skin, 5, 3);
+        for (const e of [-1, 1]) {
+          ball(at(e * .097, 0, 0), .014 * hs, .028 * hs, .02 * hs, hf, C.skin, 5, 3);
+          if (lod < 1) ball(at(e * .038, .022, .098), .0135 * hs, .009 * hs, .006 * hs, hf, C.white, 6, 3, null, .01);
+          ball(at(e * .038, .022, .1), .0075 * hs, .0075 * hs, .006 * hs, hf, C.dark, 5, 3, null, .02);
+          if (lod < 1) ball(at(e * .04, .05, .097), .022 * hs, .004 * hs, .007 * hs, hf, C.brow, 5, 3, null, .015);
+        }
+        if (lod < 1) ball(at(0, -.056, .099), .026 * hs, .007 * hs, .01 * hs, hf, C.lip, 6, 3, null, .015);
+      }
+      // arms: sleeves follow the outfit, hands are flattened ellipsoids along the forearm
       const arm = (sd, a, b) => [sd * Math.sin(b), -Math.cos(b) * Math.cos(a), Math.cos(b) * Math.sin(a)];
+      const sleeve = OF.sleeve, upperC = sleeve === 'none' ? C.skin : C.top, foreC = sleeve === 'long' ? C.top : C.skin, elbowC = sleeve === 'long' ? C.top : C.skin;
       [[-1, P.la, P.lb, P.lc, P.ld], [1, P.ra, P.rb, P.rc, P.rd]].forEach(([sd, a, b, c, d]) => {
-        const S = add(vadd(base, U, .47), [sd * .215, 0, 0]), E = vadd(S, arm(sd, a, b), .29), Wr = vadd(E, arm(sd, c, d), .26), Hd = vadd(Wr, arm(sd, c, d), .05);
-        ball(w(...S), .062 * s, .062 * s, .062 * s, sphereFrame, C.shirt, seg, rings);
-        tube(w(...S), w(...E), .052 * s, .045 * s, C.shirt, limb, 0, 0, false); ball(w(...E), .047 * s, .047 * s, .047 * s, sphereFrame, C.shirt, seg, rings);
-        tube(w(...E), w(...Wr), .042 * s, .031 * s, C.skin, limb, 0, 0, true); ball(w(...Hd), .04 * s, .04 * s, .04 * s, sphereFrame, C.skin, seg, rings); });
+        const S = add(vadd(base, U, .47 * tl), [sd * .215 * B.sw, 0, 0]), E = vadd(S, arm(sd, a, b), .29 * B.arm), Wr = vadd(E, arm(sd, c, d), .26 * B.arm), fd = arm(sd, c, d);
+        ball(w(...S), .062 * k, .062 * k, .062 * k, sphereFrame, upperC, seg, rings);
+        tube(w(...S), w(...E), .052 * k, .045 * k, upperC, limb, 0, 0, false); ball(w(...E), .047 * k, .047 * k, .047 * k, sphereFrame, elbowC, seg, rings);
+        tube(w(...E), w(...Wr), .042 * k, .031 * k, foreC, limb, 0, 0, true);
+        const Uw = wd(fd), Rw = Math.abs(Uw[1]) > .95 ? [1, 0, 0] : norm(cross(Uw, [0, 1, 0])), Fw = cross(Rw, Uw);
+        ball(w(...vadd(Wr, fd, .062 * B.arm)), .03 * k, .068 * s * B.arm, .019 * k, [Rw, Uw, Fw], C.skin, seg, rings);
+      });
       if (P.sit > .55) { const y0 = py - .13; lbox(0, y0, -.03, .5, .05, .46, C.chair); lbox(0, y0 + .05, -.26, .46, .5, .04, C.chair); for (const a of [-1, 1]) for (const b of [-1, 1]) lbox(a * .22, 0, -.03 + b * .19, .04, y0, .04, C.dark); }
     }
 
@@ -332,6 +418,7 @@ export function validateScene(input) {
   for (const o of q.objects) {
     if (typeof o.id !== 'string' || objIds.has(o.id) || typeof o.name !== 'string' || !['human', 'car', 'bus', 'tree', 'building'].includes(o.type) || !['inherit', 'white', 'color', 'texture'].includes(o.material) || !['linear', 'smooth'].includes(o.easing) || typeof o.visible !== 'boolean' || !HEX.test(o.color)) throw Error('Invalid object');
     objIds.add(o.id);
+    if (o.type === 'human') { const lk = humanLook(o); if (!BODIES[lk.body] || !OUTFITS[lk.outfit] || !HAIR_STYLES[lk.hair] || !FACIAL[lk.facial] || ![lk.skin, lk.hairColor, lk.bottomColor].every(v => HEX.test(v))) throw Error('Invalid character look'); }
     for (const f of ['x', 'z', 'endX', 'endZ']) if (!finite(o[f], -100, 150)) throw Error('Invalid position');
     if (!finite(o.scale, .2, 4) || !finite(o.start, 0, q.duration) || !finite(o.duration, .1, 120)) throw Error('Invalid timing or scale');
     if (!Array.isArray(o.clips) || o.clips.length > 60) throw Error('Invalid gesture clips');

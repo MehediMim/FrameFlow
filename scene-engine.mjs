@@ -1,5 +1,6 @@
 // FrameFlow Scene Studio engine (v2).
 // Dependency-free perspective renderer. World units: metres; Y up; road runs along +Z.
+// Finishes: smooth, grainy texture or halftone dots, per scene and per object.
 // Characters: boy / girl / man / woman bodies, hair, facial hair, outfits and skin tones (object.look).
 // v2 changes: gesture clips per human, camera clips, detailed human/car/bus models, lit + culled polygons.
 
@@ -152,14 +153,41 @@ export function cameraAt(p, t) {
   return last && bl > 0 && t - last.end < bl ? mixCam(rawCamera(p, last, t, last.start), base(), ease((t - last.end) / bl)) : base();
 }
 
+// ---------------------------------------------------------------- finishes (grain / halftone)
+export const FINISHES = { none: 'Smooth', grain: 'Grainy texture', halftone: 'Halftone dots' };
+const mkCanvas = (w, h) => { const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const patCache = new Map();
+function cachedPattern(ctx, key, w, h, paint, rotate = false) {
+  let pat = patCache.get(key);
+  if (!pat) {
+    const c = mkCanvas(w, h); paint(c.getContext('2d'), w, h); pat = ctx.createPattern(c, 'repeat');
+    if (rotate && pat?.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix().rotate(45));
+    if (patCache.size > 400) patCache.clear(); patCache.set(key, pat);
+  }
+  return pat;
+}
+// Film-like grain: fixed random black / white specks (same tile every frame so video export is stable).
+const grainPattern = ctx => cachedPattern(ctx, 'grain', 128, 128, (g, w, h) => {
+  const img = g.createImageData(w, h); let seed = 1234567;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < w * h; i++) { const v = rnd() < .5 ? 0 : 255; img.data.set([v, v, v, Math.round(rnd() * 150)], i * 4); }
+  g.putImageData(img, 0, 0);
+});
+// Halftone: a 45-degree dot screen whose dot size grows with shadow level (0 = lit, 5 = darkest).
+const halftonePattern = (ctx, ink, level, size, strength) => cachedPattern(ctx, `h|${ink}|${level}|${size}|${strength.toFixed(2)}`, size, size, (g, w, h) => {
+  g.fillStyle = ink; g.beginPath(); g.arc(w / 2, h / 2, level / 5 * size * .52 * (.55 + .6 * strength), 0, Math.PI * 2); g.fill();
+}, true);
+
 // ---------------------------------------------------------------- renderer
 const BOX_FACES = [[0, 1, 2, 3], [4, 7, 6, 5], [0, 3, 7, 4], [1, 5, 6, 2], [3, 2, 6, 7], [0, 4, 5, 1]];
 const LIGHT = norm([-.35, .85, -.4]);
 export function renderScene(canvas, p, t) {
   const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height, cam = cameraAt(p, t);
   const fwd = norm(sub(cam.look, cam.pos)), right = norm(cross(fwd, [0, 1, 0])), up = cross(right, fwd), focal = H / 2 / Math.tan(cam.fov * Math.PI / 360);
-  const white = p.material === 'white', faces = []; let layer = 3, group = null;
+  const FX = p.finish || 'none', FXS = clamp(p.finishStrength ?? .6, 0, 1), dotSize = Math.max(4, Math.round(W / 190));
+  const white = p.material === 'white', faces = []; let layer = 3, group = null, fx = FX;
   ctx.fillStyle = white ? '#e9edef' : p.sky; ctx.fillRect(0, 0, W, H);
+  if (FX === 'grain') { ctx.globalAlpha = .12 + .3 * FXS; ctx.fillStyle = grainPattern(ctx); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   const view = v => { const d = sub(v, cam.pos); return [dot(d, right), dot(d, up), dot(d, fwd)]; };
   const rgbOf = col => col.slice(1).match(/../g).map(x => parseInt(x, 16));
 
@@ -169,7 +197,8 @@ export function renderScene(canvas, p, t) {
       if (ain) out.push(a); if (ain !== bin) { const k = (.15 - a[2]) / (b[2] - a[2]); out.push(a.map((x, j) => x + (b[j] - x) * k)); } }
     if (out.length < 3) return;
     const depth = out.reduce((s, v) => s + v[2], 0) / out.length;
-    faces.push({ layer, group, depth: depth - bias, alpha, col: `rgb(${rgbOf(col).map(x => Math.round(Math.min(255, x * shade))).join(',')})`, pts: out.map(v => [W / 2 + v[0] * focal / v[2], H / 2 - v[1] * focal / v[2]]) });
+    const tint = k => `rgb(${rgbOf(col).map(x => Math.round(Math.min(255, x * k))).join(',')})`, half = fx === 'halftone';
+    faces.push({ layer, group, depth: depth - bias, alpha, fx, col: tint(half ? 1 : shade), ink: half ? tint(.36) : null, level: half ? Math.round(clamp((1.05 - shade) / .6, 0, 1) * 5) : 0, pts: out.map(v => [W / 2 + v[0] * focal / v[2], H / 2 - v[1] * focal / v[2]]) });
   }
   // Lit polygon: normal is oriented away from `center`, back faces are culled, brightness follows a fixed key light.
   function lit(pts, col, center, bias = 0, cull = true) {
@@ -201,9 +230,9 @@ export function renderScene(canvas, p, t) {
         if (color == null) continue; lit([P(l0, o0), P(l0, o1), P(l1, o1), P(l1, o0)], color, c, bias); } }
   }
   const sphereFrame = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  const shadow = (cx, cz, rx, rz, yaw) => { const keep = [layer, group]; layer = 2.5; group = null;
+  const shadow = (cx, cz, rx, rz, yaw) => { const keep = [layer, group], keepFx = fx; layer = 2.5; group = null; fx = 'none';
     push(Array.from({ length: 18 }, (_, i) => { const q = i / 18 * 2 * Math.PI, a = Math.cos(q) * rx, b = Math.sin(q) * rz; return [cx + a * Math.cos(yaw) + b * Math.sin(yaw), .03, cz - a * Math.sin(yaw) + b * Math.cos(yaw)]; }), '#000000', 1, 0, .24);
-    [layer, group] = keep; };
+    [layer, group] = keep; fx = keepFx; };
 
   // ---- ground, road, roadside
   const road = p.roadWidth / 2;
@@ -235,7 +264,7 @@ export function renderScene(canvas, p, t) {
     const O = loc(0, 0, 0), dirW = (a, b, c) => norm(sub(loc(a, b, c), O));
     const lbox = (cx, y0, cz, w, h, d, color, bias = 0) => { const q = loc(cx, y0, cz); box(q[0], q[1], q[2], w * s, h * s, d * s, color, yaw, bias); };
     const dist = Math.hypot(x - cam.pos[0], z - cam.pos[2]), lod = dist < 14 ? 0 : dist < 40 ? 1 : 2, sides = [10, 7, 5][lod], limb = [8, 6, 4][lod], seg = [10, 7, 5][lod], rings = [7, 5, 4][lod];
-    group = view(loc(0, .9, 0))[2];
+    group = view(loc(0, .9, 0))[2]; fx = o.finish && o.finish !== 'inherit' ? o.finish : FX;
     if (o.type === 'human') drawHuman();
     else if (o.type === 'car' || o.type === 'bus') drawVehicle(o.type === 'bus');
     else if (o.type === 'tree') { lbox(0, 0, 0, .35, 2, .35, colored ? '#8d6e52' : col); lbox(0, 1.5, 0, 2.5, 2, 2.5, col); lbox(0, 3, 0, 1.6, 1.2, 1.6, col); }
@@ -388,7 +417,12 @@ export function renderScene(canvas, p, t) {
 
   // far-to-near painter order: ground layers first, then actor groups, then faces within each group
   faces.sort((a, b) => a.layer - b.layer || (b.group ?? b.depth) - (a.group ?? a.depth) || b.depth - a.depth);
-  for (const f of faces) { ctx.globalAlpha = f.alpha; ctx.beginPath(); f.pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fillStyle = f.col; ctx.fill(); ctx.strokeStyle = f.col; ctx.lineWidth = .5; ctx.stroke(); }
+  for (const f of faces) {
+    ctx.globalAlpha = f.alpha; ctx.beginPath(); f.pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fillStyle = f.col; ctx.fill(); ctx.strokeStyle = f.col; ctx.lineWidth = .5; ctx.stroke();
+    if (f.alpha < .5) continue;
+    if (f.fx === 'halftone' && f.level > 0) { ctx.fillStyle = halftonePattern(ctx, f.ink, f.level, dotSize, FXS); ctx.fill(); }
+    else if (f.fx === 'grain') { ctx.globalAlpha = f.alpha * (.12 + .5 * FXS); ctx.fillStyle = grainPattern(ctx); ctx.fill(); }
+  }
   ctx.globalAlpha = 1;
   return { faces: faces.length, camera: cam };
 }
@@ -408,6 +442,7 @@ export function validateScene(input) {
   const q = migrateScene(input);
   if (typeof q.name !== 'string' || !finite(q.duration, 1, 120) || ![24, 30, 60].includes(q.fps) || !Array.isArray(q.objects) || q.objects.length > 80) throw Error('Invalid Scene Studio project');
   if (!['white', 'texture'].includes(q.material) || !HEX.test(q.sky) || !finite(q.roadWidth, 4, 20) || ![q.left, q.right].every(v => ['city', 'park', 'trees', 'playground', 'none'].includes(v))) throw Error('Invalid environment');
+  if (!['none', 'grain', 'halftone'].includes(q.finish ?? 'none') || !finite(q.finishStrength ?? .6, 0, 1)) throw Error('Invalid finish');
   const camSpec = k => { if (!CAMERA_MODES[k.mode] || !CAMERA_MOVES[k.move]) throw Error('Invalid camera');
     for (const [f, a, b] of [['yaw', -360, 360], ['height', 1, 60], ['distance', 2, 80], ['fov', 25, 100]]) if (!finite(k[f], a, b)) throw Error('Invalid camera value'); };
   camSpec(q.camera);
@@ -418,6 +453,7 @@ export function validateScene(input) {
   for (const o of q.objects) {
     if (typeof o.id !== 'string' || objIds.has(o.id) || typeof o.name !== 'string' || !['human', 'car', 'bus', 'tree', 'building'].includes(o.type) || !['inherit', 'white', 'color', 'texture'].includes(o.material) || !['linear', 'smooth'].includes(o.easing) || typeof o.visible !== 'boolean' || !HEX.test(o.color)) throw Error('Invalid object');
     objIds.add(o.id);
+    if (!['inherit', 'none', 'grain', 'halftone'].includes(o.finish ?? 'inherit')) throw Error('Invalid finish');
     if (o.type === 'human') { const lk = humanLook(o); if (!BODIES[lk.body] || !OUTFITS[lk.outfit] || !HAIR_STYLES[lk.hair] || !FACIAL[lk.facial] || ![lk.skin, lk.hairColor, lk.bottomColor].every(v => HEX.test(v))) throw Error('Invalid character look'); }
     for (const f of ['x', 'z', 'endX', 'endZ']) if (!finite(o[f], -100, 150)) throw Error('Invalid position');
     if (!finite(o.scale, .2, 4) || !finite(o.start, 0, q.duration) || !finite(o.duration, .1, 120)) throw Error('Invalid timing or scale');

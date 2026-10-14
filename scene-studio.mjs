@@ -1,6 +1,6 @@
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
 // clip timeline below. Gestures and camera shots are clips you place on the timeline.
-import { defaultScene, makeObject, makeClip, makeCameraClip, renderScene, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs';
+import { defaultScene, makeObject, makeClip, makeCameraClip, renderScene, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, FINISHES, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
 const $ = s => document.querySelector(s), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const STORE = 'frameflow-scene-v2', OLD_STORE = 'frameflow-scene-v1';
@@ -105,7 +105,7 @@ function renderInspector() {
       + (lk.outfit === 'dress' ? '' : field('look.bottomColor', 'Trousers / shorts color', lk.bottomColor, 'color'))
       + (shows ? '' : '<p class="mini-label">Colors, skin and hair show once Surface (below) is Solid color or Textured.</p>'));
     body = section('GENERAL', field('object.name', 'Name', o.name, 'text')) + character
-      + section('APPEARANCE', select('object.material', 'Surface', o.material, [['inherit', 'Use scene surface'], ['white', 'White model'], ['color', 'Solid color'], ['texture', 'Textured / colored']]) + field('object.color', human ? (humanLook(o).outfit === 'dress' ? 'Dress color' : 'Top / jacket color') : 'Object color', o.color, 'color') + field('object.scale', 'Scale', o.scale))
+      + section('APPEARANCE', select('object.material', 'Surface', o.material, [['inherit', 'Use scene surface'], ['white', 'White model'], ['color', 'Solid color'], ['texture', 'Textured / colored']]) + select('object.finish', 'Finish', o.finish ?? 'inherit', [['inherit', 'Use scene finish'], ...Object.entries(FINISHES)]) + field('object.color', human ? (humanLook(o).outfit === 'dress' ? 'Dress color' : 'Top / jacket color') : 'Object color', o.color, 'color') + field('object.scale', 'Scale', o.scale))
       + section(mobile ? 'POSITION & PATH' : 'POSITION', `<div class="two">${field('object.x', 'Start X (m)', o.x)}${field('object.z', 'Start Z (m)', o.z)}${mobile ? field('object.endX', human ? 'Toward X (m)' : 'End X (m)', o.endX) + field('object.endZ', human ? 'Toward Z (m)' : 'End Z (m)', o.endZ) : ''}</div>`
         + `<p class="mini-label">X moves across the road, Z along it.${human ? ' A human only moves during Walk and Run clips, heading toward this point.' : ''}</p>`)
       + section('TIMING', `<div class="two">${field('object.start', 'Appears at (s)', o.start)}${field('object.duration', mobile && !human ? 'Travel time (s)' : 'Visible for (s)', o.duration)}</div>${mobile && !human ? select('object.easing', 'Path movement', o.easing, [['linear', 'Constant speed'], ['smooth', 'Ease in and out']]) : ''}`)
@@ -121,7 +121,9 @@ function renderSettings() {
   const c = p.camera;
   $('#scSettings').innerHTML = group('COMPOSITION', field('duration', 'Duration (seconds)', p.duration) + select('fps', 'Frames per second', p.fps, [['24', '24'], ['30', '30'], ['60', '60']]) + '<button data-action="demo">Load city demo</button>')
     + group('ENVIRONMENT', select('left', 'Left roadside', p.left, ['city', 'park', 'trees', 'playground', 'none']) + select('right', 'Right roadside', p.right, ['city', 'park', 'trees', 'playground', 'none']) + field('roadWidth', 'Road width (m)', p.roadWidth)
-      + select('material', 'Scene surface', p.material, [['white', 'White model'], ['texture', 'Textured / colored']]) + field('sky', 'Sky', p.sky, 'color'))
+      + select('material', 'Scene surface', p.material, [['white', 'White model'], ['texture', 'Textured / colored']]) + field('sky', 'Sky', p.sky, 'color')
+      + select('finish', 'Scene finish', p.finish || 'none', Object.entries(FINISHES)) + field('finishStrength', 'Finish strength (0 – 1)', p.finishStrength ?? .6, 'number', 'min="0" max="1"')
+      + '<p class="mini-label">Grain and halftone apply to the road, buildings and every object that uses the scene finish. Objects can override it in their Appearance section.</p>')
     + group('DEFAULT CAMERA', `<p class="mini-label">Used wherever no camera shot is on the timeline.</p>` + select('camera.mode', 'Point of view', c.mode, Object.entries(CAMERA_MODES)) + select('camera.move', 'Movement', c.move, Object.entries(CAMERA_MOVES)) + select('camera.target', 'Subject', c.target || '', subjectOptions())
       + field('camera.yaw', 'Orbit angle (degrees)', c.yaw) + field('camera.height', 'Height (m)', c.height) + field('camera.distance', 'Distance (m)', c.distance) + field('camera.fov', 'Field of view', c.fov));
 }

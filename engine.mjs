@@ -2,12 +2,52 @@ import { validateVector } from './vector-layers.mjs';
 import { validateExtras } from './motion-extras.mjs';
 import { validateStructured } from './motion-structured.mjs';
 import { validateChart } from './charts.mjs';
-export const PROPS=['x','y','scale','rotation','opacity','w','h'];
+export const PROPS=['x','y','scale','rotation','opacity','w','h','blur'];
 export const easings={linear:t=>t,easeIn:t=>t*t*t,easeOut:t=>1-(1-t)**3,easeInOut:t=>t<.5?4*t*t*t:1-(-2*t+2)**3/2,backOut:t=>1+2.70158*(t-1)**3+1.70158*(t-1)**2,hold:t=>t>=1?1:0};
 export function valueAt(layer,prop,frame){const keys=layer.keys[prop];if(!keys?.length)return layer[prop];const sorted=[...keys].sort((a,b)=>a.f-b.f);if(frame<=sorted[0].f)return sorted[0].v;if(frame>=sorted.at(-1).f)return sorted.at(-1).v;for(let i=1;i<sorted.length;i++){if(frame<=sorted[i].f){const a=sorted[i-1],b=sorted[i],t=(frame-a.f)/(b.f-a.f);return a.v+(b.v-a.v)*(easings[a.e]||easings.linear)(t)}}}
-export function poseAt(layer,frame){const p={...layer};for(const k of PROPS)p[k]=valueAt(layer,k,frame);return p}
+// Non-destructive, playhead-relative Motion FX. Every clip modifies the *current*
+// keyframed pose, not a frozen pose sampled when the preset was inserted.
+const fxClamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const fxSmooth=t=>t*t*(3-2*t);
+function applyFxClip(p,fx,frame){
+ const start=fx.start,dur=Math.max(1,fx.dur),end=start+dur;
+ if(frame<start)return;
+ const held=fx.endBehavior==='hold';
+ if(frame>=end&&!held)return;
+ const t=fxClamp((frame-start)/dur,0,1),u=fxSmooth(t);
+ const returning=!held;
+ // Temporary effects rise and fall without a jump at either edge. Entrance
+ // effects with Hold are true introductions: they arrive at the animated pose.
+ const pulse=Math.sin(Math.PI*t)**2;
+ const strength=fx.kind==='in'?(returning?pulse:1-u):fx.kind==='out'?(returning?pulse:u):pulse;
+ const distance=fxClamp(Number(fx.distance)||120,0,2000);
+ const mult=fx.name==='pop'?.25:.7;
+ switch(fx.name){
+  case 'fade':p.opacity*=1-strength;break;
+  case 'slide-left':p.x-=distance*strength;if(fx.kind!=='loop')p.opacity*=1-strength;break;
+  case 'slide-right':p.x+=distance*strength;if(fx.kind!=='loop')p.opacity*=1-strength;break;
+  case 'slide-up':p.y-=distance*strength;if(fx.kind!=='loop')p.opacity*=1-strength;break;
+  case 'slide-down':p.y+=distance*strength;if(fx.kind!=='loop')p.opacity*=1-strength;break;
+  case 'zoom':case 'pop':p.scale*=1-(1-mult)*strength;if(fx.kind!=='loop')p.opacity*=1-strength;break;
+  case 'spin':p.rotation+=(fx.kind==='in'?-90:90)*strength;p.opacity*=1-strength;break;
+  case 'pulse':p.scale*=1+.12*pulse;break;
+  case 'float':p.y-=distance*.3*pulse;break;
+  case 'bounce':p.y-=distance*.5*pulse;break;
+  case 'sway':p.rotation+=8*pulse;break;
+  case 'breathe':p.opacity*=1-.45*pulse;break;
+  case 'rotate':p.rotation+=360*u;break;
+  case 'blur':p.blur=fxClamp((p.blur??0)+fxClamp(Number(fx.amount)||0,0,80)*pulse,0,80);break;
+ }
+ p.opacity=fxClamp(p.opacity,0,1);p.scale=fxClamp(p.scale,.01,20);
+}
+export function poseAt(layer,frame){
+ const p={...layer};for(const k of PROPS)p[k]=valueAt(layer,k,frame);
+ // Sorted for deterministic overlapping effects, independent of insertion order.
+ if(Array.isArray(layer.fxClips))for(const fx of [...layer.fxClips].sort((a,b)=>a.start-b.start||String(a.id).localeCompare(String(b.id))))applyFxClip(p,fx,frame);
+ return p;
+}
 export function putKey(layer,prop,frame,value,easing='easeInOut'){const list=layer.keys[prop]||=[];const existing=list.find(k=>k.f===frame);if(existing){existing.v=value;existing.e=easing}else list.push({f:frame,v:value,e:easing});list.sort((a,b)=>a.f-b.f)}
-export function validateProject(p){if(!p||p.version!==1||!Array.isArray(p.layers)||p.layers.length>200)throw Error('This is not a FrameFlow project.');if(![24,30,60].includes(p.fps)||!Number.isInteger(p.frames)||p.frames<2||p.frames>1800)throw Error('Invalid frame settings.');if(!Number.isInteger(p.width)||!Number.isInteger(p.height)||p.width<100||p.height<100||p.width>3840||p.height>3840)throw Error('Invalid canvas size.');if(typeof p.bg!=='string'||!/^#[0-9a-f]{6}$/i.test(p.bg))throw Error('Invalid background color.');let ids=new Set;for(const l of p.layers){if(!['rect','circle','text','image','table','chart','list','diagram','group','vector'].includes(l.type)||typeof l.id!=='string'||ids.has(l.id)||!l.keys||typeof l.keys!=='object')throw Error('Invalid layer.');ids.add(l.id);if(l.parentId!==undefined&&typeof l.parentId!=='string')throw Error('Invalid group parent.');for(const prop of PROPS){if(!Number.isFinite(l[prop]))throw Error('Invalid transform.');if(l.keys[prop]&&!Array.isArray(l.keys[prop]))throw Error('Invalid keyframes.');for(const k of l.keys[prop]||[]){if(!Number.isInteger(k.f)||k.f<0||!Number.isFinite(k.v)||!Object.hasOwn(easings,k.e))throw Error('Invalid keyframe.')}}if(l.type==='chart')validateChart(l.chart);if(l.type==='list'||l.type==='diagram')validateStructured(l);if(l.type==='vector')validateVector(l);if(l.type==='image'&&(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/i.test(l.src||'')))throw Error('Unsupported image data.');if(l.fontFamily!==undefined&&(typeof l.fontFamily!=='string'||l.fontFamily.length>60))throw Error('Invalid font.');if(!Number.isFinite(l.in)||!Number.isFinite(l.out)||l.in<0||l.out<l.in)throw Error('Invalid layer timing.')}for(const l of p.layers){if(l.parentId){const g=p.layers.find(x=>x.id===l.parentId);if(!g||g.type!=='group'||g.parentId||l.type==='group')throw Error('Invalid group relationship.')}}validateExtras(p);return p}
+export function validateProject(p){if(!p||p.version!==1||!Array.isArray(p.layers)||p.layers.length>200)throw Error('This is not a FrameFlow project.');if(![24,30,60].includes(p.fps)||!Number.isInteger(p.frames)||p.frames<2||p.frames>1800)throw Error('Invalid frame settings.');if(!Number.isInteger(p.width)||!Number.isInteger(p.height)||p.width<100||p.height<100||p.width>3840||p.height>3840)throw Error('Invalid canvas size.');if(typeof p.bg!=='string'||!/^#[0-9a-f]{6}$/i.test(p.bg))throw Error('Invalid background color.');let ids=new Set;for(const l of p.layers){if(l.fxClips!==undefined){if(!Array.isArray(l.fxClips)||l.fxClips.length>150)throw Error('Invalid motion effects.');for(const fx of l.fxClips){if(!fx||typeof fx.id!=='string'||!['in','out','loop','blur'].includes(fx.kind)||typeof fx.name!=='string'||!Number.isInteger(fx.start)||fx.start<0||fx.start>=p.frames||!Number.isInteger(fx.dur)||fx.dur<1||fx.start+fx.dur>p.frames||!['return','hold'].includes(fx.endBehavior)||fx.distance!==undefined&&(!Number.isFinite(fx.distance)||fx.distance<0||fx.distance>2000)||fx.amount!==undefined&&(!Number.isFinite(fx.amount)||fx.amount<0||fx.amount>80))throw Error('Invalid motion effect clip.');}}if(l.blur===undefined)l.blur=0;if(!Number.isFinite(l.blur)||l.blur<0||l.blur>80)throw Error('Invalid layer blur.');if(l.depth!==undefined&&(!Number.isFinite(l.depth)||l.depth< -500||l.depth>500))throw Error('Invalid layer depth.');if(!['rect','circle','text','image','table','chart','list','diagram','group','vector'].includes(l.type)||typeof l.id!=='string'||ids.has(l.id)||!l.keys||typeof l.keys!=='object')throw Error('Invalid layer.');ids.add(l.id);if(l.parentId!==undefined&&typeof l.parentId!=='string')throw Error('Invalid group parent.');for(const prop of PROPS){if(!Number.isFinite(l[prop]))throw Error('Invalid transform.');if(l.keys[prop]&&!Array.isArray(l.keys[prop]))throw Error('Invalid keyframes.');for(const k of l.keys[prop]||[]){if(prop==='blur'&&(k.v<0||k.v>80))throw Error('Invalid blur keyframe.');if(!Number.isInteger(k.f)||k.f<0||!Number.isFinite(k.v)||!Object.hasOwn(easings,k.e))throw Error('Invalid keyframe.')}}if(l.type==='chart')validateChart(l.chart);if(l.type==='list'||l.type==='diagram')validateStructured(l);if(l.type==='vector')validateVector(l);if(l.type==='image'&&(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/i.test(l.src||'')))throw Error('Unsupported image data.');if(l.fontFamily!==undefined&&(typeof l.fontFamily!=='string'||l.fontFamily.length>60))throw Error('Invalid font.');if(!Number.isFinite(l.in)||!Number.isFinite(l.out)||l.in<0||l.out<l.in)throw Error('Invalid layer timing.')}for(const l of p.layers){if(l.parentId){const g=p.layers.find(x=>x.id===l.parentId);if(!g||g.type!=='group'||g.parentId||l.type==='group')throw Error('Invalid group relationship.')}}validateExtras(p);return p}
 
 // ---------------------------------------------------------------- Fonts (shared by Motion and Map Studio)
 // g = generic fallback, w = Google Fonts weights to request, sys = already on most computers (nothing to download)

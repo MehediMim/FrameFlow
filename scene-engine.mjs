@@ -1,7 +1,7 @@
 // FrameFlow Scene Studio engine (v2).
 // Dependency-free perspective renderer. World units: metres; Y up; road runs along +Z.
 // Finishes: smooth, grainy texture or halftone dots, per scene and per object.
-// Characters: boy / girl / man / woman bodies, hair, facial hair, outfits and skin tones (object.look).
+// Editable city items, rotation, rounded routes and deterministic traffic signals.
 // v2 changes: gesture clips per human, camera clips, detailed human/car/bus models, lit + culled polygons.
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -29,10 +29,7 @@ const avg = pts => { const n = pts.length; return [0, 1, 2].map(i => pts.reduce(
 // ---------------------------------------------------------------- characters
 // Body proportions are multipliers on the adult-man reference model (h = overall height).
 export const BODIES = {
-  man:   { label: 'Man',   h: 1,    head: 1,    torso: 1,    leg: 1,    limb: 1,    hip: 1,    waist: 1,    chest: 1,    sw: 1,    neck: 1,    bust: 0, arm: 1,    foot: 1,    hair: 'short' },
-  woman: { label: 'Woman', h: .94,  head: .96,  torso: .98,  leg: 1.02, limb: .86,  hip: 1.1,  waist: .8,   chest: .92,  sw: .84,  neck: .84,  bust: 1, arm: .93,  foot: .87,  hair: 'long' },
-  boy:   { label: 'Boy',   h: .72,  head: 1.22, torso: .92,  leg: .88,  limb: .8,   hip: .92,  waist: 1.02, chest: .88,  sw: .78,  neck: .86,  bust: 0, arm: .88,  foot: .84,  hair: 'short' },
-  girl:  { label: 'Girl',  h: .7,   head: 1.22, torso: .9,   leg: .88,  limb: .78,  hip: .94,  waist: .96,  chest: .86,  sw: .76,  neck: .82,  bust: 0, arm: .86,  foot: .8,   hair: 'ponytail' }
+  man: { label: 'Character', h: 1, eye: 1.65, head: 1.65, torso: 1, leg: 1, limb: 1.12, hip: 1, waist: 1, chest: 1, sw: 1, neck: 1, bust: 0, arm: 1, foot: 1, hair: 'short' }
 };
 export const OUTFITS = {
   casual: { label: 'T-shirt & jeans',   bottom: '#3c4757', shoe: '#ecece7', sole: '#c5c5be', sleeve: 'short', bottomType: 'long' },
@@ -45,18 +42,28 @@ export const HAIR_STYLES = { short: 'Short', buzz: 'Buzz cut', curly: 'Curly', b
 export const FACIAL = { none: 'Clean shaven', stubble: 'Stubble', beard: 'Beard' };
 export const SKIN_TONES = ['#f6d7c0', '#ebbf98', '#d4a173', '#b07a4f', '#80532f', '#53341f'];
 export const HAIR_COLORS = ['#17120f', '#38291f', '#6b4423', '#a56b32', '#d8b26a', '#b8432f', '#8f8f94', '#e8e6e0'];
-export const defaultLook = (body = 'man') => ({ body, outfit: body === 'girl' || body === 'woman' ? 'casual' : 'casual', hair: BODIES[body]?.hair || 'short', hairColor: '#38291f', skin: '#ebbf98', bottomColor: OUTFITS.casual.bottom, facial: 'none' });
-export const humanLook = o => { const l = o.look || {}; return { ...defaultLook(l.body), ...l }; };
+export const defaultLook = () => ({ body: 'man', outfit: 'formal', hair: 'short', hairColor: '#483039', skin: '#ebbf98', bottomColor: '#3c4757', facial: 'none' });
+// Legacy body choices retain clothing and colors but now share one detailed rig.
+export const humanLook = o => ({ ...defaultLook(), ...(o.look || {}), body: 'man' });
 export const heightOf = o => o.type === 'human' ? (BODIES[humanLook(o).body]?.h ?? 1) : 1;
 const mixHex = (a, b, k) => { const x = a.slice(1).match(/../g).map(v => parseInt(v, 16)), y = b.slice(1).match(/../g).map(v => parseInt(v, 16)); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
 
 // ---------------------------------------------------------------- objects, clips, scenes
 export const makeClip = (gesture = 'walk', start = 0, dur = GESTURE_DURATION[gesture] || 2, speed = 1) => ({ id: newId(), gesture, start, dur, speed });
 export function makeCameraClip(preset = 'third', start = 0, dur = 3, target = null) { const { mode, move, yaw, height, distance, fov } = CAMERA_PRESETS[preset]; return { id: newId(), mode, move, yaw, height, distance, fov, start, dur, blend: .5, target }; }
+export const ITEM_TYPES = { human:'Character', car:'Car', bus:'Bus', road:'Road', junction:'Intersection', crossing:'Crosswalk', building:'Building', tree:'Tree', park:'Grass patch', traffic:'Traffic light', lamp:'Street light', bench:'Bench' };
+export const isMobile = o => ['human','car','bus'].includes(o.type);
+export const itemSize = o => [o.width ?? ({road:8,junction:12,crossing:8,building:4,park:8,car:1.8,bus:2.5,tree:2.5,traffic:.6,lamp:.6,bench:2,human:.7}[o.type]||1),o.length ?? ({road:20,junction:12,crossing:3,building:5,park:8,car:4.4,bus:9,tree:2.5,traffic:.6,lamp:1,bench:.7,human:.7}[o.type]||1)];
 export function makeObject(type, i = 0) {
-  return { id: newId(), type, name: type[0].toUpperCase() + type.slice(1), x: type === 'human' ? 5 : 0, z: i * 3, endX: type === 'human' ? 5 : 0, endZ: 35 + i * 3,
-    start: 0, duration: 12, scale: 1, color: type === 'human' ? '#b6f36e' : '#db795b', material: type === 'human' ? 'color' : 'inherit', easing: 'linear', visible: true, clips: [], ...(type === 'human' ? { look: defaultLook('man') } : {}) };
+  const palette={road:'#424c55',junction:'#424c55',crossing:'#f5f1dd',building:'#aabcc9',tree:'#6c9c62',park:'#709662',traffic:'#38434a',lamp:'#7b8991',bench:'#9c7555',human:'#bd6663',car:'#db795b',bus:'#e7b44c'};
+  const o={ id:newId(),type,name:ITEM_TYPES[type]||type,x:0,z:i*3,endX:0,endZ:isMobile({type})?35+i*3:i*3,start:0,duration:12,scale:1,color:palette[type]||'#aaaaaa',material:'color',easing:'linear',visible:true,clips:[],rotation:0,orientation:'path',waypoints:[],turnRadius:3 };
+  if(type==='human')o.look=defaultLook();
+  if(['road','junction','crossing','building','park'].includes(type)){[o.width,o.length]=itemSize(o);}
+  if(type==='building')o.height=8;
+  if(type==='traffic')Object.assign(o,{signal:'cycle',redTime:6,greenTime:5,amberTime:2,phase:0});
+  return o;
 }
+export function trafficState(o,t){ if(o.signal && o.signal!=='cycle')return o.signal;const r=o.redTime??6,g=o.greenTime??5,a=o.amberTime??2,u=((t+(o.phase??0))%(r+g+a)+(r+g+a))%(r+g+a);return u<r?'red':u<r+g?'green':'amber'; }
 export function defaultScene() {
   const human = { ...makeObject('human'), name: 'Human', clips: [makeClip('walk', 0, 4), makeClip('wave', 4, 2.5), makeClip('run', 6.5, 3), makeClip('bow', 9.5, 2.5)] };
   const car = { ...makeObject('car'), x: -2, endX: -2, z: 8, endZ: 55, name: 'Car' };
@@ -76,7 +83,16 @@ export function resolveClips(clips = []) {
 }
 export const activeClip = (clips, t) => resolveClips(clips).find(c => t >= c.start && t < c.end) || null;
 
-function pathLength(o) { return Math.hypot(o.endX - o.x, o.endZ - o.z); }
+// Rounded polyline sampled once per route change. Playback uses arc length, not point count.
+const routeCache=new WeakMap();
+export function routePoints(o){
+ const key=JSON.stringify([o.x,o.z,o.endX,o.endZ,o.waypoints,o.turnRadius]);const old=routeCache.get(o);if(old?.key===key)return old.points;
+ const raw=[[o.x,o.z],...(o.waypoints||[]).map(v=>[v.x,v.z]),[o.endX,o.endZ]],P=raw.filter((v,i)=>!i||Math.hypot(v[0]-raw[i-1][0],v[1]-raw[i-1][1])>1e-7),points=[P[0]],radius=o.turnRadius??3;
+ for(let i=1;i<P.length-1;i++){const A=P[i-1],B=P[i],C=P[i+1],la=Math.hypot(B[0]-A[0],B[1]-A[1]),lb=Math.hypot(C[0]-B[0],C[1]-B[1]),r=Math.min(radius,la*.45,lb*.45);if(r<.001){points.push(B);continue;}const U=B.map((v,j)=>v+(A[j]-v)*r/la),V=B.map((v,j)=>v+(C[j]-v)*r/lb);points.push(U);for(let n=1;n<=16;n++){const t=n/16;points.push(U.map((v,j)=>(1-t)**2*v+2*(1-t)*t*B[j]+t*t*V[j]));}}
+ if(P.length>1)points.push(P.at(-1));let length=0;const lengths=[0];for(let i=1;i<points.length;i++){length+=Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);lengths.push(length);}routeCache.set(o,{key,points,length,lengths});return points;
+}
+function pathLength(o){routePoints(o);return routeCache.get(o).length;}
+function pathAt(o,d){const pts=routePoints(o),r=routeCache.get(o);if(!r.length)return [o.x,0,o.z];d=clamp(d,0,r.length);let i=1;while(i<pts.length-1&&r.lengths[i]<d)i++;const a=pts[i-1],b=pts[i],k=(d-r.lengths[i-1])/(r.lengths[i]-r.lengths[i-1]||1);return [lerp(a[0],b[0],k),0,lerp(a[1],b[1],k)];}
 function travelled(o, t) {            // metres a human has walked/run by time t
   let d = 0;
   for (const c of resolveClips(o.clips)) { const sp = SPEED[c.gesture]; if (sp && t > c.start) d += sp * (c.speed || 1) * (Math.min(t, c.end) - c.start); }
@@ -86,8 +102,11 @@ function travelFraction(o, t) {
   if (o.type === 'human') { const L = pathLength(o); return L < .01 ? 0 : Math.min(1, travelled(o, t) / L); }
   const k = clamp((t - o.start) / o.duration, 0, 1); return o.easing === 'smooth' ? ease(k) : k;
 }
-export function actorPosition(o, t) { const q = travelFraction(o, t); return [o.x + (o.endX - o.x) * q, 0, o.z + (o.endZ - o.z) * q]; }
-export const headingOf = o => { const d = [o.endX - o.x, 0, o.endZ - o.z]; return Math.hypot(...d) < .1 ? [0, 0, 1] : norm(d); };
+export function actorPosition(o,t){return isMobile(o)?pathAt(o,travelFraction(o,t)*pathLength(o)):[o.x,0,o.z];}
+export function actorYaw(o,t=0){
+ let yaw=rad(o.rotation??0);if(isMobile(o)&&o.orientation!=='fixed'){const L=pathLength(o),d=travelFraction(o,t)*L,a=pathAt(o,Math.max(0,d-.08)),b=pathAt(o,Math.min(L,d+.08));if(Math.hypot(b[0]-a[0],b[2]-a[2])>1e-7)yaw+=Math.atan2(b[0]-a[0],b[2]-a[2]);}return yaw;
+}
+export const headingOf=(o,t=0)=>{const y=actorYaw(o,t);return [Math.sin(y),0,Math.cos(y)];};
 
 // ---------------------------------------------------------------- human poses
 // Angles are radians. lt/rt: thigh swing (forward +), lk/rk: knee bend. la..ld / ra..rd: upper arm (forward, outward), forearm (forward, outward).
@@ -134,12 +153,15 @@ export function humanPose(o, t) {
 const subjectOf = (p, id) => p.objects.find(o => o.id === id) || p.objects.find(o => ['human', 'car', 'bus'].includes(o.type));
 function rawCamera(p, c, t, t0) {
   const o = subjectOf(p, c.target), rig = o ? actorPosition(o, c.move === 'static' ? t0 : t) : [0, 0, 15], live = o ? actorPosition(o, t) : [0, 0, 15];
-  const dir = o ? headingOf(o) : [0, 0, 1], eye = o?.type === 'human' ? 1.62 * o.scale * heightOf(o) : 1.4 * (o?.scale || 1);
+  const dir = o ? headingOf(o,t) : [0, 0, 1], eye = o?.type === 'human' ? (BODIES[humanLook(o).body]?.eye ?? 1.62 * heightOf(o)) * o.scale : 1.4 * (o?.scale || 1);
   let pos, look;
-  if (c.mode === 'first') { pos = [rig[0] + dir[0] * .12, eye, rig[2] + dir[2] * .12]; look = [pos[0] + dir[0] * 10, eye - .1, pos[2] + dir[2] * 10]; }
+  if (c.move === 'static' && Number.isFinite(c.fixedX) && Number.isFinite(c.fixedZ)) {
+    pos = [c.fixedX, c.height, c.fixedZ]; look = [c.aimX ?? live[0], c.aimHeight ?? 1, c.aimZ ?? live[2]];
+  }
+  else if (c.mode === 'first') { pos = [rig[0] + dir[0] * .12, eye, rig[2] + dir[2] * .12]; look = [pos[0] + dir[0] * 10, eye - .1, pos[2] + dir[2] * 10]; }
   else if (c.mode === 'second') { pos = [rig[0] + dir[0] * c.distance, c.height, rig[2] + dir[2] * c.distance]; look = [live[0], 1.1, live[2]]; }
   else { const yaw = rad(c.yaw + (c.move === 'orbit' ? (t - t0) * 18 : 0)); pos = [rig[0] + Math.sin(yaw) * c.distance, c.mode === 'bird' ? Math.max(20, c.height) : c.height, rig[2] - Math.cos(yaw) * c.distance]; look = [live[0], .9, live[2]]; }
-  return { pos, look, fov: c.fov, hide: c.mode === 'first' ? o?.id : null };
+  return { pos, look, fov: c.fov, hide: c.mode === 'first' && !(c.move === 'static' && Number.isFinite(c.fixedX)) ? o?.id : null };
 }
 const mixCam = (a, b, k) => ({ pos: a.pos.map((v, i) => lerp(v, b.pos[i], k)), look: a.look.map((v, i) => lerp(v, b.look[i], k)), fov: lerp(a.fov, b.fov, k), hide: k >= .5 ? b.hide : a.hide });
 export function cameraAt(p, t) {
@@ -153,30 +175,46 @@ export function cameraAt(p, t) {
   return last && bl > 0 && t - last.end < bl ? mixCam(rawCamera(p, last, t, last.start), base(), ease((t - last.end) / bl)) : base();
 }
 
-// ---------------------------------------------------------------- finishes (grain / halftone)
-export const FINISHES = { none: 'Smooth', grain: 'Grainy texture', halftone: 'Halftone dots' };
+// ---------------------------------------------------------------- finishes / textures
+// Every texture is a repeating vector (or noise) tile. It is mapped onto each polygon in perspective, so it follows
+// the plane of every surface (road, wall, roof, limb). `T` is the tile size in metres at scale 1, `S` the tile in pixels.
+export const FINISHES = { none: 'Smooth', grain: 'Grainy texture', halftone: 'Halftone dots', stripes: 'Diagonal stripes', checks: 'Checkerboard', waves: 'Waves' };
+const FX_SPEC = { grain: { S: 128, T: 1.6, a: .55 }, halftone: { S: 64, T: .12, a: .62 }, stripes: { S: 64, T: .18, a: .32 }, checks: { S: 64, T: .3, a: .3 }, waves: { S: 64, T: .28, a: .4 } };
 const mkCanvas = (w, h) => { const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : document.createElement('canvas'); c.width = w; c.height = h; return c; };
 const patCache = new Map();
-function cachedPattern(ctx, key, w, h, paint, rotate = false) {
-  let pat = patCache.get(key);
-  if (!pat) {
-    const c = mkCanvas(w, h); paint(c.getContext('2d'), w, h); pat = ctx.createPattern(c, 'repeat');
-    if (rotate && pat?.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix().rotate(45));
-    if (patCache.size > 400) patCache.clear(); patCache.set(key, pat);
+const PAINT = {
+  grain: (g, S) => {   // film-like specks; the same tile every frame so video export is stable
+    const img = g.createImageData(S, S); let seed = 1234567; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    for (let i = 0; i < S * S; i++) { const v = rnd() < .5 ? 0 : 255; img.data.set([v, v, v, Math.round(rnd() * 150)], i * 4); }
+    g.putImageData(img, 0, 0);
+  },
+  halftone: (g, S, level, st) => {   // 45-degree dot screen, dots grow with shadow level (1 light … 5 dark)
+    const r = S * .354 * (level / 5) * (.55 + .6 * st); g.fillStyle = '#000';
+    for (const [cx, cy] of [[S / 4, S / 4], [3 * S / 4, 3 * S / 4]]) for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) { g.beginPath(); g.arc(cx + dx, cy + dy, r, 0, 2 * Math.PI); g.fill(); }
+  },
+  stripes: (g, S) => { g.strokeStyle = '#000'; g.lineWidth = S * .22; for (const k of [-1, 0, 1]) { g.beginPath(); g.moveTo(-S, -S - k * S); g.lineTo(2 * S, 2 * S - k * S); g.stroke(); } },
+  checks: (g, S) => { g.fillStyle = '#000'; g.fillRect(0, 0, S / 2, S / 2); g.fillRect(S / 2, S / 2, S / 2, S / 2); g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(S / 2, 0, S / 2, S / 2); g.fillRect(0, S / 2, S / 2, S / 2); },
+  waves: (g, S) => {
+    g.strokeStyle = '#000'; g.lineWidth = S * .07; g.lineCap = 'round';
+    for (const y0 of [S / 4, 3 * S / 4]) { g.beginPath(); for (let x = -4; x <= S + 4; x += 2) { const y = y0 + Math.sin(x / S * 2 * Math.PI) * S * .09; x === -4 ? g.moveTo(x, y) : g.lineTo(x, y); } g.stroke(); }
   }
+};
+function fxPattern(ctx, kind, level = 0, strength = .6) {
+  const spec = FX_SPEC[kind]; if (!spec) return null;
+  const key = `${kind}|${kind === 'halftone' ? level : 0}|${kind === 'halftone' ? Math.round(strength * 10) : 0}`;
+  let pat = patCache.get(key);
+  if (!pat) { const c = mkCanvas(spec.S, spec.S); PAINT[kind](c.getContext('2d'), spec.S, level, strength); pat = ctx.createPattern(c, 'repeat'); if (patCache.size > 120) patCache.clear(); patCache.set(key, pat); }
   return pat;
 }
-// Film-like grain: fixed random black / white specks (same tile every frame so video export is stable).
-const grainPattern = ctx => cachedPattern(ctx, 'grain', 128, 128, (g, w, h) => {
-  const img = g.createImageData(w, h); let seed = 1234567;
-  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  for (let i = 0; i < w * h; i++) { const v = rnd() < .5 ? 0 : 255; img.data.set([v, v, v, Math.round(rnd() * 150)], i * 4); }
-  g.putImageData(img, 0, 0);
-});
-// Halftone: a 45-degree dot screen whose dot size grows with shadow level (0 = lit, 5 = darkest).
-const halftonePattern = (ctx, ink, level, size, strength) => cachedPattern(ctx, `h|${ink}|${level}|${size}|${strength.toFixed(2)}`, size, size, (g, w, h) => {
-  g.fillStyle = ink; g.beginPath(); g.arc(w / 2, h / 2, level / 5 * size * .52 * (.55 + .6 * strength), 0, Math.PI * 2); g.fill();
-}, true);
+// Plane of a polygon. The texture is projected along the dominant axis of the surface normal (a box mapping): static
+// scenery uses world axes so a pattern runs on across neighbouring tiles; actors use their own local axes, so the
+// pattern stays continuous over their surfaces and travels with them.
+function planeOf(points, frame) {
+  let n = [0, 0, 0]; for (let i = 0; i < points.length; i++) n = add(n, cross(points[i], points[(i + 1) % points.length]));
+  const m = Math.hypot(...n); if (m < 1e-9) return null; n = mul(n, 1 / m);
+  const X = frame?.X || [1, 0, 0], Z = frame?.Z || [0, 0, 1], ax = [Math.abs(dot(n, X)), Math.abs(n[1]), Math.abs(dot(n, Z))], big = ax.indexOf(Math.max(...ax));
+  return { n, p: points[0], o: frame?.o || [0, 0, 0], U: big === 0 ? Z : X, V: big === 1 ? Z : [0, 1, 0] };
+}
 
 // ---------------------------------------------------------------- renderer
 const BOX_FACES = [[0, 1, 2, 3], [4, 7, 6, 5], [0, 3, 7, 4], [1, 5, 6, 2], [3, 2, 6, 7], [0, 4, 5, 1]];
@@ -184,10 +222,10 @@ const LIGHT = norm([-.35, .85, -.4]);
 export function renderScene(canvas, p, t) {
   const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height, cam = cameraAt(p, t);
   const fwd = norm(sub(cam.look, cam.pos)), right = norm(cross(fwd, [0, 1, 0])), up = cross(right, fwd), focal = H / 2 / Math.tan(cam.fov * Math.PI / 360);
-  const FX = p.finish || 'none', FXS = clamp(p.finishStrength ?? .6, 0, 1), dotSize = Math.max(4, Math.round(W / 190));
-  const white = p.material === 'white', faces = []; let layer = 3, group = null, fx = FX;
+  const FX = p.finish || 'none', FXS = clamp(p.finishStrength ?? .6, 0, 1), FXSC = clamp(p.finishScale ?? 1, .1, 8);
+  const white = p.material === 'white', faces = []; let layer = 3, group = null, fx = FX, fxs = FXSC, frame = null;
   ctx.fillStyle = white ? '#e9edef' : p.sky; ctx.fillRect(0, 0, W, H);
-  if (FX === 'grain') { ctx.globalAlpha = .12 + .3 * FXS; ctx.fillStyle = grainPattern(ctx); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  if (FX === 'grain') { ctx.globalAlpha = .12 + .3 * FXS; ctx.fillStyle = fxPattern(ctx, 'grain'); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   const view = v => { const d = sub(v, cam.pos); return [dot(d, right), dot(d, up), dot(d, fwd)]; };
   const rgbOf = col => col.slice(1).match(/../g).map(x => parseInt(x, 16));
 
@@ -198,7 +236,7 @@ export function renderScene(canvas, p, t) {
     if (out.length < 3) return;
     const depth = out.reduce((s, v) => s + v[2], 0) / out.length;
     const tint = k => `rgb(${rgbOf(col).map(x => Math.round(Math.min(255, x * k))).join(',')})`, half = fx === 'halftone';
-    faces.push({ layer, group, depth: depth - bias, alpha, fx, col: tint(half ? 1 : shade), ink: half ? tint(.36) : null, level: half ? Math.round(clamp((1.05 - shade) / .6, 0, 1) * 5) : 0, pts: out.map(v => [W / 2 + v[0] * focal / v[2], H / 2 - v[1] * focal / v[2]]) });
+    faces.push({ layer, group, depth: depth - bias, zv: depth, alpha, fx, fxs, plane: fx !== 'none' ? planeOf(points, frame) : null, col: tint(half ? 1 : shade), level: half ? Math.round(clamp((1.05 - shade) / .6, 0, 1) * 5) : 0, pts: out.map(v => [W / 2 + v[0] * focal / v[2], H / 2 - v[1] * focal / v[2]]) });
   }
   // Lit polygon: normal is oriented away from `center`, back faces are culled, brightness follows a fixed key light.
   function lit(pts, col, center, bias = 0, cull = true) {
@@ -236,10 +274,10 @@ export function renderScene(canvas, p, t) {
 
   // ---- ground, road, roadside
   const road = p.roadWidth / 2;
-  for (let z = -50; z < 150; z += 10) {
-    layer = 0; box(0, -.25, z, 170, .1, 10, white ? '#e5e8e7' : '#7d9970');
-    layer = 1; box(0, -.11, z, p.roadWidth, .1, 10, white ? '#babfc2' : '#424c55'); box(-road - 1, 0, z, 2, .12, 10, white ? '#f4f5f4' : '#c5bfb2'); box(road + 1, 0, z, 2, .12, 10, white ? '#f4f5f4' : '#c5bfb2');
-    layer = 2; box(0, .01, z, .12, .02, 3, '#f5f1dd');
+  layer=0; box(25,-.25,25,340,.1,340,white?'#e5e8e7':'#7d9970');
+  for (let z = -100; z < 160; z += 10) {
+    if(p.baseRoad !== false){ layer = 1; box(0, -.11, z, p.roadWidth, .1, 10, white ? '#babfc2' : '#424c55'); box(-road - 1, 0, z, 2, .12, 10, white ? '#f4f5f4' : '#c5bfb2'); box(road + 1, 0, z, 2, .12, 10, white ? '#f4f5f4' : '#c5bfb2');
+    layer = 2; box(0, .01, z, .12, .02, 3, '#f5f1dd'); }
   }
   layer = 3;
   function tree(x, z, colored) { box(x, 0, z, .35, 2, .35, colored ? '#8d6e52' : '#e4e5e3'); box(x, 1.5, z, 2.5, 2, 2.5, colored ? '#739b61' : '#fafbf7'); box(x, 3, z, 1.6, 1.2, 1.6, colored ? '#87aa71' : '#f2f4ef'); }
@@ -259,19 +297,43 @@ export function renderScene(canvas, p, t) {
   for (const o of p.objects) {
     if (!o.visible || t < o.start || t > o.start + o.duration || o.id === cam.hide) continue;
     const [x, , z] = actorPosition(o, t), colored = o.material === 'texture' || o.material === 'color' || (o.material === 'inherit' && !white), col = colored ? o.color : '#f5f5f2', s = o.scale * heightOf(o);
-    const yaw = Math.hypot(o.endX - o.x, o.endZ - o.z) < .1 ? 0 : Math.atan2(o.endX - o.x, o.endZ - o.z);
+    layer=3; const yaw=actorYaw(o,t);
     const loc = (a, b, c) => [x + (a * Math.cos(yaw) + c * Math.sin(yaw)) * s, b * s, z + (-a * Math.sin(yaw) + c * Math.cos(yaw)) * s];
     const O = loc(0, 0, 0), dirW = (a, b, c) => norm(sub(loc(a, b, c), O));
     const lbox = (cx, y0, cz, w, h, d, color, bias = 0) => { const q = loc(cx, y0, cz); box(q[0], q[1], q[2], w * s, h * s, d * s, color, yaw, bias); };
-    const dist = Math.hypot(x - cam.pos[0], z - cam.pos[2]), lod = dist < 14 ? 0 : dist < 40 ? 1 : 2, sides = [10, 7, 5][lod], limb = [8, 6, 4][lod], seg = [10, 7, 5][lod], rings = [7, 5, 4][lod];
-    group = view(loc(0, .9, 0))[2]; fx = o.finish && o.finish !== 'inherit' ? o.finish : FX;
+    const dist = Math.hypot(x - cam.pos[0], z - cam.pos[2]), lod = dist < 14 ? 0 : dist < 40 ? 1 : 2, sides = [24, 14, 8][lod], limb = [16, 10, 6][lod], seg = [24, 14, 8][lod], rings = [16, 10, 6][lod];
+    group = view(loc(0, .9, 0))[2]; fx = o.finish && o.finish !== 'inherit' ? o.finish : FX; fxs = FXSC * clamp(o.finishScale ?? 1, .1, 8); frame = { o: [x, 0, z], X: [Math.cos(yaw), 0, -Math.sin(yaw)], Z: [Math.sin(yaw), 0, Math.cos(yaw)] };
     if (o.type === 'human') drawHuman();
     else if (o.type === 'car' || o.type === 'bus') drawVehicle(o.type === 'bus');
     else if (o.type === 'tree') { lbox(0, 0, 0, .35, 2, .35, colored ? '#8d6e52' : col); lbox(0, 1.5, 0, 2.5, 2, 2.5, col); lbox(0, 3, 0, 1.6, 1.2, 1.6, col); }
-    else if (o.type === 'building') { lbox(0, 0, 0, 4, 8, 5, col);
-      if (colored && o.material !== 'color') for (let y = 1; y < 7; y += 1.5) for (let xx = -1.3; xx < 2; xx += 1.3) { lbox(xx, y, -2.51, .65, .8, .03, '#647f8c', 3); lbox(xx, y, 2.51, .65, .8, .03, '#647f8c', 3); } }
+    else if (o.type === 'building') {
+      const [w,d]=itemSize(o),h=o.height??8;lbox(0,0,0,w,h,d,col);lbox(0,h,0,w+.12,.15,d+.12,colored?'#87959f':'#e0e3e4');
+      for(let yy=1;yy<h-.7;yy+=1.6)for(let xx=-w/2+.7;xx<w/2-.3;xx+=1.3){lbox(xx,yy,-d/2-.015,.65,.8,.03,colored?'#647f8c':'#cfd6d8');lbox(xx,yy,d/2+.015,.65,.8,.03,colored?'#647f8c':'#cfd6d8');}
+      lbox(0,0,d/2+.035,.85,1.9,.05,colored?'#3c505b':'#bdc5c8');
+    }
+    else if(['road','junction','crossing','park'].includes(o.type)){
+      const [w,d]=itemSize(o);group=null;layer=o.type==='crossing'?2:1;
+      if(o.type==='crossing'){for(let xx=-w/2+.4;xx<w/2;xx+=1)lbox(xx,.025,0,.5,.015,d,col);}
+      else{lbox(0,-.08,0,w,.08,d,col);if(o.type==='road'){
+        layer=2;for(let zz=-d/2+1;zz<d/2;zz+=4)lbox(0,.006,zz,.12,.008,Math.min(2,d/2-zz),'#f5f1dd');
+        for(const sd of [-1,1])lbox(sd*(w/2-.18),.006,0,.09,.008,d,'#f5f1dd');
+      }}
+    }
+    else if(o.type==='traffic'){
+      lbox(0,0,0,.28,.15,.28,col);tube(loc(0,.15,0),loc(0,3.3,0),.055*s,.055*s,col,10);
+      lbox(0,2.5,.12,.42,1.15,.32,col);const state=trafficState(o,t),f=[dirW(1,0,0),dirW(0,1,0),dirW(0,0,1)];
+      ['red','amber','green'].forEach((v,i)=>{const colors={red:'#ff4b4b',amber:'#ffca45',green:'#64ef97'};ball(loc(0,3.43-i*.32,.29),.12*s,.12*s,.025*s,f,state===v?colors[v]:'#18232a',16,8);});
+    }
+    else if(o.type==='lamp'){
+      tube(loc(0,0,0),loc(0,5,0),.07*s,.045*s,col,10);tube(loc(0,5,0),loc(0,5,1.3),.045*s,.04*s,col,10);lbox(0,4.9,1.2,.55,.12,.8,colored?'#fff1bd':'#ffffff');
+    }
+    else if(o.type==='bench'){
+      for(const xx of [-.75,.75]){lbox(xx,0,0,.1,.55,.5,col);lbox(xx,.55,-.25,.1,.65,.08,col);}
+      for(let j=0;j<3;j++)lbox(0,.53,j*.2-.2,2,.08,.17,col);
+      for(let j=0;j<3;j++)lbox(0,.75+j*.16,-.25,2,.12,.07,col);
+    }
     if (o.type === 'human') shadow(x, z, .42 * s, .3 * s, yaw); else if (o.type === 'car') shadow(x, z, 1.15 * s, 2.35 * s, yaw); else if (o.type === 'bus') shadow(x, z, 1.4 * s, 4.7 * s, yaw);
-    group = null;
+    group = null; frame = null;
 
     function drawHuman() {
       const look = humanLook(o), B = BODIES[look.body] || BODIES.man, OF = OUTFITS[look.outfit] || OUTFITS.casual, P = humanPose(o, t);
@@ -293,8 +355,11 @@ export function renderScene(canvas, p, t) {
         ball(w(...knee), .06 * k, .06 * k, .06 * k, sphereFrame, bare ? C.skin : C.bottom, seg, rings);
         tube(w(...knee), w(...ankle), .058 * k, .043 * k, bare ? C.skin : C.bottom, limb, 0, 0, true);
         const fx = ankle[0], fy = ankle[1] - FH, fz = ankle[2] + .065 * B.foot;
-        lbox(fx, fy, fz, .105 * B.limb, .07, .27 * B.foot, C.shoe);
-        if (C.sole) lbox(fx, fy, fz, .112 * B.limb, .022, .285 * B.foot, C.sole);
+        const shoeFrame = [wd([1,0,0]), wd([0,1,0]), wd([0,0,1])];
+        ball(w(fx, fy + .037, fz), .062*s, .045*s, .145*s, shoeFrame, C.shoe, seg, rings);
+        ball(w(fx, fy + .014, fz), .064*s, .017*s, .148*s, shoeFrame, C.sole, seg, 6);
+        if (lod === 0) for (let j=0;j<4;j++) tube(w(fx-.035,fy+.077,fz+j*.015),w(fx+.035,fy+.077,fz+j*.015),.003*s,.003*s,C.white,6);
+
       });
       // torso: lofted rings shaped by body type (waist, bust, shoulders) and outfit (jacket, hoodie, skirt)
       const l = P.lean, U = [0, Math.cos(l), Math.sin(l)], F = [0, -Math.sin(l), Math.cos(l)], base = [0, py, 0];
@@ -348,15 +413,37 @@ export function renderScene(canvas, p, t) {
           for (const [a, b, c] of [[.105, .07, .02], [-.105, .07, .02], [.07, .115, 0], [-.07, .115, 0], [0, .14, -.02], [.1, -.03, -.06], [-.1, -.03, -.06], [0, -.04, -.115]]) hv([a, b, c], .055, .055, .055, null);
         }
       }
+      // Sculpted facial volumes and fine features follow the animated head frame.
+      const face = (x,y,z,rx,ry,rz,color,detail=16) => ball(at(x,y,z),rx*hs,ry*hs,rz*hs,hf,color, lod===0?detail:10,lod===0?10:6,null,.001);
       if (lod < 2) {
-        ball(at(0, -.012, .105), .017 * hs, .02 * hs, .02 * hs, hf, C.skin, 5, 3);
-        for (const e of [-1, 1]) {
-          ball(at(e * .097, 0, 0), .014 * hs, .028 * hs, .02 * hs, hf, C.skin, 5, 3);
-          if (lod < 1) ball(at(e * .038, .022, .098), .0135 * hs, .009 * hs, .006 * hs, hf, C.white, 6, 3, null, .01);
-          ball(at(e * .038, .022, .1), .0075 * hs, .0075 * hs, .006 * hs, hf, C.dark, 5, 3, null, .02);
-          if (lod < 1) ball(at(e * .04, .05, .097), .022 * hs, .004 * hs, .007 * hs, hf, C.brow, 5, 3, null, .015);
+        face(0,-.062,.032,.069,.055,.071,C.skin,24); // jaw and chin
+        face(0,-.006,.101,.012,.033,.014,C.skin);
+        face(0,-.025,.119,.017,.015,.019,C.skin); // nose tip
+        for (const e of [-1,1]) {
+          face(e*.064,-.025,.072,.029,.033,.026,C.skin);
+          face(e*.099,-.005,0,.019,.034,.023,C.skin);
+          face(e*.107,-.004,.018,.009,.021,.006,C.lip);
+          face(e*.039,.019,.095,.019,.014,.009,C.white);
+          face(e*.039,.019,.103,.010,.012,.004,C.hair);
+          face(e*.039,.019,.107,.005,.008,.002,C.dark);
+          face(e*.036,.024,.109,.0025,.003,.0015,C.white,8);
+          face(e*.041,.047,.095,.026,.006,.008,C.brow);
+          face(e*.011,-.035,.122,.004,.0025,.002,C.lip,8);
+          // Thin round glasses: actual 3D rim segments and temple arms.
+          for (let j=0;j<24;j++) {
+            const a=j*Math.PI/12,b=(j+1)*Math.PI/12;
+            tube(at(e*.043+.032*Math.cos(a),.015+.029*Math.sin(a),.115),at(e*.043+.032*Math.cos(b),.015+.029*Math.sin(b),.115),.0018*hs,.0018*hs,C.sole,5);
+          }
+          tube(at(e*.075,.02,.115),at(e*.104,.02,-.012),.002*hs,.002*hs,C.sole,6);
         }
-        if (lod < 1) ball(at(0, -.056, .099), .026 * hs, .007 * hs, .01 * hs, hf, C.lip, 6, 3, null, .015);
+        tube(at(-.011,.022,.115),at(.011,.022,.115),.0018*hs,.0018*hs,C.sole,6);
+        face(0,-.057,.096,.028,.014,.008,C.lip);
+        face(0,-.056,.103,.023,.009,.003,C.dark);
+        face(0,-.051,.106,.021,.0035,.002,C.white);
+      }
+      if (hairOn && style === 'short') {
+        // Overlapping swept locks form a continuous hairstyle, with a side part.
+        for (const [x,y,z,rx,ry,rz] of [[-.063,.066,.055,.037,.065,.045],[-.025,.108,.026,.055,.038,.072],[.026,.112,.009,.059,.037,.077],[.064,.086,-.009,.04,.043,.066],[.082,.038,-.03,.022,.048,.048]]) hv([x,y,z],rx,ry,rz,null,.001);
       }
       // arms: sleeves follow the outfit, hands are flattened ellipsoids along the forearm
       const arm = (sd, a, b) => [sd * Math.sin(b), -Math.cos(b) * Math.cos(a), Math.cos(b) * Math.sin(a)];
@@ -367,7 +454,22 @@ export function renderScene(canvas, p, t) {
         tube(w(...S), w(...E), .052 * k, .045 * k, upperC, limb, 0, 0, false); ball(w(...E), .047 * k, .047 * k, .047 * k, sphereFrame, elbowC, seg, rings);
         tube(w(...E), w(...Wr), .042 * k, .031 * k, foreC, limb, 0, 0, true);
         const Uw = wd(fd), Rw = Math.abs(Uw[1]) > .95 ? [1, 0, 0] : norm(cross(Uw, [0, 1, 0])), Fw = cross(Rw, Uw);
-        ball(w(...vadd(Wr, fd, .062 * B.arm)), .03 * k, .068 * s * B.arm, .019 * k, [Rw, Uw, Fw], C.skin, seg, rings);
+        const palm = w(...vadd(Wr, fd, .04)), handFrame = [Rw, Uw, Fw];
+        ball(palm, .032*k, .044*s, .018*k, handFrame, C.skin, seg, rings);
+        const hp = (x,y,z) => add(palm,add(mul(Rw,x*s),add(mul(Uw,y*s),mul(Fw,z*s))));
+        if (lod < 2) {
+          // Four individually modelled fingers, knuckles and a separate thumb.
+          for (let j=0;j<4;j++) {
+            const xx=(j-1.5)*.016, len=[.049,.061,.057,.043][j], bend=activeClip(o.clips,t)?.gesture==='point' && j!==0 ? .022 : .006;
+            const A=hp(xx,.029,0), Bp=hp(xx,.029+len*.52,bend), D=hp(xx,.029+len,bend*1.5);
+            tube(A,Bp,.008*s,.007*s,C.skin,10); tube(Bp,D,.007*s,.0055*s,C.skin,10);
+            ball(Bp,.007*s,.007*s,.007*s,handFrame,C.skin,10,6);
+            ball(D,.0055*s,.006*s,.0055*s,handFrame,C.skin,10,6);
+          }
+          tube(hp(sd*.025,0,0),hp(sd*.047,.023,.005),.011*s,.009*s,C.skin,10);
+          tube(hp(sd*.047,.023,.005),hp(sd*.052,.045,.009),.009*s,.006*s,C.skin,10);
+        }
+
       });
       if (P.sit > .55) { const y0 = py - .13; lbox(0, y0, -.03, .5, .05, .46, C.chair); lbox(0, y0 + .05, -.26, .46, .5, .04, C.chair); for (const a of [-1, 1]) for (const b of [-1, 1]) lbox(a * .22, 0, -.03 + b * .19, .04, y0, .04, C.dark); }
     }
@@ -415,13 +517,71 @@ export function renderScene(canvas, p, t) {
     }
   }
 
+  // Texture of one face: ray-cast the screen onto the face's plane so the tile keeps its true size and perspective.
+  // Large faces (road, ground) are filled in small patches, each with its own local affine fit.
+  function paintFx(f) {
+    const spec = FX_SPEC[f.fx]; if (!spec || !f.plane || (f.fx === 'halftone' && f.level < 1)) return;
+    const T = spec.T * f.fxs, S = spec.S, k = S / T, px = T * focal / Math.max(.2, f.zv);
+    const fade = f.fx === 'grain' ? clamp((px / S - .3) / .9, 0, 1) : clamp((px - 5) / 10, 0, 1);
+    if (fade <= .02) return;
+    const pat = fxPattern(ctx, f.fx, f.level, FXS); if (!pat) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of f.pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0)); x1 = Math.min(W, Math.ceil(x1)); y1 = Math.min(H, Math.ceil(y1));
+    if (x1 <= x0 || y1 <= y0) return;
+    const { n, p: p0, o, U, V } = f.plane, base = dot(sub(p0, cam.pos), n);
+    const hit = (sx, sy) => {
+      const d = add(add(mul(right, (sx - W / 2) / focal), mul(up, (H / 2 - sy) / focal)), fwd), den = dot(d, n); if (Math.abs(den) < 1e-3) return null;
+      const t = base / den; if (t <= 0) return null; const q = sub(add(cam.pos, mul(d, t)), o); return [dot(q, U) * k, dot(q, V) * k];
+    };
+    // Affine map pattern -> screen through three exact point pairs; the pattern repeats every S, so coordinates are wrapped.
+    const affine = (s0, s1, s2, q0, q1, q2) => {
+      const sx = Math.floor(q0[0] / S) * S, sy = Math.floor(q0[1] / S) * S, a0 = [q0[0] - sx, q0[1] - sy];
+      const qa = [q1[0] - q0[0], q1[1] - q0[1]], qb = [q2[0] - q0[0], q2[1] - q0[1]], sa = [s1[0] - s0[0], s1[1] - s0[1]], sb = [s2[0] - s0[0], s2[1] - s0[1]], det = qa[0] * qb[1] - qb[0] * qa[1];
+      if (Math.abs(det) < 1e-9) return null;
+      const m00 = (sa[0] * qb[1] - sb[0] * qa[1]) / det, m01 = (sb[0] * qa[0] - sa[0] * qb[0]) / det, m10 = (sa[1] * qb[1] - sb[1] * qa[1]) / det, m11 = (sb[1] * qa[0] - sa[1] * qb[0]) / det;
+      return [m00, m10, m01, m11, s0[0] - m00 * a0[0] - m01 * a0[1], s0[1] - m10 * a0[0] - m11 * a0[1]];
+    };
+    const path = () => { ctx.beginPath(); f.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); };
+    ctx.globalAlpha = f.alpha * clamp(spec.a * (.5 + .8 * FXS), 0, 1) * fade; ctx.fillStyle = pat;
+    let budget = 3000;   // triangles per face, keeps pathological views cheap
+    const mid = (A, B) => vert((A.s[0] + B.s[0]) / 2, (A.s[1] + B.s[1]) / 2);
+    const tri = (A, B, D, depth = 0) => {
+      if (depth < 3 && budget > 0) {   // split where the perspective mapping is far from linear
+        const M = [mid(A, B), mid(B, D), mid(D, A)];
+        if (M.every(Boolean)) {
+          let err = 0;
+          [[A, B, M[0]], [B, D, M[1]], [D, A, M[2]]].forEach(([P1, P2, Mq]) => {
+            const lq = Math.hypot(P2.q[0] - P1.q[0], P2.q[1] - P1.q[1]), ls = Math.hypot(P2.s[0] - P1.s[0], P2.s[1] - P1.s[1]);
+            if (lq > 1e-6) err = Math.max(err, Math.hypot(Mq.q[0] - (P1.q[0] + P2.q[0]) / 2, Mq.q[1] - (P1.q[1] + P2.q[1]) / 2) * ls / lq);
+          });
+          if (err > .6) { budget -= 4; tri(A, M[0], M[2], depth + 1); tri(M[0], B, M[1], depth + 1); tri(M[2], M[1], D, depth + 1); tri(M[0], M[1], M[2], depth + 1); return; }
+        }
+      }
+      const m = affine(A.s, B.s, D.s, A.q, B.q, D.q); if (!m) return;
+      ctx.beginPath(); ctx.moveTo(...A.s); ctx.lineTo(...B.s); ctx.lineTo(...D.s); ctx.closePath(); ctx.setTransform(...m); ctx.fill(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const vert = (sx, sy) => { const q = hit(sx, sy); return q ? { s: [sx, sy], q } : null; };
+    if (x1 - x0 <= 96 && y1 - y0 <= 96) {   // small face: one affine fit around its centre
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, A = vert(cx, cy), B = vert(cx + 8, cy), D = vert(cx, cy + 8); if (!A || !B || !D) return;
+      const m = affine(A.s, B.s, D.s, A.q, B.q, D.q); if (!m) return; path(); ctx.setTransform(...m); ctx.fill(); ctx.setTransform(1, 0, 0, 1, 0, 0); return;
+    }
+    // large face (road, walls): a grid of triangles whose corners are ray-cast exactly, so the pattern stays continuous
+    const nx = Math.ceil((x1 - x0) / 48), ny = Math.ceil((y1 - y0) / 48), gw = (x1 - x0) / nx, gh = (y1 - y0) / ny, G = [];
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) G.push(vert(x0 + i * gw, y0 + j * gh));
+    ctx.save(); path(); ctx.clip();
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const A = G[j * (nx + 1) + i], B = G[j * (nx + 1) + i + 1], D = G[(j + 1) * (nx + 1) + i], E = G[(j + 1) * (nx + 1) + i + 1];
+      if (A && B && D) tri(A, B, D); if (B && E && D) tri(B, E, D);
+    }
+    ctx.restore();
+  }
+
   // far-to-near painter order: ground layers first, then actor groups, then faces within each group
   faces.sort((a, b) => a.layer - b.layer || (b.group ?? b.depth) - (a.group ?? a.depth) || b.depth - a.depth);
   for (const f of faces) {
     ctx.globalAlpha = f.alpha; ctx.beginPath(); f.pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fillStyle = f.col; ctx.fill(); ctx.strokeStyle = f.col; ctx.lineWidth = .5; ctx.stroke();
-    if (f.alpha < .5) continue;
-    if (f.fx === 'halftone' && f.level > 0) { ctx.fillStyle = halftonePattern(ctx, f.ink, f.level, dotSize, FXS); ctx.fill(); }
-    else if (f.fx === 'grain') { ctx.globalAlpha = f.alpha * (.12 + .5 * FXS); ctx.fillStyle = grainPattern(ctx); ctx.fill(); }
+    if (f.alpha >= .5) paintFx(f);
   }
   ctx.globalAlpha = 1;
   return { faces: faces.length, camera: cam };
@@ -442,18 +602,25 @@ export function validateScene(input) {
   const q = migrateScene(input);
   if (typeof q.name !== 'string' || !finite(q.duration, 1, 120) || ![24, 30, 60].includes(q.fps) || !Array.isArray(q.objects) || q.objects.length > 80) throw Error('Invalid Scene Studio project');
   if (!['white', 'texture'].includes(q.material) || !HEX.test(q.sky) || !finite(q.roadWidth, 4, 20) || ![q.left, q.right].every(v => ['city', 'park', 'trees', 'playground', 'none'].includes(v))) throw Error('Invalid environment');
-  if (!['none', 'grain', 'halftone'].includes(q.finish ?? 'none') || !finite(q.finishStrength ?? .6, 0, 1)) throw Error('Invalid finish');
+  if (!Object.hasOwn(FINISHES, q.finish ?? 'none') || !finite(q.finishStrength ?? .6, 0, 1) || !finite(q.finishScale ?? 1, .1, 8)) throw Error('Invalid finish');
   const camSpec = k => { if (!CAMERA_MODES[k.mode] || !CAMERA_MOVES[k.move]) throw Error('Invalid camera');
     for (const [f, a, b] of [['yaw', -360, 360], ['height', 1, 60], ['distance', 2, 80], ['fov', 25, 100]]) if (!finite(k[f], a, b)) throw Error('Invalid camera value'); };
-  camSpec(q.camera);
+  const fixedSpec = c => { for (const key of ['fixedX','fixedZ','aimX','aimZ']) if (c[key] !== undefined && !finite(c[key], -100, 150)) throw Error('Invalid camera position'); if(c.aimHeight !== undefined && !finite(c.aimHeight,0,60)) throw Error('Invalid camera aim'); };
+  camSpec(q.camera); fixedSpec(q.camera); q.cameraClips.forEach(fixedSpec);
   if (!Array.isArray(q.cameraClips) || q.cameraClips.length > 100) throw Error('Invalid camera shots');
+  if(q.baseRoad!==undefined&&typeof q.baseRoad!=='boolean')throw Error('Invalid base road');
   const ids = new Set();
   for (const c of q.cameraClips) { camSpec(c); if (typeof c.id !== 'string' || ids.has(c.id) || !finite(c.start, 0, q.duration) || !finite(c.dur, .1, 120) || !finite(c.blend ?? .5, 0, 5)) throw Error('Invalid camera shot timing'); ids.add(c.id); }
   const objIds = new Set();
   for (const o of q.objects) {
-    if (typeof o.id !== 'string' || objIds.has(o.id) || typeof o.name !== 'string' || !['human', 'car', 'bus', 'tree', 'building'].includes(o.type) || !['inherit', 'white', 'color', 'texture'].includes(o.material) || !['linear', 'smooth'].includes(o.easing) || typeof o.visible !== 'boolean' || !HEX.test(o.color)) throw Error('Invalid object');
+    if (typeof o.id !== 'string' || objIds.has(o.id) || typeof o.name !== 'string' || !Object.hasOwn(ITEM_TYPES,o.type) || !['inherit', 'white', 'color', 'texture'].includes(o.material) || !['linear', 'smooth'].includes(o.easing) || typeof o.visible !== 'boolean' || !HEX.test(o.color)) throw Error('Invalid object');
     objIds.add(o.id);
-    if (!['inherit', 'none', 'grain', 'halftone'].includes(o.finish ?? 'inherit')) throw Error('Invalid finish');
+    if(!finite(o.rotation??0,-360,360)||!['path','fixed'].includes(o.orientation??'path')||!finite(o.turnRadius??3,0,20))throw Error('Invalid rotation or turn radius');
+    if(o.waypoints!==undefined&&(!Array.isArray(o.waypoints)||o.waypoints.length>60||o.waypoints.some(v=>!v||!finite(v.x,-100,150)||!finite(v.z,-100,150))))throw Error('Invalid route points');
+    for(const k of ['width','length','height'])if(o[k]!==undefined&&!finite(o[k],.5,80))throw Error('Invalid object dimensions');
+    if(o.type==='traffic'){if(!['cycle','red','amber','green'].includes(o.signal??'cycle'))throw Error('Invalid signal');for(const k of ['redTime','greenTime','amberTime'])if(!finite(o[k]??(k==='redTime'?6:k==='greenTime'?5:2),.1,120))throw Error('Invalid signal timing');if(!finite(o.phase??0,0,360))throw Error('Invalid phase');}
+
+    if (!((o.finish ?? 'inherit') === 'inherit' || Object.hasOwn(FINISHES, o.finish)) || !finite(o.finishScale ?? 1, .1, 8)) throw Error('Invalid finish');
     if (o.type === 'human') { const lk = humanLook(o); if (!BODIES[lk.body] || !OUTFITS[lk.outfit] || !HAIR_STYLES[lk.hair] || !FACIAL[lk.facial] || ![lk.skin, lk.hairColor, lk.bottomColor].every(v => HEX.test(v))) throw Error('Invalid character look'); }
     for (const f of ['x', 'z', 'endX', 'endZ']) if (!finite(o[f], -100, 150)) throw Error('Invalid position');
     if (!finite(o.scale, .2, 4) || !finite(o.start, 0, q.duration) || !finite(o.duration, .1, 120)) throw Error('Invalid timing or scale');
@@ -461,4 +628,18 @@ export function validateScene(input) {
     for (const c of o.clips) { if (typeof c.id !== 'string' || ids.has(c.id) || !GESTURES[c.gesture] || !finite(c.start, 0, q.duration) || !finite(c.dur, .1, 120) || !finite(c.speed ?? 1, .25, 3)) throw Error('Invalid gesture clip'); ids.add(c.id); }
   }
   return q;
+}
+
+export function cityScene(){
+ const p=defaultScene();Object.assign(p,{name:'Build your city',baseRoad:false,left:'none',right:'none',material:'texture',duration:16,objects:[],cameraClips:[]});
+ const put=(type,x,z,extra={})=>{const o=Object.assign(makeObject(type),{x,z,endX:x,endZ:z,duration:p.duration},extra);p.objects.push(o);return o;};
+ put('junction',0,15,{width:10,length:10});
+ put('road',0,-5,{width:10,length:30});put('road',0,35,{width:10,length:30});put('road',-20,15,{width:10,length:30,rotation:90});put('road',20,15,{width:10,length:30,rotation:90});
+ for(const [x,z,h] of [[-12,-1,8],[13,-1,12],[-12,31,15],[13,31,6]])put('building',x,z,{width:7,length:8,height:h});
+ for(const [x,z] of [[-8,5],[8,25],[-18,25],[18,5]])put('tree',x,z);
+ put('traffic',-6,9,{rotation:180});put('traffic',6,21);put('traffic',6,9,{rotation:90,phase:6});put('traffic',-6,21,{rotation:-90,phase:6});
+ put('crossing',0,8);put('crossing',7,15,{rotation:90});put('lamp',-7,-5,{rotation:90});put('bench',9,25,{rotation:-90});
+ const car=put('car',-2,-15,{endX:30,endZ:17,waypoints:[{x:-2,z:17}],turnRadius:4,color:'#e38c58'});
+ put('bus',27,13,{endX:2,endZ:45,waypoints:[{x:2,z:13}],turnRadius:5,color:'#6fa8c4'});
+ p.camera={mode:'third',move:'follow',yaw:35,height:14,distance:28,fov:60,target:car.id};return p;
 }

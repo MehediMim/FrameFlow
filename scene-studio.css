@@ -106,3 +106,15 @@ body.mode-scene #scToolbar{display:contents}
 .sc-swatch{appearance:none;width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;padding:0!important;margin:0!important;border-radius:50%!important;border:1px solid #ffffff55!important;background:var(--sw)!important;cursor:pointer;transition:transform .1s}
 .sc-swatch:hover{transform:scale(1.14)}
 .sc-swatch.selected{outline:2px solid var(--accent,#b6f36e);outline-offset:2px}
+
+/* Plan editor uses the same stage and timeline as the 3D preview. */
+#scCanvas{touch-action:none;cursor:crosshair}
+.sc-view-tabs{display:flex;gap:4px}.sc-view-tabs button.active{background:var(--accent,#b6f36e);color:#172016}
+#scLeft label{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;font-size:11px}
+#scLeft select{width:100%;min-width:0}
+.sc-hint{color:#a1adb5;line-height:1.4}
+.sc-workspace main{display:flex;flex-direction:column;overflow:hidden}
+.sc-workspace .stagebar{flex-wrap:wrap;gap:6px;height:auto;min-height:47px}
+
+#sceneStudio .c-road,#sceneStudio .c-junction,#sceneStudio .c-crossing{color:#c4cbd2}#sceneStudio .c-traffic{color:#ffcf66}#sceneStudio .c-park{color:#80b785}
+#scInspector .sc-actions{flex-wrap:wrap}#scInspector .sc-actions button{min-width:70px}

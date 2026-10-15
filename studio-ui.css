@@ -51,3 +51,10 @@ body.ff-unified dialog.ff-dialog .ff-dialog-actions button{margin:0}
 @media(prefers-reduced-motion:reduce){.ff-unified :is(button,summary){transition:none}}
 /* Scene keeps its footer outside the timeline; reserve the same total height. */
 .ff-unified #sceneStudio > .sc-timeline{height:calc(var(--ff-timeline) - 30px);flex-basis:calc(var(--ff-timeline) - 30px)}
+/* Shared preview magnification. Canvas backing pixels remain unchanged. */
+.ff-unified .ff-zoom-area{display:block!important;position:relative;padding:0!important;overflow:auto!important;scrollbar-width:thin;overscroll-behavior:contain}
+.ff-unified .ff-zoom-wrap{display:flex!important;align-items:center;justify-content:center;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;flex:none!important;margin:0!important;padding:0!important}
+.ff-unified canvas.ff-zoom-canvas{max-width:none!important;max-height:none!important;min-width:0!important;flex:none!important;transform:none!important}
+.ff-unified .canvas-zoom{display:flex;align-items:center;gap:4px}
+.ff-unified .canvas-zoom :is([data-zoom-label],#canvasZoomLabel){min-width:38px;text-align:center;font-size:10px;font-variant-numeric:tabular-nums}
+.ff-unified .ff-zoom-area :is(.stage-hint,.sc-hint){pointer-events:none}

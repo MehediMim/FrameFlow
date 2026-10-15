@@ -1,3 +1,4 @@
+import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
@@ -95,7 +96,7 @@ function draw() {
 }
 function setFrame(n) {
   frame = clamp(Math.round(n) || 0, 0, proj.frames - 1);
-  $('#mFrame').value = frame; $('#mFrame').max = proj.frames - 1;
+  $('#mFrame').value = +(frame / proj.fps).toFixed(3); $('#mFrame').max = +((proj.frames - 1) / proj.fps).toFixed(3); $('#mFrame').step = '0.001';
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
@@ -436,7 +437,7 @@ async function exportVideo() {
   pause();
   if (!geo) { notify('Map data is still loading'); return; }
   const snapshot = clone(proj), exportName = fileBase();
-  modal(`<h2>Export your map.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Detailed maps may take longer than the video duration. Format: WebM.</p><p class="ff-export-note">Retained audio parts are included, with your volume and mute settings. Deleted parts stay silent.</p><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a><progress id="mProgress" max="${snapshot.frames}" value="0"></progress><p id="mExportStatus">Preparing…</p>`);
+  modal(exportMarkup({...snapshot, progressId:'mProgress', statusId:'mExportStatus'}));
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
   const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height;
   const ec = c.getContext('2d');
@@ -471,7 +472,7 @@ function bindToolbar() {
   $('#mPlay').onclick = play; $('#mStart').onclick = () => { pause(); setFrame(0); }; $('#mEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
   $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };
-  $('#mFrame').onchange = e => { pause(); setFrame(+e.target.value); };
+  $('#mFrame').onchange = e => { pause(); setFrame(Math.round(+e.target.value * proj.fps)); };
   $('#mZoomT').oninput = () => { renderTimeline(); setFrame(frame); };
   $('#mDuplicate').onclick = () => {
     if (audioUI?.duplicate()) return;
@@ -486,8 +487,8 @@ function bindToolbar() {
     for (const s of proj.shots) if (s.planeId === it.id) s.planeId = '';
     sel = null; saveLocal(); renderAll();
   };
-  $('#mNew').onclick = () => { if (!confirm('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
-  $('#mDemo').onclick = () => { if (!confirm('Load the demo map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = demoMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
+  $('#mNew').onclick = async () => { if (!await confirmStudio('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
+  $('#mDemo').onclick = async () => { if (!await confirmStudio('Load the demo map? Your current edit can be restored with Undo.', 'Load demo', 'Load demo')) return; pause(); checkpoint(); proj = demoMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
   $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change its length.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
   $('#mCloseModal').onclick = () => { if (exporting) { exporting = false; $('#mCloseModal').disabled = true; } else $('#mModal').close(); };
   $('#mModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });

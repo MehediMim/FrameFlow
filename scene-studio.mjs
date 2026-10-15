@@ -1,3 +1,4 @@
+import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES } from './studio-ui.mjs';
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
 // clip timeline below. Gestures and camera shots are clips you place on the timeline.
 import { defaultScene, makeObject, makeClip, makeCameraClip, renderScene, cityScene, ITEM_TYPES, isMobile, itemSize, routePoints, actorYaw, trafficState, actorPosition, cameraAt, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, FINISHES, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs?v=6';
@@ -20,7 +21,7 @@ root.innerHTML = `<div class="sc-toolbar" id="scToolbar"><input id="scName" aria
 <div class="sc-stage"><canvas id="scCanvas" width="1280" height="720"></canvas><span class="sc-hint">Drag to orbit the active camera shot · Scroll to zoom · Add gestures and camera shots from the left, then edit them on the timeline</span></div>
 <div class="transport"><span class="time" id="scTime"></span><div class="play-controls"><button data-action="start">|◀</button><button data-action="prev">‹</button><button data-action="play" class="play">▶</button><button data-action="next">›</button><button data-action="end">▶|</button><button data-action="loop" class="active">↻</button></div><label>SECONDS <input id="scSeek" type="number" step="0.033" min="0"></label></div></main>
 <aside class="right"><div class="tabs"><b>Properties</b><span>SCENE STUDIO</span></div><div id="scInspector"></div></aside></div>
-<div class="sc-timeline"><div class="timeline-head"><b>Scene timeline <span class="pill">SECONDS</span></b><div class="timeline-tools"><label>Zoom <input id="scTimelineZoom" type="range" min="1" max="5" step=".25" value="1"></label></div></div><input id="scScrub" aria-label="Timeline playhead" type="range" min="0" step="0.033"><div id="scTimelineScroll"><div id="scTracks"></div></div></div>
+<div class="sc-timeline"><div class="timeline-head"><div><b>Timeline</b><span class="pill" id="scFpsLabel">30 FPS</span></div><div class="timeline-tools"><label>Zoom <input id="scTimelineZoom" type="range" min="1" max="5" step=".25" value="1"></label></div></div><input id="scScrub" aria-label="Timeline playhead" type="range" min="0" step="0.033"><div id="scTimelineScroll"><div id="scTracks"></div></div></div>
 <footer><span><i class="dot"></i> Ready to animate · 2D layout → 3D preview</span><span>Space Play / pause <em>·</em> ← → Step frames <em>·</em> Drag clips to move, drag their edges to resize <em>·</em> Click ruler to seek</span></footer>
 <dialog id="scSettingsPanel"><div class="section-title"><span>SCENE SETTINGS</span><button id="scSettingsClose" aria-label="Close">✕</button></div><div id="scSettings"></div></dialog>
 <input hidden id="scFile" type="file" accept=".json,application/json">`;
@@ -51,7 +52,8 @@ const targetHuman = () => { const o = currentObject(); return o?.type === 'human
 // ------------------------------------------------------------------ state, history, drawing
 function checkpoint() { undo.push(JSON.stringify(p)); if (undo.length > 60) undo.shift(); redo = []; }
 function saveLocal() { try { localStorage.setItem(STORE, JSON.stringify(p)); $('#scStatus').textContent = 'Saved locally'; } catch { $('#scStatus').textContent = 'Storage full — download project'; } }
-function draw() { if(viewMode === '2d') drawPlan(); else { renderScene(canvas, p, time); root.querySelector('.sc-hint').textContent = '3D preview · Drag to orbit · Scroll to zoom · Switch to 2D layout to place items and fixed cameras'; } $('#scTime').textContent = time.toFixed(2) + ' s / ' + p.duration + ' s'; $('#scSeek').value = time.toFixed(3); $('#scScrub').value = time; root.style.setProperty('--sc-progress', time / p.duration * 100 + '%'); }
+function draw() {
+  const dims=CANVAS_SIZES.some(([v])=>v===`${p.width},${p.height}`)?[p.width,p.height]:[1280,720];const [w,h]=dims;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=`${w}/${h}`;} if(viewMode === '2d') drawPlan(); else { renderScene(canvas, p, time); root.querySelector('.sc-hint').textContent = '3D preview · Drag to orbit · Scroll to zoom · Switch to 2D layout to place items and fixed cameras'; } $('#scTime').textContent = `${String(Math.floor(time/60)).padStart(2,'0')}:${(time%60).toFixed(2).padStart(5,'0')}`; $('#scSeek').value = time.toFixed(3); $('#scScrub').value = time; root.style.setProperty('--sc-progress', time / p.duration * 100 + '%'); }
 function pause() { playing = false; cancelAnimationFrame(raf); root.querySelector('[data-action="play"]').textContent = '▶'; }
 function seek(t) { pause(); time = clamp(Math.round(t * p.fps) / p.fps, 0, p.duration - 1 / p.fps); draw(); }
 function play() {
@@ -119,7 +121,7 @@ function renderInspector() {
 // ------------------------------------------------------------------ scene settings dialog
 function renderSettings() {
   const c = p.camera;
-  $('#scSettings').innerHTML = group('COMPOSITION', field('duration', 'Duration (seconds)', p.duration) + select('fps', 'Frames per second', p.fps, [['24', '24'], ['30', '30'], ['60', '60']]) + '<button data-action="demo">Load city demo</button>')
+  $('#scSettings').innerHTML = select('canvasSize', 'Canvas', `${p.width||1280},${p.height||720}`, CANVAS_SIZES) + '<div class="two">' + select('fps', 'Frame rate', p.fps, [['24','24'],['30','30'],['60','60']]) + field('duration', 'Duration (seconds)', p.duration) + '</div>'
     + group('ENVIRONMENT', select('baseRoad','Generated main road',p.baseRoad!==false,[['true','Show'],['false','Hide — use placed roads']]) + select('left', 'Left roadside', p.left, ['city', 'park', 'trees', 'playground', 'none']) + select('right', 'Right roadside', p.right, ['city', 'park', 'trees', 'playground', 'none']) + field('roadWidth', 'Road width (m)', p.roadWidth)
       + select('material', 'Scene surface', p.material, [['white', 'White model'], ['texture', 'Textured / colored']]) + field('sky', 'Sky', p.sky, 'color')
       + select('finish', 'Scene finish', p.finish || 'none', Object.entries(FINISHES)) + field('finishStrength', 'Finish strength (0 – 1)', p.finishStrength ?? .6, 'number', 'min="0" max="1"') + field('finishScale', 'Texture scale (×)', p.finishScale ?? 1, 'number', 'min="0.1" max="8"')
@@ -130,6 +132,7 @@ function renderSettings() {
 
 // ------------------------------------------------------------------ timeline
 function renderTimeline() {
+  $('#scFpsLabel').textContent=p.fps+' FPS';
   const scroll = $('#scTimelineScroll'), laneWidth = Math.max(300, (scroll.clientWidth - 215) * timelineZoom), pct = v => v / p.duration * 100;
   $('#scTracks').style.width = (215 + laneWidth) + 'px';
   const clipEl = (c, cls, label, attr, tip, isSel = selClip === c.id) => `<div class="sc-clip ${cls} ${isSel ? 'selected' : ''}" ${attr}="${esc(c.id)}" style="left:${pct(c.start)}%;width:${Math.max(.4, pct(Math.min(c.dur ?? c.duration, p.duration - c.start)))}%" title="${esc(tip)}"><i class="sc-h l" data-h="l"></i><span>${esc(label)}</span><i class="sc-h r" data-h="r"></i></div>`;
@@ -164,13 +167,14 @@ root.addEventListener('change', e => {
   if (busy) return; const key = e.target.dataset.field; if (!key) return; pause();
   const previous = JSON.stringify(p), [obj, prop] = targetFor(key); if (!obj) return;
   obj[prop] = (e.target.type === 'number' || key === 'fps') ? Number(e.target.value) : (prop === 'target' && e.target.value === '' ? null : e.target.value);
+  if(key==='canvasSize'){const [w,h]=e.target.value.split(',').map(Number);p.width=w;p.height=h;delete p.canvasSize;}
   if(key==='baseRoad')obj[prop]=e.target.value==='true';
   if (key === 'planCam.target') { obj.move = 'follow'; if (obj.mode === 'first' && !obj.target) obj.mode = 'third'; }
   if (key === 'look.outfit') obj.bottomColor = OUTFITS[obj.outfit].bottom;
   if (key === 'look.body') { obj.hair = defaultLook(obj.body).hair; if (obj.body !== 'man') obj.facial = 'none'; }
   if (key === 'object.x' || key === 'object.z') { if (!isMobile(obj)) { obj.endX = obj.x; obj.endZ = obj.z; } }
   if (key === 'duration') { const cap = Math.max(0, p.duration - .1); p.objects.forEach(o => { o.start = Math.min(o.start, cap); (o.clips || []).forEach(c => { c.start = Math.min(c.start, cap); }); }); p.cameraClips.forEach(c => { c.start = Math.min(c.start, cap); }); }
-  try { validateScene(p); undo.push(previous); redo = []; time = clamp(time, 0, p.duration - 1 / p.fps); } catch (err) { p = JSON.parse(previous); alert(err.message); }
+  try { validateScene(p); undo.push(previous); redo = []; time = clamp(time, 0, p.duration - 1 / p.fps); } catch (err) { p = JSON.parse(previous); alertStudio(err.message); }
   sync();
 });
 
@@ -188,7 +192,7 @@ function addCameraShot(id) {
   insertClip(p.cameraClips, makeCameraClip(id, snap(start), snap(dur) || dur, target)); selected = null; sync();
 }
 function addObject(spec) {
-  if (p.objects.length >= 80) { alert('This scene supports up to 80 objects.'); return; }
+  if (p.objects.length >= 80) { alertStudio('This scene supports up to 80 objects.'); return; }
   const [type, body] = spec.split(':'); checkpoint(); const o = makeObject(type, p.objects.length); o.duration = p.duration;
   if (type === 'human') { o.look = defaultLook(); o.name = 'Character'; }
   if (!isMobile(o)) { o.x = 10; o.endX = 10; o.endZ = o.z; }
@@ -209,7 +213,7 @@ const actions = {
   loop: () => { loop = !loop; root.querySelector('[data-action="loop"]').classList.toggle('active', loop); },
   undo: () => { if (!undo.length) return; pause(); redo.push(JSON.stringify(p)); p = JSON.parse(undo.pop()); time = Math.min(time, p.duration - 1 / p.fps); sync(); },
   redo: () => { if (!redo.length) return; pause(); undo.push(JSON.stringify(p)); p = JSON.parse(redo.pop()); sync(); },
-  new: () => { if (!confirm('Start an empty scene? Your current scene can be restored with Undo.')) return; checkpoint(); pause(); p = defaultScene(); p.objects = []; p.cameraClips = []; p.left=p.right='none'; p.baseRoad=false; viewMode='2d'; placement=null; time = 0; selected = null; selClip = null; sync(); },
+  new: async () => { if (!await confirmStudio('Start an empty scene? Your current scene can be restored with Undo.')) return; checkpoint(); pause(); p = defaultScene(); p.objects = []; p.cameraClips = []; p.left=p.right='none'; p.baseRoad=false; viewMode='2d'; placement=null; time = 0; selected = null; selClip = null; sync(); },
   demo: () => { checkpoint(); pause(); p = cityScene(); time = 0; selected = p.objects.find(isMobile)?.id; selClip = null; fitPlan(); sync(); },
   save: () => download(new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' }), 'scene.frameflow.json'),
   open: () => $('#scFile').click(), png: () => { renderScene(canvas,p,time); canvas.toBlob(b => { if(b) download(b,'scene.png'); draw(); }); },
@@ -230,9 +234,18 @@ const actions = {
   },
   visibility: () => { const o = currentObject(); if (o) { checkpoint(); o.visible = !o.visible; sync(); } },
   export: async () => {
-    pause(); busy = true; const prior = time, btn = toolbar.querySelector('[data-action="export"]'); root.classList.add('sc-busy'); toolbar.classList.add('sc-busy');
-    try { download(await exportMapVideo({ canvas, fps: p.fps, frames: Math.round(p.duration * p.fps), draw: f => renderScene(canvas, p, f / p.fps), progress: n => { btn.textContent = `Export ${Math.round(n / (p.duration * p.fps) * 100)}%`; } }), 'scene.webm'); }
-    catch (err) { alert(err.message); } finally { busy = false; time = prior; root.classList.remove('sc-busy'); toolbar.classList.remove('sc-busy'); btn.textContent = 'Export video ↗'; draw(); }
+    if (busy) return; pause(); busy = true; const prior = time;
+    const snapshot=JSON.parse(JSON.stringify(p));
+    const c=document.createElement('canvas');c.width=canvas.width;c.height=canvas.height;
+    const frames=Math.round(snapshot.duration*snapshot.fps);
+    const ui=sceneExportDialog({width:c.width,height:c.height,fps:snapshot.fps,frames});
+    root.classList.add('sc-busy'); toolbar.classList.add('sc-busy');
+    try {
+      const video=await exportMapVideo({canvas:c,fps:snapshot.fps,frames,draw:f=>renderScene(c,snapshot,f/snapshot.fps),cancelled:ui.cancelled,progress:ui.progress});
+      if(ui.cancelled())ui.finish('Export cancelled.');
+      else {download(video,'scene.webm');ui.finish('All frames encoded. Download started.');}
+    } catch(err){ui.finish(err.name==='AbortError'?'Export cancelled.':'Export failed: '+err.message);}
+    finally {busy=false;time=prior;root.classList.remove('sc-busy');toolbar.classList.remove('sc-busy');draw();}
   }
 };
 function handleSceneClick(e) {
@@ -294,7 +307,7 @@ $('#scName').onchange = e => { checkpoint(); p.name = e.target.value; saveLocal(
 $('#scTimelineZoom').oninput = e => { timelineZoom = Number(e.target.value); renderTimeline(); };
 $('#scFile').onchange = async e => {
   try { const f = e.target.files[0]; if (!f) return; if (f.size > 2e6) throw Error('Project is too large'); const q = validateScene(JSON.parse(await f.text())); checkpoint(); pause(); p = q; time = 0; selected = p.objects[0]?.id ?? null; selClip = null; sync(); }
-  catch (err) { alert(err.message); } e.target.value = '';
+  catch (err) { alertStudio(err.message); } e.target.value = '';
 };
 // Canvas drag/scroll edits whichever camera is active at the playhead (a shot, or the default camera).
 const activeCamSpec = () => { const c = resolveClips(p.cameraClips).find(c => time >= c.start && time < c.end); return c ? p.cameraClips.find(x => x.id === c.id) : p.camera; };
@@ -306,7 +319,7 @@ canvas.onwheel = e => { e.preventDefault(); if (busy) return; if(viewMode==='2d'
 // Capture only Scene shortcuts: legacy Motion handlers otherwise run in unknown modes.
 window.addEventListener('keydown', e => {
   if (!document.body.classList.contains('mode-scene')) return; e.stopImmediatePropagation();
-  if (busy || ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if (document.querySelector('dialog[open]') || busy || ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
   if (e.key === 'Escape') { placement=null;planTool='select';draw(); }
   else if (e.code === 'Space') { e.preventDefault(); play(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); seek(time + (e.key === 'ArrowLeft' ? -1 : 1) / p.fps); }
@@ -365,7 +378,7 @@ function drawPlan(){
 function planDown(e){
  pause();const q=eventPoint(e);if(e.button===2)return;canvas.setPointerCapture(e.pointerId);
  if(placement){const type=placement;placement=null;const n=p.objects.length;addObject(type);if(p.objects.length===n)return;const o=currentObject();o.x=Math.round(q.x*2)/2;o.z=Math.round(q.z*2)/2;o.endX=o.x;o.endZ=isMobile(o)?Math.min(150,o.z+15):o.z;if(type==='human')o.clips=[makeClip('walk',0,p.duration,1)];sync();return;}
- if(planTool==='route'){const o=currentObject();if(!o||!isMobile(o)){planTool='select';draw();return;}if((o.waypoints||[]).length>=60){alert('Maximum 60 route points.');return;}checkpoint();(o.waypoints||=[]).push({x:Math.round(q.x*2)/2,z:Math.round(q.z*2)/2});sync();return;}
+ if(planTool==='route'){const o=currentObject();if(!o||!isMobile(o)){planTool='select';draw();return;}if((o.waypoints||[]).length>=60){alertStudio('Maximum 60 route points.');return;}checkpoint();(o.waypoints||=[]).push({x:Math.round(q.x*2)/2,z:Math.round(q.z*2)/2});sync();return;}
  if(planTool==='camera'||planTool==='aim'){checkpoint();const c=activeCamSpec(),cam=cameraAt(p,time);c.move='static';c.mode='third';c.fixedX??=clamp(cam.pos[0],-100,150);c.fixedZ??=clamp(cam.pos[2],-100,150);c.aimX??=clamp(cam.look[0],-100,150);c.aimZ??=clamp(cam.look[2],-100,150);if(planTool==='camera'){c.fixedX=q.x;c.fixedZ=q.z;}else{c.aimX=q.x;c.aimZ=q.z;}planTool='select';sync();return;}
  const hit=(x,z,r=17)=>{const a=screenPoint(x,z);return Math.hypot(a[0]-q.sx,a[1]-q.sy)<r;},sel=currentObject();
  if(sel&&!selClip){const rp=rotationPoint(sel);if(hit(...rp,14)){planDrag={kind:'rotate',o:sel,base:actorYaw(sel,0)-(sel.rotation??0)*Math.PI/180};return;}

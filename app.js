@@ -1,3 +1,4 @@
+import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 import { drawShape, shapeInspector, bindShapeInspector } from './motion-shapes.mjs';
 import { installAlignBar } from './motion-align.mjs';
 import { applyCamera, attachMotionCamera, cameraAt } from './motion-camera.mjs';
@@ -570,7 +571,7 @@ window.addEventListener('keydown',event=>{
 
   if(event.key.toLowerCase()!=='f'||event.repeat||event.ctrlKey||event.altKey||event.metaKey)return;
 
-  if(document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+  if(document.querySelector('dialog[open]')||document.body.classList.contains('mode-scene')||document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
 
   event.preventDefault();toggleMotionFullscreen();
 
@@ -622,7 +623,7 @@ function modal(html){$('#modalBody').innerHTML=html;$('#closeModal').textContent
 
 $('#help').onclick=()=>modal(`<h2>Make your first move.</h2><ol><li>Select a layer and go to frame 0.</li><li>Click <b>◇ Key transform</b> to record its starting pose.</li><li>Move to a later frame. Drag the layer or change a property; Auto-key records the next pose.</li><li>Press Space to preview, then export your video.</li></ol><p><b>Timeline:</b> drag diamonds to retime keys. Alt-click a diamond to remove the keys at that frame. Property diamonds toggle one key. Easing controls motion to the next key.</p><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · K key transform · Ctrl/Cmd Z undo · Ctrl/Cmd Shift Z redo · Delete remove layer.</p><p>Your latest project is saved in this browser. Use <b>Save project</b> to keep a portable copy. Video exports include retained audio parts. Audio files and edits are session-only and are not embedded in saved project files.</p>`);$('#closeModal').onclick=()=>{if(exporting){exporting=false;$('#closeModal').disabled=true}else $('#modal').close()};$('#modal').addEventListener('cancel',e=>{if(exporting){e.preventDefault();exporting=false}});
 
-$('#new').onclick=()=>{if(!confirm('Start an empty composition? Your current edit can be restored with Undo.'))return;pause();checkpoint();audioUI?.reset();project={version:1,name:'Untitled composition',width:1920,height:1080,fps:30,frames:180,bg:'#e7e9e1',layers:[]};selected=null;frame=0;changed()};$('#demo').onclick=()=>{if(!confirm('Load the demo? Your current edit can be restored with Undo.'))return;pause();checkpoint();audioUI?.reset();project=demo();selected=project.layers[1].id;frame=45;changed()};
+$('#new').onclick=async()=>{if(!await confirmStudio('Start an empty composition? Your current edit can be restored with Undo.'))return;pause();checkpoint();audioUI?.reset();project={version:1,name:'Untitled composition',width:1920,height:1080,fps:30,frames:180,bg:'#e7e9e1',layers:[]};selected=null;frame=0;changed()};$('#demo').onclick=async()=>{if(!await confirmStudio('Load the demo? Your current edit can be restored with Undo.', 'Load demo', 'Load demo'))return;pause();checkpoint();audioUI?.reset();project=demo();selected=project.layers[1].id;frame=45;changed()};
 
 $('#export').onclick=async()=>{
 
@@ -630,7 +631,7 @@ $('#export').onclick=async()=>{
 
   const snapshot=JSON.parse(JSON.stringify(project)), name=filename();
 
-  modal(`<h2>Export your motion.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames/snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order, including animated backgrounds and tables. Format: WebM.</p><p class="ff-export-note">Retained audio parts are included, with your volume and mute settings. Deleted parts stay silent.</p><a class="support-link" href="https\://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a><progress id="progress" max="${snapshot.frames}" value="0"></progress><p id="exportStatus">Preparing…</p>`);
+  modal(exportMarkup({...snapshot, progressId:'progress', statusId:'exportStatus'}));
 
   $('#closeModal').textContent='Cancel export';exporting=true;
 
@@ -654,7 +655,7 @@ $('#export').onclick=async()=>{
 
 };
 
-window.addEventListener('keydown',e=>{if(document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(e.shiftKey?'redo':'undo');return}if(e.code==='Space'){e.preventDefault();play()}else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();pause();setFrame(frame+(e.key==='ArrowRight'?1:-1)*(e.shiftKey?10:1))}else if(e.key.toLowerCase()==='k')$('#keyAll').click();else if(e.key==='Delete'||e.key==='Backspace'){if(!cameraUI?.removeSelected())$('#delete').click();e.preventDefault()}});
+window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||document.body.classList.contains('mode-scene')||document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(e.shiftKey?'redo':'undo');return}if(e.code==='Space'){e.preventDefault();play()}else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();pause();setFrame(frame+(e.key==='ArrowRight'?1:-1)*(e.shiftKey?10:1))}else if(e.key.toLowerCase()==='k')$('#keyAll').click();else if(e.key==='Delete'||e.key==='Backspace'){if(!cameraUI?.removeSelected())$('#delete').click();e.preventDefault()}});
 
 audioUI = registerAudioStudio('motion', {
  getSelected:()=>selected, getFrame:()=>frame, getFps:()=>project.fps, getFrames:()=>project.frames,

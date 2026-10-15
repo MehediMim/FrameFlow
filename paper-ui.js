@@ -1,3 +1,4 @@
+import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 // FrameFlow Paper Studio: editor UI (parts, camera, timeline, playback, templates, export).
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
@@ -80,7 +81,7 @@ function overlay() {
 }
 function setFrame(n) {
   frame = clamp(Math.round(n) || 0, 0, proj.frames - 1);
-  $('#pFrame').value = frame; $('#pFrame').max = proj.frames - 1; $('#pTimecode').textContent = fmtTime(frame);
+  $('#pFrame').value = +(frame / proj.fps).toFixed(3); $('#pFrame').max = +((proj.frames - 1) / proj.fps).toFixed(3); $('#pFrame').step = '0.001'; $('#pTimecode').textContent = fmtTime(frame);
   $('#pPlayhead').style.left = `${frame / Math.max(1, proj.frames - 1) * 100}%`;
   draw(); window.dispatchEvent(new CustomEvent('ff-frame', { detail: { studio: 'paper', frame, fps: proj.fps, playing } }));
 }
@@ -398,7 +399,7 @@ function modal(html) { $('#pModalBody').innerHTML = html; $('#pCloseModal').text
 async function exportVideo() {
   if (exporting) return; pause();
   const snapshot = JSON.parse(snap()); snapshot.assets = registry; const exportName = fileBase();
-  modal(`<h2>Export your newspaper.</h2><p>${snapshot.width} × ${snapshot.height} · ${snapshot.fps} FPS · ${(snapshot.frames / snapshot.fps).toFixed(2)} seconds</p><p>Every frame is encoded in order. Format: WebM.</p><p class="ff-export-note">Retained audio parts are included, with your volume and mute settings. Deleted parts stay silent.</p><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a><progress id="pProgress" max="${snapshot.frames}" value="0"></progress><p id="pExportStatus">Preparing…</p>`);
+  modal(exportMarkup({...snapshot, progressId:'pProgress', statusId:'pExportStatus'}));
   $('#pCloseModal').textContent = 'Cancel export'; exporting = true;
   const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height; const ec = c.getContext('2d');
   try {
@@ -426,7 +427,7 @@ function bindToolbar() {
   $('#pPlay').onclick = play; $('#pStart').onclick = () => { pause(); setFrame(0); }; $('#pEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#pPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#pNext').onclick = () => { pause(); setFrame(frame + 1); };
   $('#pLoop').onclick = () => { loop = !loop; $('#pLoop').classList.toggle('active', loop); };
-  $('#pFrame').onchange = e => { pause(); setFrame(+e.target.value); };
+  $('#pFrame').onchange = e => { pause(); setFrame(Math.round(+e.target.value * proj.fps)); };
   $('#pZoomT').oninput = () => { renderTimeline(); setFrame(frame); };
   $('#pDuplicate').onclick = () => {
     if (audioUI?.duplicate()) return;
@@ -444,7 +445,7 @@ function bindToolbar() {
   const z = d => () => { const it = current(); if (!it || isShot(it) || isSheet(it)) return; const i = proj.parts.indexOf(it), j = clamp(i + d, 0, proj.parts.length - 1); if (i === j) return; checkpoint(); proj.parts.splice(i, 1); proj.parts.splice(j, 0, it); saveLocal(); renderAll(); };
   $('#pUp').onclick = z(1); $('#pDown').onclick = z(-1);
   $('#pTemplates').onclick = openTemplates;
-  $('#pNew').onclick = () => { if (!confirm('Start an empty sheet? Your current edit can be restored with Undo.')) return; applyTemplate('blank'); };
+  $('#pNew').onclick = async () => { if (!await confirmStudio('Start an empty sheet? Your current edit can be restored with Undo.')) return; applyTemplate('blank'); };
   $('#pHelp').onclick = () => modal(`<h2>Make a newspaper animation.</h2><ol><li>Press <b>Templates</b> and pick a look: front page, breaking news, headline close-up, vintage extra, clipping or Bangla daily.</li><li>Click any part on the page (headline, photo, columns…) to edit its text, font, colors and how it appears.</li><li>Drag a part to move it, or drag its green corner to resize it. Use the <b>Add parts</b> buttons for banners, stamps, tickers, highlighter pens and more.</li><li>Click <b>Newspaper sheet</b> in the list to change the paper, folds, torn edges, tilt, background and how the sheet arrives (spin, slap, drop…).</li><li>Add <b>camera moves</b> to glide to a headline, push in on a photo or pull back. Drag bars on the timeline to retime them.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Alt + arrows nudge a part · Delete remove · Ctrl/Cmd Z undo · F fullscreen</p>`);
   $('#pCloseModal').onclick = () => { if (exporting) { exporting = false; $('#pCloseModal').disabled = true; } else $('#pModal').close(); };
   $('#pModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });

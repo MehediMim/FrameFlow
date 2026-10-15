@@ -27,12 +27,17 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const icons={vector:'✧',text:'T',rect:'▢',circle:'○',image:'▧',table:'▤',chart:'▥',list:'☷',diagram:'◇',group:'▣'};
 
 const fxStyle=document.createElement('style');fxStyle.textContent=`
-.timeline.motion-only .ff-fx-track-row{background:#20251f!important}
-.timeline.motion-only .ff-fx-track-label{color:#efdbad!important;padding-left:25px!important}
-.timeline.motion-only .ff-fx-clip{background:#725c2b!important;border:1px solid #e7bc63!important;z-index:2}
-.timeline.motion-only .ff-fx-clip.ff-selected{outline:2px solid #f4e1b0;outline-offset:1px}
-.timeline.motion-only .ff-fx-clip .clip-label{color:#fff2d5!important}
-.timeline.motion-only .ff-fx-clip .clip-handle:hover{background:#ffd778!important}
+/* Inline FX: one timeline row per layer, even if it has many effects. */
+.timeline.motion-only .ff-layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.timeline.motion-only .ff-fx-count{margin-left:auto;flex:none;font-size:9px;color:#f0c775;background:#594927;border:1px solid #826535;border-radius:5px;padding:2px 5px}
+.timeline.motion-only .track-row.ff-fx-parent-row>.clip.clip-editable:not(.ff-fx-clip){top:3px!important;bottom:18px!important;z-index:1!important}
+.timeline.motion-only .track-row.ff-fx-parent-row>.diamond{top:5px!important;z-index:4!important}
+.timeline.motion-only .track-row.ff-fx-parent-row>.ff-fx-clip.clip-editable{position:absolute;top:21px!important;bottom:2px!important;min-height:13px;min-width:7px;z-index:5!important;background:#725c2b!important;border:1px solid #e7bc63!important;border-radius:4px;padding:0!important;box-shadow:none!important;display:flex;justify-content:space-between;align-items:center;overflow:hidden;touch-action:none}
+.timeline.motion-only .track-row.ff-fx-parent-row>.ff-fx-clip.ff-selected{outline:2px solid #f4e1b0;outline-offset:-1px}
+.timeline.motion-only .ff-fx-clip .clip-label{font-size:8px!important;color:#fff2d5!important;padding:0 3px!important;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.timeline.motion-only .ff-fx-clip .clip-handle{width:7px!important;min-width:7px!important;height:100%;flex:none;cursor:ew-resize;opacity:.85}
+.timeline.motion-only .ff-fx-clip .clip-handle:hover{background:#ffd778!important;opacity:1}
+.timeline.motion-only .ff-fx-parent-row .clip-label{pointer-events:none}
 `;document.head.append(fxStyle);
 let selectedFx=null;
 let project,selected,frame=45,playing=false,loop=true,showGrid=false,raf,startTime,startFrame,undoStack=[],redoStack=[],images=new Map,drag=null,keyDrag=null,clipDrag=null,fxDrag=null,exporting=false,selectedKey=null;
@@ -230,8 +235,8 @@ function applyMotionPreset(l,kind,name,seconds,endBehavior=kind==='loop'?'return
 }
 function effectClipInspector(l){
  if(!l.fxClips?.length)return '';
- return `<div class="section-title" style="margin-top:18px">TIMELINE EFFECT CLIPS <span>◷</span></div>
- <p class="mini-label">Each effect starts at its own time and follows the moving layer. Drag the colored effect clips in the timeline to move or resize them.</p>
+ return `<div class="section-title" style="margin-top:18px">LAYER EFFECTS <span>◷</span></div>
+ <p class="mini-label">All effects belong to this layer; they do not create extra timeline rows. Drag the gold segments inside the layer’s timeline row, or edit their timing below. Effects follow the layer’s motion.</p>
  ${l.fxClips.map(fx=>`<div class="ff-fx-editor" style="border:1px solid #46575c;padding:8px;margin-bottom:8px;border-radius:7px;${selectedFx===fx.id?'background:#25343a;':''}">
  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px"><b>${esc(fx.name.replaceAll('-',' '))}</b><button type="button" data-fx-delete="${esc(fx.id)}" title="Delete this effect">Remove</button></div>
  <div class="two"><label>Start (s)<input type="number" min="0" max="${(project.frames-1)/project.fps}" step="0.01" data-fx-edit="${esc(fx.id)}" data-fx-field="start" value="${(fx.start/project.fps).toFixed(2)}"></label><label>Duration (s)<input type="number" min="0.03" max="${project.frames/project.fps}" step="0.01" data-fx-edit="${esc(fx.id)}" data-fx-field="dur" value="${(fx.dur/project.fps).toFixed(2)}"></label></div>
@@ -344,18 +349,18 @@ function renderTimeline(){
  let ticks='';for(let s=0;s<duration;s+=step){const f=s*project.fps;ticks+=`<span class="tick" style="left:${f/(project.frames-1)*100}%">${+s.toFixed(2)}s</span>`}$('#ruler').innerHTML=ticks;
 
  const ls=[...project.layers].reverse();
- const rows=ls.flatMap(l=>[{type:'layer',l},...(l.fxClips||[]).map(fx=>({type:'effect',l,fx}))]);
- $('#trackLabels').innerHTML=rows.map(({type,l,fx})=>type==='effect'
-  ?`<div class="track-label ff-fx-track-label ${selectedFx===fx.id?'selected':''}" data-fx-label="${esc(l.id)}" data-fx-select="${esc(fx.id)}"><span style="color:#eec579">✦</span>↳ ${esc(fx.name.replaceAll('-',' '))}</div>`
-  :`<div class="track-label ${l.id===selected?'selected':''}" data-track-label="${esc(l.id)}"><span>${icons[l.type]}</span>${esc(l.name)}</div>`).join('');
- $('#trackRows').innerHTML=rows.map(({type,l,fx})=>{
-  if(type==='effect'){
-   const left=fx.start/(project.frames-1)*100,right=100-Math.min(project.frames-1,fx.start+fx.dur)/(project.frames-1)*100;
-   return `<div class="track-row ff-fx-track-row"><div class="clip clip-editable ff-fx-clip ${fx.id===selectedFx?'ff-selected':''}" data-fx-clip="${esc(fx.id)}" data-fx-owner="${esc(l.id)}" style="left:${left}%;right:${right}%" title="${esc(fx.name)} · drag to move, edges to resize"><span class="clip-handle clip-left" data-fx-trim="left"></span><span class="clip-label">✦ ${esc(fx.name.replaceAll('-',' '))}</span><span class="clip-handle clip-right" data-fx-trim="right"></span></div></div>`;
-  }
+ // Every project layer has exactly one timeline row. Its effect clips live INSIDE
+ // that row (and stay stored in the layer.fxClips array), not as fake layers.
+ $('#trackLabels').innerHTML=ls.map(l=>`<div class="track-label ${l.id===selected?'selected':''}" data-track-label="${esc(l.id)}"><span>${icons[l.type]}</span><span class="ff-layer-name">${esc(l.name)}</span>${l.fxClips?.length?`<span class="ff-fx-count" title="${l.fxClips.length} effects on this layer · select to edit">✦ ${l.fxClips.length}</span>`:''}</div>`).join('');
+ $('#trackRows').innerHTML=ls.map(l=>{
   const fs=[...new Set(Object.values(l.keys).flat().map(k=>k.f))].filter(f=>f<project.frames).sort((a,b)=>a-b);
   const left=l.in/(project.frames-1)*100,right=100-Math.min(l.out,project.frames-1)/(project.frames-1)*100;
-  return `<div class="track-row ${l.id===selected?'selected':''}" data-row="${esc(l.id)}"><div class="clip clip-editable" data-clip="${esc(l.id)}" style="left:${left}%;right:${right}%" title="Drag to move · drag edges to trim"><span class="clip-handle clip-left" data-trim="left"></span><span class="clip-label">${esc(l.name)}</span><span class="clip-handle clip-right" data-trim="right"></span></div>${fs.map(f=>`<button class="diamond ${selectedKey?.id===l.id&&selectedKey.f===f?'chosen':''}" style="left:${f/(project.frames-1)*100}%" data-layer="${esc(l.id)}" data-f="${f}" title="${(f/project.fps).toFixed(2)}s · drag to move · Alt click to delete" aria-label="Keyframe ${f} on ${esc(l.name)}"></button>`).join('')}</div>`;
+  const hasFx=!!l.fxClips?.length;
+  const effects=(l.fxClips||[]).map(fx=>{
+   const fxLeft=fx.start/(project.frames-1)*100,fxRight=100-Math.min(project.frames-1,fx.start+fx.dur)/(project.frames-1)*100;
+   return `<div class="clip clip-editable ff-fx-clip ${fx.id===selectedFx?'ff-selected':''}" data-fx-clip="${esc(fx.id)}" data-fx-owner="${esc(l.id)}" style="left:${fxLeft}%;right:${fxRight}%" title="${esc(fx.name)} · drag to move, edges to resize"><span class="clip-handle clip-left" data-fx-trim="left"></span><span class="clip-label">✦ ${esc(fx.name.replaceAll('-',' '))}</span><span class="clip-handle clip-right" data-fx-trim="right"></span></div>`;
+  }).join('');
+  return `<div class="track-row ${l.id===selected?'selected':''} ${hasFx?'ff-fx-parent-row':''}" data-row="${esc(l.id)}"><div class="clip clip-editable" data-clip="${esc(l.id)}" style="left:${left}%;right:${right}%" title="Drag to move layer · drag edges to trim"><span class="clip-handle clip-left" data-trim="left"></span><span class="clip-label">${esc(l.name)}</span><span class="clip-handle clip-right" data-trim="right"></span></div>${fs.map(f=>`<button class="diamond ${selectedKey?.id===l.id&&selectedKey.f===f?'chosen':''}" style="left:${f/(project.frames-1)*100}%" data-layer="${esc(l.id)}" data-f="${f}" title="${(f/project.fps).toFixed(2)}s · drag to move · Alt click to delete" aria-label="Keyframe ${f} on ${esc(l.name)}"></button>`).join('')}${effects}</div>`;
  }).join('');
 
  $$('[data-track-label]').forEach(el=>el.onclick=()=>select(el.dataset.trackLabel));
@@ -365,7 +370,6 @@ function renderTimeline(){
 
  $$('.diamond').forEach(el=>el.onpointerdown=e=>{e.preventDefault();e.stopPropagation();pause();const id=el.dataset.layer,f=+el.dataset.f;selected=id;selectedKey={id,f};if(e.altKey){checkpoint();const l=current();for(const prop of PROPS){const v=valueAt(l,prop,f);l.keys[prop]=(l.keys[prop]||[]).filter(k=>k.f!==f);if(!l.keys[prop].length)l[prop]=v}changed();return}checkpoint();keyDrag={id,from:f,to:f,keys:JSON.parse(JSON.stringify(current().keys))};setFrame(f);renderLayers();renderTimeline()});
 
- $$('[data-fx-label]').forEach(el=>el.onclick=()=>{selectedFx=el.dataset.fxSelect;select(el.dataset.fxLabel);selectedFx=el.dataset.fxSelect;renderInspector();renderTimeline()});
  $$('[data-fx-clip]').forEach(el=>el.onpointerdown=e=>{
   if(e.button!==0)return;e.preventDefault();e.stopPropagation();pause();
   const l=project.layers.find(q=>q.id===el.dataset.fxOwner),fx=l?.fxClips?.find(q=>q.id===el.dataset.fxClip);if(!fx)return;

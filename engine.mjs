@@ -13,13 +13,20 @@ function applyFxClip(p,fx,frame){
  const start=fx.start,dur=Math.max(1,fx.dur),end=start+dur;
  if(frame<start)return;
  const held=fx.endBehavior==='hold';
- if(frame>=end&&!held)return;
- const t=fxClamp((frame-start)/dur,0,1),u=fxSmooth(t);
+ // An explicit Return command freezes the effect at the playhead, then fades its
+ // RELATIVE displacement out. The keyed layer keeps moving underneath.
+ const releaseAt=Number.isInteger(fx.returnStart)?fx.returnStart:null;
+ const releasing=releaseAt!==null&&frame>=releaseAt;
+ const at=releasing?releaseAt:frame;
+ if(at>=end&&!held)return;
+ const release=releasing?1-fxSmooth(fxClamp((frame-releaseAt)/Math.max(1,fx.returnDuration||1),0,1)):1;
+ if(release<=0)return;
+ const t=fxClamp((at-start)/dur,0,1),u=fxSmooth(t);
  const returning=!held;
  // Temporary effects rise and fall without a jump at either edge. Entrance
  // effects with Hold are true introductions: they arrive at the animated pose.
- const pulse=Math.sin(Math.PI*t)**2;
- const strength=fx.kind==='in'?(returning?pulse:1-u):fx.kind==='out'?(returning?pulse:u):pulse;
+ const pulse=Math.sin(Math.PI*t)**2*release;
+ const strength=(fx.kind==='in'?(returning?Math.sin(Math.PI*t)**2:1-u):fx.kind==='out'?(returning?Math.sin(Math.PI*t)**2:u):Math.sin(Math.PI*t)**2)*release;
  const distance=fxClamp(Number(fx.distance)||120,0,2000);
  const mult=fx.name==='pop'?.25:.7;
  switch(fx.name){
@@ -35,7 +42,7 @@ function applyFxClip(p,fx,frame){
   case 'bounce':p.y-=distance*.5*pulse;break;
   case 'sway':p.rotation+=8*pulse;break;
   case 'breathe':p.opacity*=1-.45*pulse;break;
-  case 'rotate':p.rotation+=360*u;break;
+  case 'rotate':p.rotation+=360*u*release;break;
   case 'blur':p.blur=fxClamp((p.blur??0)+fxClamp(Number(fx.amount)||0,0,80)*pulse,0,80);break;
  }
  p.opacity=fxClamp(p.opacity,0,1);p.scale=fxClamp(p.scale,.01,20);
@@ -47,7 +54,7 @@ export function poseAt(layer,frame){
  return p;
 }
 export function putKey(layer,prop,frame,value,easing='easeInOut'){const list=layer.keys[prop]||=[];const existing=list.find(k=>k.f===frame);if(existing){existing.v=value;existing.e=easing}else list.push({f:frame,v:value,e:easing});list.sort((a,b)=>a.f-b.f)}
-export function validateProject(p){if(!p||p.version!==1||!Array.isArray(p.layers)||p.layers.length>200)throw Error('This is not a FrameFlow project.');if(![24,30,60].includes(p.fps)||!Number.isInteger(p.frames)||p.frames<2||p.frames>1800)throw Error('Invalid frame settings.');if(!Number.isInteger(p.width)||!Number.isInteger(p.height)||p.width<100||p.height<100||p.width>3840||p.height>3840)throw Error('Invalid canvas size.');if(typeof p.bg!=='string'||!/^#[0-9a-f]{6}$/i.test(p.bg))throw Error('Invalid background color.');let ids=new Set;for(const l of p.layers){if(l.fxClips!==undefined){if(!Array.isArray(l.fxClips)||l.fxClips.length>150)throw Error('Invalid motion effects.');for(const fx of l.fxClips){if(!fx||typeof fx.id!=='string'||!['in','out','loop','blur'].includes(fx.kind)||typeof fx.name!=='string'||!Number.isInteger(fx.start)||fx.start<0||fx.start>=p.frames||!Number.isInteger(fx.dur)||fx.dur<1||fx.start+fx.dur>p.frames||!['return','hold'].includes(fx.endBehavior)||fx.distance!==undefined&&(!Number.isFinite(fx.distance)||fx.distance<0||fx.distance>2000)||fx.amount!==undefined&&(!Number.isFinite(fx.amount)||fx.amount<0||fx.amount>80))throw Error('Invalid motion effect clip.');}}if(l.blur===undefined)l.blur=0;if(!Number.isFinite(l.blur)||l.blur<0||l.blur>80)throw Error('Invalid layer blur.');if(l.depth!==undefined&&(!Number.isFinite(l.depth)||l.depth< -500||l.depth>500))throw Error('Invalid layer depth.');if(!['rect','circle','text','image','table','chart','list','diagram','group','vector'].includes(l.type)||typeof l.id!=='string'||ids.has(l.id)||!l.keys||typeof l.keys!=='object')throw Error('Invalid layer.');ids.add(l.id);if(l.parentId!==undefined&&typeof l.parentId!=='string')throw Error('Invalid group parent.');for(const prop of PROPS){if(!Number.isFinite(l[prop]))throw Error('Invalid transform.');if(l.keys[prop]&&!Array.isArray(l.keys[prop]))throw Error('Invalid keyframes.');for(const k of l.keys[prop]||[]){if(prop==='blur'&&(k.v<0||k.v>80))throw Error('Invalid blur keyframe.');if(!Number.isInteger(k.f)||k.f<0||!Number.isFinite(k.v)||!Object.hasOwn(easings,k.e))throw Error('Invalid keyframe.')}}if(l.type==='chart')validateChart(l.chart);if(l.type==='list'||l.type==='diagram')validateStructured(l);if(l.type==='vector')validateVector(l);if(l.type==='image'&&(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/i.test(l.src||'')))throw Error('Unsupported image data.');if(l.fontFamily!==undefined&&(typeof l.fontFamily!=='string'||l.fontFamily.length>60))throw Error('Invalid font.');if(!Number.isFinite(l.in)||!Number.isFinite(l.out)||l.in<0||l.out<l.in)throw Error('Invalid layer timing.')}for(const l of p.layers){if(l.parentId){const g=p.layers.find(x=>x.id===l.parentId);if(!g||g.type!=='group'||g.parentId||l.type==='group')throw Error('Invalid group relationship.')}}validateExtras(p);return p}
+export function validateProject(p){if(!p||p.version!==1||!Array.isArray(p.layers)||p.layers.length>200)throw Error('This is not a FrameFlow project.');if(![24,30,60].includes(p.fps)||!Number.isInteger(p.frames)||p.frames<2||p.frames>1800)throw Error('Invalid frame settings.');if(!Number.isInteger(p.width)||!Number.isInteger(p.height)||p.width<100||p.height<100||p.width>3840||p.height>3840)throw Error('Invalid canvas size.');if(typeof p.bg!=='string'||!/^#[0-9a-f]{6}$/i.test(p.bg))throw Error('Invalid background color.');let ids=new Set;for(const l of p.layers){if(l.fxClips!==undefined){if(!Array.isArray(l.fxClips)||l.fxClips.length>150)throw Error('Invalid motion effects.');for(const fx of l.fxClips){if(!fx||typeof fx.id!=='string'||!['in','out','loop','blur'].includes(fx.kind)||typeof fx.name!=='string'||!Number.isInteger(fx.start)||fx.start<0||fx.start>=p.frames||!Number.isInteger(fx.dur)||fx.dur<1||fx.start+fx.dur>p.frames||!['return','hold'].includes(fx.endBehavior)||fx.distance!==undefined&&(!Number.isFinite(fx.distance)||fx.distance<0||fx.distance>2000)||fx.amount!==undefined&&(!Number.isFinite(fx.amount)||fx.amount<0||fx.amount>80)||fx.returnStart!==undefined&&(!Number.isInteger(fx.returnStart)||fx.returnStart<fx.start||fx.returnStart>=p.frames)||fx.returnDuration!==undefined&&(!Number.isInteger(fx.returnDuration)||fx.returnDuration<1||fx.returnDuration>p.frames))throw Error('Invalid motion effect clip.');}}if(l.blur===undefined)l.blur=0;if(!Number.isFinite(l.blur)||l.blur<0||l.blur>80)throw Error('Invalid layer blur.');if(l.depth!==undefined&&(!Number.isFinite(l.depth)||l.depth< -500||l.depth>500))throw Error('Invalid layer depth.');if(!['rect','circle','text','image','table','chart','list','diagram','group','vector'].includes(l.type)||typeof l.id!=='string'||ids.has(l.id)||!l.keys||typeof l.keys!=='object')throw Error('Invalid layer.');ids.add(l.id);if(l.parentId!==undefined&&typeof l.parentId!=='string')throw Error('Invalid group parent.');for(const prop of PROPS){if(!Number.isFinite(l[prop]))throw Error('Invalid transform.');if(l.keys[prop]&&!Array.isArray(l.keys[prop]))throw Error('Invalid keyframes.');for(const k of l.keys[prop]||[]){if(prop==='blur'&&(k.v<0||k.v>80))throw Error('Invalid blur keyframe.');if(!Number.isInteger(k.f)||k.f<0||!Number.isFinite(k.v)||!Object.hasOwn(easings,k.e))throw Error('Invalid keyframe.')}}if(l.type==='chart')validateChart(l.chart);if(l.type==='list'||l.type==='diagram')validateStructured(l);if(l.type==='vector')validateVector(l);if(l.type==='image'&&(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/i.test(l.src||'')))throw Error('Unsupported image data.');if(l.fontFamily!==undefined&&(typeof l.fontFamily!=='string'||l.fontFamily.length>60))throw Error('Invalid font.');if(!Number.isFinite(l.in)||!Number.isFinite(l.out)||l.in<0||l.out<l.in)throw Error('Invalid layer timing.')}for(const l of p.layers){if(l.parentId){const g=p.layers.find(x=>x.id===l.parentId);if(!g||g.type!=='group'||g.parentId||l.type==='group')throw Error('Invalid group relationship.')}}validateExtras(p);return p}
 
 // ---------------------------------------------------------------- Fonts (shared by Motion and Map Studio)
 // g = generic fallback, w = Google Fonts weights to request, sys = already on most computers (nothing to download)

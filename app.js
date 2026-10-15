@@ -207,7 +207,7 @@ const MOTION_PRESETS = {
 
 const presetOptions = type => MOTION_PRESETS[type].map(([key,name])=>`<option value="${key}">${name}</option>`).join('');
 
-function animationInspector(l){const settings=l.animationPresets||{};return `<div class="section-title" style="margin-top:18px">ANIMATION PRESETS <span>✦</span></div><p class="mini-label">Effects start at the current playhead, follow moving keyframed layers, and never overwrite existing keyframes. Return means rejoin the underlying animation; Hold keeps an offset after the effect.</p>${['in','out','loop'].map(type=>{const s=settings[type]||{};return `<div class="ff-animation-preset"><label>${type==='in'?'Entrance':type==='out'?'Exit':'Loop'}<select data-preset-kind="${type}">${presetOptions(type)}</select></label><label>${type==='loop'?'Cycle (seconds)':'Duration (seconds)'}<input type="number" min="0.1" max="30" step="0.1" data-preset-duration="${type}" value="${s.duration|| (type==='loop'?2:0.7)}"></label><label>After effect<select data-preset-end="${type}"><option value="return" ${((s.endBehavior|| (type==='loop'?'return':'hold'))==='return')?'selected':''}>Return to starting state</option><option value="hold" ${((s.endBehavior||(type==='loop'?'return':'hold'))==='hold')?'selected':''}>Hold final state</option></select></label><button type="button" class="ff-apply-preset" data-apply-preset="${type}">Apply ${type==='in'?'In':type==='out'?'Out':'Loop'}</button></div>`}).join('')}<div class="section-title" style="margin-top:18px">RESTORE LAYER <span>↶</span></div><p class="mini-label">At the current playhead, smoothly return animated properties (including Gaussian blur) to their values at the layer's start. Useful for existing effects or custom keyframes.</p><div class="two"><label>Return duration (seconds)<input id="ffRestoreDuration" type="number" min="0.03" max="30" step="0.1" value="0.5"></label><button id="ffRestoreLayer" type="button">↶ Return to start</button></div>${effectClipInspector(l)}`}
+function animationInspector(l){const settings=l.animationPresets||{};return `<div class="section-title" style="margin-top:18px">ANIMATION PRESETS <span>✦</span></div><p class="mini-label">Effects start at the current playhead, follow moving keyframed layers, and never overwrite existing keyframes. Return means rejoin the underlying animation; Hold keeps an offset after the effect.</p>${['in','out','loop'].map(type=>{const s=settings[type]||{};return `<div class="ff-animation-preset"><label>${type==='in'?'Entrance':type==='out'?'Exit':'Loop'}<select data-preset-kind="${type}">${presetOptions(type)}</select></label><label>${type==='loop'?'Cycle (seconds)':'Duration (seconds)'}<input type="number" min="0.1" max="30" step="0.1" data-preset-duration="${type}" value="${s.duration|| (type==='loop'?2:0.7)}"></label><label>After effect<select data-preset-end="${type}"><option value="return" ${((s.endBehavior|| (type==='loop'?'return':'hold'))==='return')?'selected':''}>Rejoin ongoing motion</option><option value="hold" ${((s.endBehavior||(type==='loop'?'return':'hold'))==='hold')?'selected':''}>Hold final state</option></select></label><button type="button" class="ff-apply-preset" data-apply-preset="${type}">Apply ${type==='in'?'In':type==='out'?'Out':'Loop'}</button></div>`}).join('')}<div class="section-title" style="margin-top:18px">RESTORE LAYER <span>↶</span></div><p class="mini-label">Return to where the effect began: remove its offset smoothly while the underlying layer keeps moving. For manually keyed animation, return to the most recent earlier keyframe. Original layer start is optional.</p><label>Return reference<select id="ffRestoreAnchor"><option value="dynamic">Current effect / previous keyframe</option><option value="original">Original layer start</option></select></label><div class="two"><label>Return duration (seconds)<input id="ffRestoreDuration" type="number" min="0.03" max="30" step="0.1" value="0.5"></label><button id="ffRestoreLayer" type="button">↶ Return from here</button></div>${effectClipInspector(l)}`}
 
 // Presets are timeline clips, not baked absolute keyframes. Start exactly at the
 // current playhead; relative offsets are evaluated on top of moving keyframes.
@@ -245,7 +245,7 @@ function bindEffectClipInspector(l){
   const fx=l.fxClips?.find(f=>f.id===el.dataset.fxEdit);if(!fx)return;
   const field=el.dataset.fxField;const v=el.value;
   if(field!=='endBehavior'&&!Number.isFinite(Number(v)))return;
-  checkpoint();if(field==='start'){fx.start=Math.max(l.in,Math.min(l.out,project.frames-1,Math.round(Number(v)*project.fps)));fx.dur=Math.min(fx.dur,project.frames-fx.start,l.out-fx.start+1);}
+  checkpoint();if(field==='start'){const oldStart=fx.start;fx.start=Math.max(l.in,Math.min(l.out,project.frames-1,Math.round(Number(v)*project.fps)));fx.dur=Math.min(fx.dur,project.frames-fx.start,l.out-fx.start+1);if(fx.returnStart!==undefined)fx.returnStart=Math.max(fx.start,Math.min(project.frames-1,fx.returnStart+fx.start-oldStart));}
   else if(field==='dur')fx.dur=Math.max(1,Math.min(project.frames-fx.start,l.out-fx.start+1,Math.round(Number(v)*project.fps)));
   else if(field==='amount')fx.amount=Math.max(0,Math.min(80,Number(v)));
   else if(field==='endBehavior')fx.endBehavior=v;
@@ -253,29 +253,43 @@ function bindEffectClipInspector(l){
  });
 }
 
-// Explicit return for manually edited keyframes, legacy preset effects and blur.
-// It affects only the requested timeline interval; later manual keys are retained.
-function restoreLayerAtPlayhead(l,seconds){
-  const a=Math.max(l.in,Math.min(l.out,frame));
-  const b=Math.min(l.out,a+Math.max(1,Math.round(seconds*project.fps)));
-  if(b<=a)return notify('Move the playhead earlier to allow time to return');
-  const changes=PROPS.filter(k=>{
-    const from=valueAt(l,k,a),to=valueAt(l,k,l.in);
-    return Number.isFinite(from)&&Number.isFinite(to)&&Math.abs(from-to)>1e-5;
-  }).map(k=>({prop:k,from:valueAt(l,k,a),to:valueAt(l,k,l.in)}));
-  if(!changes.length)return notify('This layer is already at its starting state');
-  checkpoint();
-  for(const {prop,from,to} of changes){
-    l.keys[prop]=(l.keys[prop]||[]).filter(k=>k.f<=a||k.f>b);
-    putKey(l,prop,a,from,'easeInOut');
-    putKey(l,prop,b,to,'easeInOut');
-  }
-  changed();notify(`Return animation added to ${changes.length} properties`);
+// Return is relative to the effect's own starting frame, never frame zero.
+// For FX clips we non-destructively fade the effect OUT, so any ongoing motion
+// continues underneath. Ordinary manual keys can also return to the previous
+// animated position rather than the layer's original default coordinates.
+function restoreLayerAtPlayhead(l,seconds,anchorMode='dynamic'){
+ const a=Math.max(l.in,Math.min(l.out,frame));
+ const b=Math.min(l.out,a+Math.max(1,Math.round(seconds*project.fps)));
+ if(b<=a)return notify('Move the playhead earlier to allow time to return');
+ const canRestore=fx=>fx.start<=a && (fx.returnStart===undefined || a<fx.returnStart+(fx.returnDuration||1)) &&
+  (fx.endBehavior==='hold'||a<fx.start+fx.dur);
+ const candidate=(l.fxClips||[]).find(fx=>fx.id===selectedFx&&canRestore(fx)) ||
+  [...(l.fxClips||[])].filter(canRestore).sort((x,y)=>y.start-x.start)[0];
+ if(anchorMode==='dynamic'&&candidate){
+  checkpoint();candidate.returnStart=a;candidate.returnDuration=b-a;
+  selectedFx=candidate.id;changed();
+  notify('Effect returns to the layer’s ongoing motion, not its original position');
+  return;
+ }
+ const earlier=[...new Set(Object.values(l.keys).flat().map(k=>k.f))].filter(k=>k<a&&k>=l.in);
+ const reference=anchorMode==='original'?l.in:(earlier.length?Math.max(...earlier):l.in);
+ const changes=PROPS.filter(k=>{
+   const from=valueAt(l,k,a),to=valueAt(l,k,reference);
+   return Number.isFinite(from)&&Number.isFinite(to)&&Math.abs(from-to)>1e-5;
+ }).map(k=>({prop:k,from:valueAt(l,k,a),to:valueAt(l,k,reference)}));
+ if(!changes.length)return notify('Already at the chosen return position');
+ checkpoint();
+ for(const {prop,from,to} of changes){
+   l.keys[prop]=(l.keys[prop]||[]).filter(k=>k.f<=a||k.f>b);
+   putKey(l,prop,a,from,'easeInOut');
+   putKey(l,prop,b,to,'easeInOut');
+ }
+ changed();notify(`Returned ${changes.length} properties to their ${anchorMode==='original'?'original':'previous'} values`);
 }
 
 function bindAnimationInspector(l){
  bindEffectClipInspector(l);
- $('#ffRestoreLayer').onclick=()=>restoreLayerAtPlayhead(l,Math.max(.03,+$('#ffRestoreDuration').value||.5));
+ $('#ffRestoreLayer').onclick=()=>restoreLayerAtPlayhead(l,Math.max(.03,+$('#ffRestoreDuration').value||.5),$('#ffRestoreAnchor').value);
  for(const kind of ['in','out','loop']){
 
    const s=l.animationPresets?.[kind];const picker=$(`[data-preset-kind="${kind}"]`);
@@ -356,7 +370,7 @@ function renderTimeline(){
   if(e.button!==0)return;e.preventDefault();e.stopPropagation();pause();
   const l=project.layers.find(q=>q.id===el.dataset.fxOwner),fx=l?.fxClips?.find(q=>q.id===el.dataset.fxClip);if(!fx)return;
   checkpoint();selected=l.id;selectedKey=null;selectedFx=fx.id;
-  fxDrag={id:fx.id,layerId:l.id,startX:e.clientX,start:fx.start,dur:fx.dur,mode:e.target.closest('[data-fx-trim]')?.dataset.fxTrim||'move'};
+  fxDrag={id:fx.id,layerId:l.id,startX:e.clientX,start:fx.start,dur:fx.dur,returnStart:fx.returnStart,mode:e.target.closest('[data-fx-trim]')?.dataset.fxTrim||'move'};
   renderLayers();renderInspector();
  });
 
@@ -390,6 +404,8 @@ function updateFxDrag(e){
  else if(d.mode==='left'){
   const end=d.start+d.dur;fx.start=Math.max(l.in,Math.min(end-1,d.start+offset));fx.dur=end-fx.start;
  }else fx.dur=Math.max(1,Math.min(l.out-fx.start+1,project.frames-fx.start,d.dur+offset));
+ if(d.returnStart!==undefined&&(d.mode==='move'||d.mode==='left'))
+  fx.returnStart=Math.max(fx.start,Math.min(project.frames-1,d.returnStart+fx.start-d.start));
  draw();renderTimeline();renderInspector();
 }
 
@@ -410,7 +426,7 @@ function updateClipDrag(e){
   l.keys=JSON.parse(JSON.stringify(d.keys));
 
   for(const keys of Object.values(l.keys))for(const k of keys)k.f+=shift;
-  l.fxClips=(d.fxClips||[]).map(fx=>({...fx,start:fx.start+shift}));
+  l.fxClips=(d.fxClips||[]).map(fx=>({...fx,start:fx.start+shift,...(fx.returnStart!==undefined?{returnStart:fx.returnStart+shift}:{})}));
 
  }else if(d.mode==='left')l.in=Math.max(0,Math.min(d.startOut,d.startIn+offset));
 

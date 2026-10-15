@@ -35,13 +35,16 @@ export function makeCameraShot(p,preset,frame,selectedId=null){
  const v=presets[preset]||presets.push,m=cameraMods[preset]||cameraMods.push;
  const dur=Math.min(Math.max(1,Math.round(p.fps*2)),Math.max(1,p.frames-frame));
  const focusId=p.layers.some(l=>l.id===selectedId&&l.type!=='group')?selectedId:(p.layers.findLast(l=>l.type!=='group')?.id||'');
- return {id:crypto.randomUUID(),name:v[0],preset,start:frame,dur,zoomA:v[1],zoomB:v[2],xA:v[3],yA:v[4],xB:v[5],yB:v[6],
+ const shot={id:crypto.randomUUID(),name:v[0],preset,start:frame,dur,zoomA:v[1],zoomB:v[2],xA:v[3],yA:v[4],xB:v[5],yB:v[6],
  rotationA:0,rotationB:preset==='shake'?0:0,yawA:m[0],yawB:m[1],pitchA:m[2],pitchB:m[3],dollyA:m[4],dollyB:m[5],
  perspective:1200,easing:'easeInOut',strength:12,focusLayerId:focusId,
  depthOfField:['focus','rackFocus','cinematic'].includes(preset),
  aperture:preset==='rackFocus'?24:20,blurBehindOnly:preset!=='rackFocus',trackFocus:preset==='focus',
  focusFromDepth:preset==='rackFocus'?300:null,
  endBehavior:'return',returnTime:Math.min(.7,Math.max(.16,dur/p.fps*.28))};
+ // A/B are absolute camera coordinates for the inspector, captured at the playhead.
+ // Runtime uses B - A, so the same relative move follows other camera animation.
+ return rebaseCameraShot(p,shot,frame);
 }
 const ease=(t,type)=>type==='linear'?t:type==='easeIn'?t*t*t:type==='easeOut'?1-(1-t)**3:t*t*(3-2*t);
 const targetCenter=(p,layer,f)=>{
@@ -77,21 +80,23 @@ export function cameraAt(p,f){
   const arrival=Math.min(Math.max(1,Math.round(moveFrames*.14)),Math.max(1,moveFrames));
   const fadeIn=ease(clamp(elapsed/arrival,0,1),'easeInOut');
   const fadeOut=hold||elapsed<=moveFrames?1:1-ease(clamp((elapsed-moveFrames)/returnFrames,0,1),'easeInOut');
-  const weight=hold?u:fadeIn*fadeOut;
-  const value=(k,def=0)=>blend(finite(s[k+'A'],def),finite(s[k+'B'],def),u);
-  const initial=(k,def=0)=>finite(s[k+'A'],def);
-  // Ratio for zoom, deltas for all other transforms. This makes the effect
-  // start from the actual camera pose at the playhead, even after earlier shots.
-  const za=Math.max(.01,initial('zoom',1));
-  state.zoom*=1+(value('zoom',1)/za-1)*weight;
+  // Interpolate once. The final camera is the current underlying pose plus
+  // (shot end - shot start), never the default camera plus an absolute preset end.
+  const weight=u*(hold?1:fadeIn*fadeOut);
+  const za=Math.max(.01,finite(s.zoomA,1));
+  const ratio=Math.max(.01,finite(s.zoomB,za))/za;
+  state.zoom*=1+(ratio-1)*weight;
   for(const k of ['x','y','rotation','yaw','pitch','dolly']){
-   state[k]+=(value(k)-initial(k))*weight;
+   const initial=finite(s[k+'A']);
+   state[k]+=(finite(s[k+'B'],initial)-initial)*weight;
   }
   state.perspective=blend(state.perspective,clamp(finite(s.perspective,1200),400,5000),weight);
   const subject=p.layers.find(l=>l.id===s.focusLayerId);
   if(s.trackFocus&&subject){const target=targetCenter(p,subject,Math.min(f,end));
-   state.x+=(target.x-p.width/2)*weight;
-   state.y+=(target.y-p.height/2)*weight;
+   // Focus is a target camera position, NOT a second offset from zero. A held
+   // pan is already in state.x/y; adding the target would overshoot it.
+   state.x=blend(state.x,target.x-p.width/2,weight);
+   state.y=blend(state.y,target.y-p.height/2,weight);
   }
   if(s.preset==='shake'&&elapsed<dur){const fade=Math.sin(Math.PI*u),mag=finite(s.strength,12)*fade*weight;
    state.x+=Math.sin(f*2.399)*mag;state.y+=Math.sin(f*1.943)*mag*.8;state.rotation+=Math.sin(f*1.31)*mag*.12;
@@ -111,6 +116,23 @@ export function cameraAt(p,f){
   }
  }
  return state;
+}
+// Re-anchor a preset at its actual start time, excluding the shot being moved.
+// Preserve the user's intended movement delta and zoom ratio if the clip moves
+// to another frame, or if an earlier camera clip changes.
+export function rebaseCameraShot(p,shot,at=shot.start){
+ const base=cameraAt({...p,cameraShots:cameraShots(p).filter(x=>x.id!==shot.id)},at);
+ const za=Math.max(.01,finite(shot.zoomA,1));
+ const ratio=Math.max(.01,finite(shot.zoomB,za))/za;
+ const deltas=Object.fromEntries(['x','y','rotation','yaw','pitch','dolly'].map(k=>
+  [k,finite(shot[k+'B'])-finite(shot[k+'A'])]));
+ shot.start=at;
+ shot.zoomA=base.zoom;shot.zoomB=base.zoom*ratio;
+ for(const [k,delta] of Object.entries(deltas)){
+  shot[k+'A']=base[k];shot[k+'B']=base[k]+delta;
+ }
+ shot.anchorMode='dynamic';
+ return shot;
 }
 // 2D plane camera with yaw/pitch foreshortening. Local depth transform is applied separately.
 export function applyCamera(ctx,p,f,camera=cameraAt(p,f)){
@@ -166,12 +188,15 @@ export function attachMotionCamera(host){
  const find=()=>cameraShots(host.project()).find(s=>s.id===active);
  function inspect(){
   const s=find();if(!s)return false;const p=host.project();
-  const option=(key,label,val)=>`<label>${label}<input data-cam="${key}" type="number" step="1" value="${finite(val)}"></label>`;
+  rebaseCameraShot(p,s,s.start);
+  const option=(key,label,val)=>`<label>${label}<input data-cam="${key}" type="number" step="1" ${key.endsWith('A')?'readonly title="Automatically follows the camera at shot start"':''} value="${finite(val)}"></label>`;
   $('#inspector').innerHTML=`<div class="inspector-title"><span>◉</span> ${esc(s.name)}</div>
   <label>Shot name<input data-cam="name" maxlength="80" value="${esc(s.name)}"></label>
   <label>Preset<select data-cam="preset">${Object.entries(CAMERA_PRESETS).map(([k,n])=>`<option value="${k}" ${k===s.preset?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
   <div class="section-title">CAMERA SHOT</div><div class="two"><label>Start (s)<input data-cam="start" type="number" min="0" max="${(p.frames-1)/p.fps}" step="0.01" value="${(s.start/p.fps).toFixed(2)}"></label><label>Duration (s)<input data-cam="dur" type="number" min="0.03" max="${p.frames/p.fps}" step="0.01" value="${(s.dur/p.fps).toFixed(2)}"></label></div>
-  <div class="section-title">3D-STYLE CAMERA / PARALLAX</div><div class="two"><label>Start zoom<input data-cam="zoomA" type="number" min="0.1" max="20" step="0.05" value="${finite(s.zoomA,1)}"></label><label>End zoom<input data-cam="zoomB" type="number" min="0.1" max="20" step="0.05" value="${finite(s.zoomB,1)}"></label></div>
+  <div class="section-title">3D-STYLE CAMERA / PARALLAX</div>
+  <p class="mini-label">Start is automatically sampled at this clip's timeline position. End is relative to that start (and continues following any underlying camera motion). Move the clip to rebase both endpoints.</p>
+  <div class="two"><label>Start zoom (auto)<input data-cam="zoomA" readonly title="Camera zoom at clip start" type="number" min="0.1" max="20" step="0.05" value="${finite(s.zoomA,1)}"></label><label>End zoom (target)<input data-cam="zoomB" type="number" min="0.1" max="20" step="0.05" value="${finite(s.zoomB,1)}"></label></div>
   <div class="two">${option('yawA','Start yaw °',s.yawA)}${option('yawB','End yaw °',s.yawB)}</div>
   <div class="two">${option('pitchA','Start pitch °',s.pitchA)}${option('pitchB','End pitch °',s.pitchB)}</div>
   <div class="two">${option('dollyA','Start dolly',s.dollyA)}${option('dollyB','End dolly',s.dollyB)}</div>
@@ -196,8 +221,11 @@ export function attachMotionCamera(host){
   <button id="ffCameraRemove" type="button">Delete camera shot</button><p class="mini-label">This is a layered 2.5D camera: the artwork remains flat, but camera rotation, perspective, parallax and optical blur are rendered frame by frame, including video exports.</p>`;
   $('#inspector').querySelectorAll('[data-cam]').forEach(el=>el.addEventListener(el.type==='range'?'change':'change',()=>{
    const k=el.dataset.cam,v=el.type==='checkbox'?el.checked:el.value;
-   if(k==='preset'){host.checkpoint();const replacement=makeCameraShot(p,v,s.start,s.focusLayerId);Object.assign(s,replacement,{id:s.id,start:s.start,dur:s.dur,endBehavior:s.endBehavior||'return',returnTime:s.returnTime??replacement.returnTime});}
-   else{if(el.type==='number'&&!Number.isFinite(Number(v)))return;host.checkpoint();if(k==='start')s.start=clamp(Math.round(Number(v)*p.fps),0,p.frames-1);
+   if(el.readOnly)return;
+   if(k==='preset'){host.checkpoint();const withoutSelf={...p,cameraShots:cameraShots(p).filter(q=>q.id!==s.id)};
+    const replacement=makeCameraShot(withoutSelf,v,s.start,s.focusLayerId);
+    Object.assign(s,replacement,{id:s.id,start:s.start,dur:s.dur,endBehavior:s.endBehavior||'return',returnTime:s.returnTime??replacement.returnTime});}
+   else{if(el.type==='number'&&!Number.isFinite(Number(v)))return;host.checkpoint();if(k==='start')rebaseCameraShot(p,s,clamp(Math.round(Number(v)*p.fps),0,Math.max(0,p.frames-s.dur)));
     else if(k==='dur')s.dur=clamp(Math.round(Number(v)*p.fps),1,p.frames-s.start);
     else if(['name','easing','focusLayerId','endBehavior'].includes(k))s[k]=v;
     else if(el.type==='checkbox')s[k]=v;
@@ -216,7 +244,7 @@ export function attachMotionCamera(host){
   for(const el of document.querySelectorAll('[data-cam-select]'))if(!el.closest('[data-camera-clip]'))el.addEventListener('click',()=>{active=el.dataset.camSelect;host.selectLayer(null);host.renderInspector();host.renderTimeline();});
  }
  function timelineRefresh(){document.querySelectorAll('.ff-camera-clip').forEach(el=>el.classList.toggle('selected',el.dataset.cameraClip===active));}
- window.addEventListener('pointermove',e=>{if(!drag)return;const p=host.project(),s=cameraShots(p).find(x=>x.id===drag.id),width=$('#tracks')?.getBoundingClientRect().width||1;if(!s)return;const d=Math.round((e.clientX-drag.startX)/width*(p.frames-1));if(drag.mode==='move')s.start=clamp(drag.start+d,0,p.frames-s.dur);else if(drag.mode==='left'){const end=drag.start+drag.dur;s.start=clamp(drag.start+d,0,end-1);s.dur=end-s.start;}else s.dur=clamp(drag.dur+d,1,p.frames-s.start);host.draw();host.renderTimeline();});
+ window.addEventListener('pointermove',e=>{if(!drag)return;const p=host.project(),s=cameraShots(p).find(x=>x.id===drag.id),width=$('#tracks')?.getBoundingClientRect().width||1;if(!s)return;const d=Math.round((e.clientX-drag.startX)/width*(p.frames-1));if(drag.mode==='move')rebaseCameraShot(p,s,clamp(drag.start+d,0,p.frames-s.dur));else if(drag.mode==='left'){const end=drag.start+drag.dur;rebaseCameraShot(p,s,clamp(drag.start+d,0,end-1));s.dur=end-s.start;}else s.dur=clamp(drag.dur+d,1,p.frames-s.start);host.draw();host.renderTimeline();});
  window.addEventListener('pointerup',()=>{if(drag){drag=null;host.changed();}});
  return {inspect,timeline,clear:()=>{active=null},isActive:()=>!!find(),removeSelected:()=>{const s=find();if(!s)return false;host.pause();host.checkpoint();const p=host.project();p.cameraShots=p.cameraShots.filter(x=>x.id!==s.id);active=null;host.changed();return true;}};
 }

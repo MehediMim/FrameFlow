@@ -1,3 +1,4 @@
+import { installCountryDetail, detailRegions, regionAt } from './map-engine.mjs';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
 let audioUI = null;
@@ -56,22 +57,55 @@ async function ensureGeo() {
   } catch (e) { geoState = 'error'; geoError = e.message || String(e); }
   renderAll();
 }
+
+const detailLoads = new Map();
+let detailError = '';
+const isBangladesh = () => areaOf(proj).mode === 'country' && areaOf(proj).country === 'Bangladesh';
+const localCities = () => isBangladesh() ? geo?.details?.get('Bangladesh')?.cities || CITIES.filter(c => c[3] === 'Bangladesh') : CITIES;
+const needsDetail = () => isBangladesh() || [...proj.actions,...proj.shots].some(a => [a.target,a.from,a.to,a.place].some(t => t?.kind === 'region' || t?.country === 'Bangladesh'));
+async function ensureDetail() {
+  if (!geo || !needsDetail()) return true;
+  if (geo.details?.has('Bangladesh')) return true;
+  if (detailLoads.has('Bangladesh')) return detailLoads.get('Bangladesh');
+  detailError = '';
+  const task = (async () => {
+    try {
+      const r = await fetch('map-data/bangladesh-detail.json');
+      if (!r.ok) throw Error('HTTP ' + r.status);
+      const pack = await r.json();
+      if (pack.country !== 'Bangladesh' || !pack.features?.length) throw Error('Invalid Bangladesh data');
+      installCountryDetail(geo, pack); buildLists(); renderAll(); return true;
+    } catch (e) { detailError = e.message; renderAreaSettings(); notify('Bangladesh detail failed to load. Use Retry in map settings.'); return false; }
+  })();
+  detailLoads.set('Bangladesh', task); return task;
+}
+function defaultRegion() {
+  const list = geo ? detailRegions(proj,geo) : [];
+  const f = list.find(f => f.name === 'Dhaka') || list[0];
+  return f ? {kind:'region',name:f.key} : {kind:'country',name:areaOf(proj).country};
+}
 const cityKey = c => (geo && geo.byName.has(c[0]) ? `${c[0]} (city)` : c[0]);
 function buildLists() {
-  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = CITIES.map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
-  $('#mDlBorder').innerHTML = opt('All countries', 'Every border') + countries; $('#mDlCountry').innerHTML = countries;
-  $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + countries;
+  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = localCities().map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
+  const regions = geo ? detailRegions(proj,geo).map(f => opt(f.key, f.level)).join('') : '';
+  $('#mDlBorder').innerHTML = regions ? opt('All regions','Every regional border') + regions : opt('All countries','Every border') + countries; $('#mDlCountry').innerHTML = regions || countries;
+  $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + (regions || countries);
   const area = $('#mAreaCountry'); if (area) area.innerHTML = geo ? geo.names.map(n => opt(n, n)).join('') : '';
 }
-const locText = l => (!l ? '' : l.kind === 'all' ? 'All countries' : l.kind === 'city' && geo && geo.byName.has(l.name) ? `${l.name} (city)` : l.name);
+const locText = l => (!l ? '' : l.kind === 'all' ? (l.country ? 'All regions' : 'All countries') : l.kind === 'city' && geo && geo.byName.has(l.name) ? `${l.name} (city)` : l.name);
 function parseLoc(text, kinds) {
   const t = text.trim(), low = t.toLowerCase();
   if (!t) return null;
   const wantCountry = ['border', 'country', 'any'].includes(kinds), wantPlace = ['place', 'any'].includes(kinds);
   if (kinds === 'border' && (low === 'all countries' || low === 'all')) return { kind: 'all', name: 'All countries' };
+  if (wantCountry && geo && isBangladesh()) {
+    if (kinds === 'border' && ['all regions','all'].includes(low)) return {kind:'all',name:'All regions',country:'Bangladesh',level:areaOf(proj).detailLevel || 'district'};
+    const f = detailRegions(proj,geo).find(f => f.key.toLowerCase() === low || f.name.toLowerCase() === low);
+    if (f) return {kind:'region',name:f.key};
+  }
   if (wantCountry && geo) { const n = geo.names.find(x => x.toLowerCase() === low); if (n) return { kind: 'country', name: n }; }
   if (wantPlace) {
-    const c = CITIES.find(c => cityKey(c).toLowerCase() === low) || CITIES.find(c => c[0].toLowerCase() === low);
+    const c = localCities().find(c => cityKey(c).toLowerCase() === low) || localCities().find(c => c[0].toLowerCase() === low);
     if (c) return { kind: 'city', name: c[0], lat: c[1], lon: c[2] };
     const m = t.match(/^(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)$/);
     if (m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180) return { kind: 'point', name: `${(+m[1]).toFixed(2)}, ${(+m[2]).toFixed(2)}`, lat: +m[1], lon: +m[2] };
@@ -141,8 +175,10 @@ function suggestTarget() {
   return t && t.kind !== 'all' ? clone(t) : null;
 }
 function addAction(type) {
+  if (isBangladesh() && !geo?.details?.has('Bangladesh')) { notify('Load Bangladesh detail first; check map settings for Retry.'); return; }
   pause(); checkpoint();
   const a = makeAction(type, frame); ensureLength(a.start + a.dur);
+  if (isBangladesh()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (type === 'pin' && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
 }
 function addShot(preset) {
@@ -175,7 +211,7 @@ const F = {
   sel: (k, label, v, opts) => `<label>${label}<select data-mf="${k}" data-t="sel">${opts.map(([o, l]) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`,
   loc: (k, label, v, kinds) => {
     const dl = { border: 'mDlBorder', country: 'mDlCountry', place: 'mDlPlace', any: 'mDlAny' }[kinds];
-    const hint = kinds === 'border' ? 'Country or All countries' : kinds === 'country' ? 'Country' : 'City or lat, lon';
+    const hint = kinds === 'border' ? (isBangladesh() ? 'Region or All regions' : 'Country or All countries') : kinds === 'country' ? (isBangladesh() ? 'Region' : 'Country') : 'City or lat, lon';
     return `<div class="m-loc"><label>${label}<input data-mf="${k}" data-t="loc" data-kinds="${kinds}" list="${dl}" value="${esc(locText(v))}" placeholder="${hint}" autocomplete="off"></label><button type="button" data-mpick="${k}" data-kinds="${kinds}" title="Click the map to choose${kinds === 'any' ? ' (hold Shift for a whole country)' : ''}">⌖</button></div>`;
   },
 };
@@ -196,11 +232,11 @@ function renderInspector() {
 }
 function actionFields(a) {
   switch (a.type) {
-    case 'border': return F.loc('target', 'Country', a.target, 'border') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%');
+    case 'border': return F.loc('target', isBangladesh() ? 'Region' : 'Country', a.target, 'border') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%');
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '');
     case 'highlight': {
-      const country = a.target.kind === 'country';
-      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? 'Country' : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+      const country = ['country','region'].includes(a.target.kind);
+      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isBangladesh() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? (isBangladesh() ? 'Region' : 'Country') : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
     case 'pin': return F.loc('place', 'Location', a.place, 'place') + F.color('color', 'Pin color', a.color) + F.range('size', 'Pin size', a.size, .5, 3, .1, x => x + '×') + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
   }
@@ -211,7 +247,7 @@ const km = (a, b) => { const R = 6371, r = Math.PI / 180, dl = (b.lat - a.lat) *
 /** A named place for a clicked point: the closest built-in city within 60 km, otherwise plain coordinates. */
 function placeAt(p) {
   let best = null, bd = 60;
-  for (const c of CITIES) { const d = km(p, { lat: c[1], lon: c[2] }); if (d < bd) { bd = d; best = c; } }
+  for (const c of localCities()) { const d = km(p, { lat: c[1], lon: c[2] }); if (d < bd) { bd = d; best = c; } }
   return best ? { kind: 'city', name: best[0], lat: p.lat, lon: p.lon } : { kind: 'point', name: `${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}`, lat: p.lat, lon: p.lon };
 }
 /** Keeps From / To equal to the first and last point, so labels and camera shots that name the route keep working. */
@@ -249,9 +285,9 @@ function shotFields(s) {
   const P = PRESETS[s.preset], has = k => P.fields.includes(k);
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
-  if (has('autoFit') && s.target.kind === 'country') h += F.chk('autoFit', 'Fit the whole country in view', s.autoFit);
+  if (has('autoFit') && ['country','region'].includes(s.target.kind)) h += F.chk('autoFit', 'Fit the whole region in view', s.autoFit);
   if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, `${a.name} (${a.from?.name ?? '?'} → ${a.to?.name ?? '?'})`])]);
-  if (has('zoom') && !(has('autoFit') && s.autoFit && s.target.kind === 'country')) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
+  if (has('zoom') && !(has('autoFit') && s.autoFit && ['country','region'].includes(s.target.kind))) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
   if (has('pitch')) h += F.range('pitch', 'Tilt', s.pitch, 0, 70, 1, x => x + '°');
@@ -293,7 +329,7 @@ function bindInspector(it) {
       }
       if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
-      if (key === '__hmode') { it.target = v === 'country' ? { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' } : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
+      if (key === '__hmode') { it.target = v === 'country' ? (isBangladesh() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
       if (t === 'num') {
         const lo = Number(el.min), hi = Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         if (key === 'start' || key === 'dur') { v = Math.round(v); it[key] = v; ensureLength(it.start + it.dur); el.value = v; changed(); return; }
@@ -360,7 +396,7 @@ function labelFields(a) {
 // ------------------------------------------------------------------ pick a location on the map
 function startPick(key, kinds) {
   pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click the map to choose a location · Esc to cancel';
-  notify(kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : 'Click a country');
+  notify(kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isBangladesh() ? 'Click a region' : 'Click a country');
 }
 function cancelPick() { pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; }
 const HINT = 'Add animations on the left · camera presets move the view for you · scrub the timeline to preview';
@@ -402,12 +438,12 @@ canvas.onpointerdown = e => {
   const wantCountry = pick.kinds === 'border' || pick.kinds === 'country' || (pick.kinds === 'any' && e.shiftKey);
   let loc;
   if (wantCountry) {
-    const n = countryAt(geo, ll.lon, ll.lat);
-    if (!n) { notify('No country there. Try again'); return; }
-    loc = { kind: 'country', name: n };
+    const n = isBangladesh() ? regionAt(proj,geo,ll.lon,ll.lat) : countryAt(geo, ll.lon, ll.lat);
+    if (!n) { notify('No region there. Try again'); return; }
+    loc = { kind: isBangladesh() ? 'region' : 'country', name: n };
   } else {
     let best = null, bd = 18 * lastView.unit;
-    for (const c of CITIES) {
+    for (const c of localCities()) {
       const X = lonToX(c[2]), p = projectPoint(lastView, X + Math.round(lastView.cx - X), latToY(c[1])), d = Math.hypot(p.x - sx, p.y - sy);
       if (d < bd) { bd = d; best = c; }
     }
@@ -451,6 +487,12 @@ function renderAreaSettings() {
   if (![...sel.options].some(o => o.value === ar.country)) sel.insertAdjacentHTML('afterbegin', `<option value="${esc(ar.country)}">${esc(ar.country)}</option>`);
   sel.value = ar.country; $('#mAreaNeighbors').value = ar.neighbors;
   $('#mAreaFit').checked = ar.fit; $('#mAreaName').checked = ar.name; $('#mAreaCities').checked = ar.cities;
+  if (!$('#mDetailLevel')) $('#mAreaBox').insertAdjacentHTML('beforeend', '<label id="mDetailLabel">Boundary level<select id="mDetailLevel"><option value="division">Divisions</option><option value="district">Districts</option><option value="local">Local areas / upazilas</option></select></label><p class="muted" id="mDetailStatus"></p><button type="button" id="mDetailRetry" hidden>Retry Bangladesh detail</button>');
+  $('#mDetailLabel').hidden = !isBangladesh(); $('#mDetailLevel').value = ar.detailLevel || 'district';
+  $('#mDetailStatus').textContent = !isBangladesh() ? (country ? 'Detailed regional boundaries are currently available for Bangladesh only.' : '') : geo?.details?.has('Bangladesh') ? 'Bangladesh regions ready. Select a boundary level, then add Border or Highlight and pick a region. City labels show district towns. District boundaries: BBS/OCHA (2020), via geoBoundaries, CC BY 3.0 IGO.' : detailError ? 'Could not load map-data/bangladesh-detail.json: ' + detailError : 'Loading Bangladesh regional boundaries…';
+  $('#mDetailRetry').hidden = !isBangladesh() || !detailError;
+  $('#mDetailRetry').onclick = () => { detailLoads.delete('Bangladesh'); detailError=''; ensureDetail(); renderAreaSettings(); };
+  $('#mDetailLevel').onchange = e => { pause(); checkpoint(); proj.area = {...areaOf(proj),detailLevel:e.target.value}; buildLists(); saveLocal(); renderAll(); };
   $('#mAreaPad').value = Math.round(ar.pad * 100); $('#mAreaPadValue').textContent = Math.round(ar.pad * 100) + '%'; $('#mAreaPad').disabled = !ar.fit;
   const locked = country && ar.fit; $('#mRegion').disabled = $('#mStartZoom').disabled = locked;
   $('#mAreaNote').textContent = locked ? 'The start view is framed on this country automatically. Tilt and rotation still apply.' : '';
@@ -538,6 +580,7 @@ async function exportVideo() {
   if (exporting) return;
   pause();
   if (!geo) { notify('Map data is still loading'); return; }
+  if (!await ensureDetail()) return;
   const snapshot = clone(proj), exportName = fileBase();
   modal(exportMarkup({...snapshot, progressId:'mProgress', statusId:'mExportStatus'}));
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
@@ -570,7 +613,7 @@ function bindToolbar() {
     e.target.value = '';
   };
   $('#mExport').onclick = exportVideo;
-  $('#mSnapshot').onclick = () => { if (!geo) return; const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
+  $('#mSnapshot').onclick = async () => { if (!geo || !await ensureDetail()) return; const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
   $('#mPlay').onclick = play; $('#mStart').onclick = () => { pause(); setFrame(0); }; $('#mEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
   $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };
@@ -626,7 +669,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('#mDelete').click(); }
 });
 
-function renderAll() { if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
+function renderAll() { if (geo) { buildLists(); if (needsDetail() && !detailLoads.has('Bangladesh')) void ensureDetail(); } if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
 
 // Fullscreen the entire Map Studio root. This avoids fullscreen/layout conflicts
 // with the nested grid and keeps playback controls available.

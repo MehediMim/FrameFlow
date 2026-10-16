@@ -24,6 +24,7 @@ export const THEMES = {
   dark: { label: 'Night', void: '#03060a', ocean: '#0c1a28', land: ['#1a2a3a', '#1d2e3f', '#182736', '#1b2c3b', '#203243'], border: '#3d5b75', borderA: .95, bw: 1, grat: '#6f9bbd', gratA: .12, dim: '#000000', vignette: .35, pill: 'rgba(235,242,248,.92)', pillText: '#0b1620' },
   paper: { label: 'Paper atlas', void: '#d9cfb8', ocean: '#f3eddf', land: ['#e2d6bb', '#dccfb1', '#e5dac1', '#d9ccae', '#e0d3b8'], border: '#faf5e8', borderA: .95, bw: 1.2, grat: '#b9a98a', gratA: .35, dim: '#2a2113', vignette: .1, pill: 'rgba(52,40,22,.9)', pillText: '#fbf4e2' },
   realistic: { label: 'Natural terrain · realistic', void: '#071b27', ocean: '#246b87', land: ['#6c8c58', '#7f8e63', '#9a9577', '#7a9167', '#ad9f7e'], border: '#385d51', borderA: .35, bw: .65, grat: '#c8e5de', gratA: .10, dim: '#0a1d26', vignette: .18, pill: 'rgba(9,32,30,.9)', pillText: '#f4f5e8' },
+  satellite: { label: 'Satellite · photo-realistic', imagery: true, void: '#02070b', ocean: '#0b2a3d', land: ['#4f6b45', '#5d6e49', '#7c7a5c', '#5a7050', '#8a7d5e'], border: '#ffffff', borderA: .55, bw: .8, grat: '#ffffff', gratA: .16, dim: '#000000', vignette: .24, pill: 'rgba(8,16,22,.9)', pillText: '#ffffff' },
   blueprint: { label: 'Blueprint', void: '#071a3d', ocean: '#0f2f66', land: ['#1b4b9b', '#1d4fa3', '#1a4794', '#1e53aa', '#1c4d9e'], border: '#8fb8ff', borderA: .85, bw: 1, grat: '#8fb8ff', gratA: .2, dim: '#020b1d', vignette: .25, pill: 'rgba(255,255,255,.92)', pillText: '#0a2250' },
 };
 
@@ -688,13 +689,95 @@ function naturalWater(ctx,v) {
   g.addColorStop(0,'#174b68');g.addColorStop(.5,'#2b7991');g.addColorStop(1,'#0a354b');
   ctx.save(); ctx.globalAlpha=.52; ctx.fillStyle=g; ctx.fillRect(0,0,v.W,v.H);ctx.restore();
 }
+// ---------------------------------------------------------------- Satellite imagery (raster XYZ tiles, same Web-Mercator space)
+// The provider (map-imagery.mjs) is passed in as geo.imagery, so this file stays DOM-free.
+function groundWorld(v, sx, sy) { // like screenToLonLat, but unwrapped world units and with a safety margin below the horizon
+  const px = sx - v.W / 2, py = sy - v.H / 2, den = v.cp + py * v.sp / v.d;
+  if (den <= .12) return null;
+  const y1 = py / den, x1 = px * (v.d - y1 * v.sp) / v.d;
+  return { X: v.cx + (x1 * v.cb - y1 * v.sb) / v.S, Y: v.cy + (x1 * v.sb + y1 * v.cb) / v.S };
+}
+/** Which tiles cover the screen: one zoom level (chosen from the on-screen size) and a rectangle of x/y indices. */
+function planTiles(v, maxZoom) {
+  let z = Math.ceil(Math.log2(v.S / 256) - .3); if (v.cam.pitch >= 45) z -= 1;
+  z = clamp(z, 0, maxZoom);
+  const syMin = v.sp > 1e-6 ? clamp(v.H / 2 + (.13 - v.cp) * v.d / v.sp, 0, v.H) : 0;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) {
+    const g = groundWorld(v, v.W * i / 6, syMin + (v.H - syMin) * j / 6); if (!g) continue;
+    x0 = Math.min(x0, g.X); x1 = Math.max(x1, g.X); y0 = Math.min(y0, g.Y); y1 = Math.max(y1, g.Y);
+  }
+  if (!Number.isFinite(x0) || y1 < 0 || y0 > 1) return null;
+  for (;;) { // never plan an enormous grid (steep tilt): drop a zoom level instead
+    const n = 2 ** z, tx0 = Math.floor(x0 * n), tx1 = Math.floor(x1 * n), ty0 = Math.floor(clamp(y0, 0, .999999) * n), ty1 = Math.floor(clamp(y1, 0, .999999) * n);
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 140 || z === 0) {
+      const list = []; for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) list.push({ tx, ty });
+      return { z, n, list };
+    }
+    z--;
+  }
+}
+/** Tiles a frame needs, so an export can wait for them (and prefetch the next frames) before drawing. */
+export function imageryNeeds(proj, geo, W, H, frame) {
+  const th = THEMES[proj.theme]; if (!th?.imagery || !geo.imagery) return [];
+  const id = proj.imagery || 'gibs', v = makeView(cameraAt(proj, geo, W, H, frame), W, H), plan = planTiles(v, geo.imagery.maxZoom(id));
+  if (!plan) return [];
+  const seen = new Set(), out = [];
+  for (const t of plan.list) { const x = ((t.tx % plan.n) + plan.n) % plan.n, k = x + ',' + t.ty; if (!seen.has(k)) { seen.add(k); out.push({ src: id, z: plan.z, x, y: t.ty }); } }
+  return out;
+}
+function tileMesh(ctx, v, img, X0, Y0, w, sx, sy, ss, n) { // draw one tile as an n x n mesh of affine-mapped cells (n = 1 when the map is not tilted)
+  const iw = img.width, ih = img.height, P = [], e = .9;
+  for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) P.push(project(v, X0 + w * i / n, Y0 + w * j / n, 0));
+  if (P.some(q => !Number.isFinite(q.x) || !Number.isFinite(q.y) || q.z < v.near * 2)) return;
+  if (P.every(q => q.x < -40) || P.every(q => q.x > v.W + 40) || P.every(q => q.y < -40) || P.every(q => q.y > v.H + 40)) return;
+  const U = i => (sx + ss * i / n) * iw, V = j => (sy + ss * j / n) * ih;
+  const put = (a, b, c, ua, va, ub, vb, uc, vc, clip) => { // affine map: image pixels (u,v) -> screen, from three vertex pairs
+    const det = (ub - ua) * (vc - va) - (uc - ua) * (vb - va); if (Math.abs(det) < 1e-9) return;
+    const A = ((b.x - a.x) * (vc - va) - (c.x - a.x) * (vb - va)) / det, C = ((c.x - a.x) * (ub - ua) - (b.x - a.x) * (uc - ua)) / det;
+    const B = ((b.y - a.y) * (vc - va) - (c.y - a.y) * (vb - va)) / det, D = ((c.y - a.y) * (ub - ua) - (b.y - a.y) * (uc - ua)) / det;
+    ctx.save(); ctx.transform(A, B, C, D, a.x - A * ua - C * va, a.y - B * ua - D * va);
+    if (clip) { // triangle pushed outwards by e image pixels, so neighbouring triangles overlap instead of leaving hairlines
+      const cu = (ua + ub + uc) / 3, cv = (va + vb + vc) / 3, o = (u, vv) => { const dx = u - cu, dy = vv - cv, l = Math.hypot(dx, dy) || 1; return [u + dx / l * e, vv + dy / l * e]; };
+      const q0 = o(ua, va), q1 = o(ub, vb), q2 = o(uc, vc); ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.closePath(); ctx.clip();
+    }
+    return true;
+  };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const u0 = U(i), u1 = U(i + 1), v0 = V(j), v1 = V(j + 1), p00 = P[j * (n + 1) + i], p10 = P[j * (n + 1) + i + 1], p01 = P[(j + 1) * (n + 1) + i], p11 = P[(j + 1) * (n + 1) + i + 1];
+    const cell = () => ctx.drawImage(img, u0, v0, u1 - u0, v1 - v0, u0 - e, v0 - e, u1 - u0 + 2 * e, v1 - v0 + 2 * e);
+    if (n === 1) { if (put(p00, p10, p01, u0, v0, u1, v0, u0, v1, false)) { cell(); ctx.restore(); } continue; }
+    if (put(p00, p10, p01, u0, v0, u1, v0, u0, v1, true)) { cell(); ctx.restore(); }
+    if (put(p10, p11, p01, u1, v0, u1, v1, u0, v1, true)) { cell(); ctx.restore(); }
+  }
+}
+function drawImagery(ctx, v, im, id) {
+  const plan = planTiles(v, im.maxZoom(id)); if (!plan) return;
+  const n = v.sp < 1e-4 ? 1 : (v.cam.pitch < 35 ? 4 : 8);
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  for (const t of plan.list) {
+    const x = ((t.tx % plan.n) + plan.n) % plan.n; let img = im.get(id, plan.z, x, t.ty), sx = 0, sy = 0, ss = 1;
+    if (!img) for (let dz = 1; dz <= 4 && plan.z - dz >= 0; dz++) { // still loading: stretch a coarser tile that is already in memory
+      const m = 2 ** dz, a = im.peek(id, plan.z - dz, Math.floor(x / m), Math.floor(t.ty / m));
+      if (a) { img = a; ss = 1 / m; sx = (x % m) / m; sy = (t.ty % m) / m; break; }
+    }
+    if (img) tileMesh(ctx, v, img, t.tx / plan.n, t.ty / plan.n, 1 / plan.n, sx, sy, ss, n);
+  }
+  ctx.restore();
+}
+function drawAttribution(ctx, v, text) {
+  const fs = 10 * v.unit; ctx.save(); ctx.font = `500 ${fs}px Arial, sans-serif`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.lineJoin = 'round'; ctx.lineWidth = fs * .35; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.strokeText(text, v.W - 8 * v.unit, v.H - 6 * v.unit); ctx.fillText(text, v.W - 8 * v.unit, v.H - 6 * v.unit); ctx.restore();
+}
 // ---------------------------------------------------------------- Base map
 function drawBase(ctx, v, geo, th, proj) {
   ctx.fillStyle = th.void; ctx.fillRect(0, 0, v.W, v.H);
   const k0 = Math.round(v.cx);
   ctx.beginPath(); loadXY(v, new Float64Array([k0 - 4, 0, k0 + 5, 0, k0 + 5, 1, k0 - 4, 1]), 4, 0); emit(ctx, v, 4, true);
   ctx.fillStyle = th.ocean; ctx.fill();
-  if (proj.theme === 'realistic') naturalWater(ctx, v);
+  if (v.img) drawImagery(ctx, v, v.img.im, v.img.id);
+  else if (proj.theme === 'realistic') naturalWater(ctx, v);
   if (proj.graticule) {
     ctx.beginPath();
     for (let i = -48; i <= 60; i++) { const X = k0 + i / 12; if (Math.abs(X - v.cx) > 3) continue; loadXY(v, new Float64Array([X, 0, X, 1]), 2, 0); emit(ctx, v, 2, false); }
@@ -707,15 +790,16 @@ function drawBase(ctx, v, geo, th, proj) {
   const paint = (f, k, fill, borderA, lw, raised) => {
     ctx.beginPath();
     for (const r of f.rings) { loadXY(v, r.xy, r.n, k); emit(ctx, v, r.n, true); }
-    ctx.fillStyle = fill;
-    if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
+    ctx.fillStyle = fill || '#000';
+    if (!fill) { /* imagery: outline only */ } else if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
     ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;
   };
-  const fillOf = (f, k) => (proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
+  const fillOf = (f, k) => (v.img ? null : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
   for (let k = k0 - 1; k <= k0 + 1; k++) for (const f of set.features) {
-    if (focus && (f.name === focus.name || neighbors === 'hide')) continue; // the chosen country is drawn last, on top
+    if (focus && (f.name === focus.name || (neighbors === 'hide' && !v.img))) continue; // the chosen country is drawn last, on top
     if (!bboxVisible(v, f.bbox, k)) continue;
-    if (focus && neighbors === 'dim') paint(f, k, mixColor(th.land[f.tint], th.ocean, .58), th.borderA * .45, th.bw * v.unit, false);
+    if (focus && neighbors === 'dim') paint(f, k, v.img ? 'rgba(2,8,12,.6)' : mixColor(th.land[f.tint], th.ocean, .58), th.borderA * .45, th.bw * v.unit, false);
+    else if (focus && neighbors === 'hide') paint(f, k, th.void, 0, th.bw * v.unit, false); // imagery: cover the neighbours
     else paint(f, k, fillOf(f, k), th.borderA, th.bw * v.unit, false);
   }
   if (focus) {
@@ -850,7 +934,7 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
     const c = project(v, f.cx + off, f.cy), rad = featureRadius(f) * v.S * 1.05 * p;
     ctx.save();
-    if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); }
+    if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
     if (rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
       ctx.save(); ctx.beginPath(); groundCircle(ctx, v, f.cx, f.cy, rad, off); ctx.clip();
       path(); ctx.globalAlpha = alpha * .78; ctx.fillStyle = a.color; ctx.fill('evenodd');
@@ -1132,6 +1216,7 @@ function drawPin(ctx, v, geo, th, a, frame, labels) {
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo) {
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
+  if (th.imagery && geo.imagery) v.img = { im: geo.imagery, id: proj.imagery || 'gibs' };
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   drawBase(ctx, v, geo, th, proj);
   drawAreaDetail(ctx, v, geo, th, proj, labels);
@@ -1144,6 +1229,7 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   for (const a of proj.actions) if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
+  if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
   ctx.restore();
   return v;
 }
@@ -1246,6 +1332,7 @@ export function validateMapProject(p) {
   if (![24, 30, 60].includes(p.fps) || !Number.isInteger(p.frames) || p.frames < 2 || p.frames > 1800) throw Error('Invalid frame settings.');
   if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || p.width < 100 || p.height < 100 || p.width > 3840 || p.height > 3840) throw Error('Invalid canvas size.');
   if (!ENUMS.theme.includes(p.theme)) throw Error('Unknown map theme.');
+  if (p.imagery !== undefined && !/^[a-z0-9_-]{1,20}$/i.test(p.imagery)) throw Error('Invalid imagery source.');
   if (p.texture !== undefined && (!p.texture || !Object.hasOwn(TEXTURES, p.texture.type) || !num(p.texture.strength, 0, 1) || !num(p.texture.scale, .5, 3))) throw Error('Invalid map texture.');
   const i = p.camera?.init;
   if (!i || !num(i.lon, -540, 540) || !num(i.lat, -90, 90) || !num(i.zoom, 0, 14) || !num(i.bearing ?? 0, -3600, 3600) || !num(i.pitch ?? 0, 0, 75)) throw Error('Invalid start view.');

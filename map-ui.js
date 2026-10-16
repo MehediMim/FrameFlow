@@ -3,10 +3,11 @@ import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles } from './map-engine.mjs';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs';
 import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
+import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -53,7 +54,7 @@ async function ensureGeo() {
   geoState = 'loading'; draw();
   try {
     const [hi, lo] = await Promise.all(['countries-50m.json', 'countries-110m.json'].map(f => fetch('map-data/' + f).then(r => { if (!r.ok) throw Error(`${f}: HTTP ${r.status}`); return r.json(); })));
-    geo = buildGeo(hi, lo); geo.cities = CITIES; geoState = 'ready'; buildLists();
+    geo = buildGeo(hi, lo); geo.cities = CITIES; geo.imagery = createImagery(); let tileDraw = 0; geo.imagery.onTile = () => { if (!tileDraw) tileDraw = requestAnimationFrame(() => { tileDraw = 0; if (!exporting) draw(); }); }; geoState = 'ready'; buildLists();
   } catch (e) { geoState = 'error'; geoError = e.message || String(e); }
   renderAll();
 }
@@ -159,7 +160,8 @@ function buildStaticUI() {
   $$('[data-madd]').forEach(el => el.onclick = () => addAction(el.dataset.madd));
   $$('[data-mpre]').forEach(el => el.onclick = () => addShot(el.dataset.mpre));
   $('#mTheme').innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
-  if (!$('#mTexture')) $('#mTheme').closest('label').insertAdjacentHTML('afterend', `
+  $('#mImagery').innerHTML = Object.entries(IMAGERY_SOURCES).map(([k, x]) => `<option value="${k}">${x.label}</option>`).join('');
+  if (!$('#mTexture')) $('#mImageryBox').insertAdjacentHTML('afterend', `
     <details open id="mTextureSection">
       <summary class="section-title">TEXTURE</summary>
       <label>Surface <select id="mTexture">${Object.entries(TEXTURES).map(([k, label]) => `<option value="${k}">${label}</option>`).join('')}</select></label>
@@ -382,7 +384,7 @@ function bindLabelStyle(root, pre, get, replace, rerender) {
 }
 function renderLabelPanel() {
   let box = $('#mLabelStyle');
-  if (!box) { box = document.createElement('div'); box.id = 'mLabelStyle'; $('#mTheme').closest('label').after(box); }
+  if (!box) { box = document.createElement('div'); box.id = 'mLabelStyle'; $('#mImageryBox').after(box); }
   const wasOpen = box.querySelector('details')?.open;
   const st = labelStyleOf(proj);
   box.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">LABEL STYLE <span>Aa</span></summary><p class="mini-label">Applies to every place name, pin and highlight label. Pick a different style on any item to override it.</p>${labelStyleHtml(st, 'mProjLbl')}</details>`;
@@ -468,6 +470,7 @@ function renderSettings() {
   $('#mProjectName').value = proj.name; $('#mFps').value = proj.fps; $('#mFpsLabel').textContent = proj.fps + ' FPS';
   syncMapDuration(); $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} × ${proj.height}`;
   $('#mTheme').value = proj.theme; $('#mGrat').checked = !!proj.graticule;
+  { const on = !!THEMES[proj.theme]?.imagery; $('#mImageryBox').hidden = !on; $('#mImagery').value = proj.imagery || DEFAULT_IMAGERY; $('#mImageryNote').textContent = on ? (proj.imagery === 'esri' ? 'Sharp to street level. Esri licence terms apply to published videos.' : 'Public-domain NASA imagery. Gets soft past about zoom 6.') : ''; }
   renderAreaSettings();
   const texture = { ...DEFAULT_TEXTURE, ...proj.texture };
   $('#mTexture').value = texture.type;
@@ -504,6 +507,7 @@ function bindSettings() {
   $('#mDuration').onchange = edit(el => { const seconds = Number(el.value); if (el.value.trim() && Number.isFinite(seconds)) proj.frames = clamp(Math.round(seconds * proj.fps), 2, 1800); frame = Math.min(frame, proj.frames - 1); });
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   $('#mTheme').onchange = edit(el => proj.theme = el.value);
+  $('#mImagery').onchange = edit(el => proj.imagery = el.value);
   const area = patch => { proj.area = { ...DEFAULT_AREA, ...(proj.area || {}), ...patch }; };
   $('#mAreaMode').onchange = edit(el => { area({ mode: el.value }); if (el.value === 'country' && geo && !geo.byName.has(areaOf(proj).country)) area({ country: DEFAULT_AREA.country }); });
   $('#mAreaCountry').onchange = edit(el => area({ country: el.value }));
@@ -589,7 +593,13 @@ async function exportVideo() {
   try {
     await loadFonts(mapFontsUsed(snapshot)); await document.fonts.ready;
     const video = await exportMapVideo({ audio: getAudioSnapshot('map'), canvas: c, fps: snapshot.fps, frames: snapshot.frames,
-      draw: f => drawMap(ec, c.width, c.height, snapshot, f, geo),
+      draw: async f => {
+        if (THEMES[snapshot.theme]?.imagery) { // wait for this frame's satellite tiles, and start fetching the next frames' tiles
+          await geo.imagery.ready(imageryNeeds(snapshot, geo, c.width, c.height, f), () => !exporting);
+          geo.imagery.prefetch(imageryNeeds(snapshot, geo, c.width, c.height, Math.min(f + 8, snapshot.frames - 1)));
+        }
+        drawMap(ec, c.width, c.height, snapshot, f, geo);
+      },
       cancelled: () => !exporting,
       progress: n => { $('#mProgress').value = n; $('#mExportStatus').textContent = `Rendering frame ${n} of ${snapshot.frames}`; }
     });

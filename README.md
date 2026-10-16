@@ -88,6 +88,14 @@ Switch to **Map Studio** with the toggle in the header. It animates a vector wor
 
 **Choosing places**: type a city or country, type `lat, lon`, or press the target button and click the map (Shift+click picks a whole country for camera targets).
 
+### Country maps (Map area)
+
+Open **Canvas settings → Map area** and choose **One country · detailed map**. Pick any country from the list (Bangladesh, India, United States of America…). The view is framed on that country using the detailed 50 m outlines; neighbouring countries can be dimmed, shown or hidden, and the country name and its main cities can be switched on or off. **Margin around the country** controls how tightly it is framed. Turn off **Frame the view on this country** to place the start view yourself. Switch back to **World map** at any time; nothing else in the project changes.
+
+### Travel along your own path
+
+Add a **Travel** animation, then set **Travel along → My own path**. Press **Draw path on map** and click the points the icon should pass through, in order. Drag a point to move it, Alt+click (or ✕ in the list) removes it, Backspace removes the last one, Enter finishes. **Path shape** is a smooth curve through the points or straight lines. The icon, trail and optional path points animate along the whole path; camera presets such as *Frame route* and *Follow traveler* work with it. **Start → end (flight arc)** keeps the original great-circle behaviour.
+
 Drag bars on the map timeline to retime them; drag their edges to change length. Projects save as `.framemap.json`. Export uses the same real-time WebM/MP4 recorder as Motion mode.
 
 The map data files are loaded with `fetch`, so serve the folder over http (same as the module imports).

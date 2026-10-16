@@ -55,3 +55,19 @@ body.mode-map #mapStudio{display:flex}
 #mSettingsPanel .section-title{align-items:center}
 #mSettingsClose{font-size:14px;padding:3px 8px}
 #mapStudio .right>.tabs{min-height:55px}
+
+/* Map area (world / one country) in the canvas settings */
+#mAreaBox{margin:2px 0 10px;padding:12px 12px 4px;border:1px solid #343d40;border-radius:8px;background:#1b2023}
+#mAreaBox[hidden]{display:none}
+#mAreaBox .mini-label:empty{display:none}
+/* Travel along a drawn path */
+.m-path-actions{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.m-path-actions button{flex:1 1 auto;padding:7px 8px;font-size:10px}
+.m-path-actions button.active{background:var(--accent);color:#1a2810;border-color:var(--accent)}
+.m-path-actions button:disabled{opacity:.4;cursor:default}
+.m-wps{list-style:none;margin:0 0 10px;padding:0;max-height:156px;overflow:auto}
+.m-wps li{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;font-size:10px}
+.m-wps li:hover{background:#262b2f}
+.m-wps li b{flex:0 0 18px;height:18px;border-radius:50%;background:#2c3729;border:1px solid #4f6140;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px}
+.m-wps li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c3cad2}
+.m-wps li button{padding:2px 7px;font-size:11px;line-height:1.2}

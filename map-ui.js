@@ -2,7 +2,7 @@ import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY } from './map-engine.mjs';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles } from './map-engine.mjs';
 import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
@@ -16,6 +16,7 @@ const EASE_OPTS = [['easeInOut', 'Ease in & out'], ['linear', 'Linear'], ['easeI
 
 let proj, sel = null, frame = 0, playing = false, loop = true, raf, startTime, startFrame;
 let undoStack = [], redoStack = [], geo = null, geoState = 'idle', geoError = '', pick = null, exporting = false, lastView = null, drag = null;
+let pathDraw = null, pathDrag = null; // pathDraw = { id } while points of a travel path are being clicked on the map
 
 // ------------------------------------------------------------------ helpers
 const items = () => [...proj.shots].sort((a, b) => a.start - b.start).concat(proj.actions);
@@ -51,7 +52,7 @@ async function ensureGeo() {
   geoState = 'loading'; draw();
   try {
     const [hi, lo] = await Promise.all(['countries-50m.json', 'countries-110m.json'].map(f => fetch('map-data/' + f).then(r => { if (!r.ok) throw Error(`${f}: HTTP ${r.status}`); return r.json(); })));
-    geo = buildGeo(hi, lo); geoState = 'ready'; buildLists();
+    geo = buildGeo(hi, lo); geo.cities = CITIES; geoState = 'ready'; buildLists();
   } catch (e) { geoState = 'error'; geoError = e.message || String(e); }
   renderAll();
 }
@@ -60,6 +61,7 @@ function buildLists() {
   const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = CITIES.map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
   $('#mDlBorder').innerHTML = opt('All countries', 'Every border') + countries; $('#mDlCountry').innerHTML = countries;
   $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + countries;
+  const area = $('#mAreaCountry'); if (area) area.innerHTML = geo ? geo.names.map(n => opt(n, n)).join('') : '';
 }
 const locText = l => (!l ? '' : l.kind === 'all' ? 'All countries' : l.kind === 'city' && geo && geo.byName.has(l.name) ? `${l.name} (city)` : l.name);
 function parseLoc(text, kinds) {
@@ -93,6 +95,7 @@ function draw() {
     return;
   }
   lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo);
+  if (pathDraw) { const a = proj.actions.find(x => x.id === pathDraw.id); if (a) drawPathEditor(ctx, lastView, a); }
 }
 function setFrame(n) {
   frame = clamp(Math.round(n) || 0, 0, proj.frames - 1);
@@ -160,7 +163,7 @@ function renderItems() {
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current();
   audioUI?.renderList();
 }
-function select(id) { sel = id; renderItems(); renderInspector(); renderTimeline(); }
+function select(id) { if (pathDraw && pathDraw.id !== id) endPathDraw(true); sel = id; renderItems(); renderInspector(); renderTimeline(); }
 
 // ------------------------------------------------------------------ inspector
 const F = {
@@ -194,7 +197,7 @@ function renderInspector() {
 function actionFields(a) {
   switch (a.type) {
     case 'border': return F.loc('target', 'Country', a.target, 'border') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%');
-    case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place') + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '');
+    case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '');
     case 'highlight': {
       const country = a.target.kind === 'country';
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? 'Country' : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
@@ -203,12 +206,51 @@ function actionFields(a) {
   }
   return '';
 }
+// ------------------------------------------------------------------ travel along a drawn path
+const km = (a, b) => { const R = 6371, r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r, h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.min(1, Math.sqrt(h))); };
+/** A named place for a clicked point: the closest built-in city within 60 km, otherwise plain coordinates. */
+function placeAt(p) {
+  let best = null, bd = 60;
+  for (const c of CITIES) { const d = km(p, { lat: c[1], lon: c[2] }); if (d < bd) { bd = d; best = c; } }
+  return best ? { kind: 'city', name: best[0], lat: p.lat, lon: p.lon } : { kind: 'point', name: `${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}`, lat: p.lat, lon: p.lon };
+}
+/** Keeps From / To equal to the first and last point, so labels and camera shots that name the route keep working. */
+function syncPathEnds(a) { const p = a.path || []; if (p.length) { a.from = placeAt(p[0]); a.to = placeAt(p[p.length - 1]); } }
+function pathFields(a) {
+  const pts = a.path || [], drawing = pathDraw?.id === a.id;
+  return F.sel('curve', 'Path shape', a.curve === 'straight' ? 'straight' : 'smooth', Object.entries(PATH_CURVES)) +
+    `<div class="m-path-actions"><button type="button" data-mpath="draw" class="${drawing ? 'active' : ''}" title="Click the map to add points. Drag a point to move it. Alt+click removes it.">${drawing ? '✓ Finish drawing' : '✎ Draw path on map'}</button>` +
+    `<button type="button" data-mpath="undo" ${pts.length ? '' : 'disabled'} title="Remove the last point">↶ Last point</button>` +
+    `<button type="button" data-mpath="reverse" ${pts.length > 1 ? '' : 'disabled'} title="Travel the path the other way">⇄ Reverse</button>` +
+    `<button type="button" data-mpath="clear" ${pts.length ? '' : 'disabled'} title="Remove every point">Clear</button></div>` +
+    (pts.length ? `<ol class="m-wps">${pts.map((p, i) => `<li><b>${i + 1}</b><span title="${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}">${esc(placeAt(p).name)}</span><button type="button" data-mwdel="${i}" title="Remove this point" aria-label="Remove point ${i + 1}">✕</button></li>`).join('')}</ol>` : '') +
+    `<p class="mini-label">${drawing ? 'Click the map to add points · drag a point to move it · Alt+click removes it · Enter when done.' : pts.length < 2 ? 'Press “Draw path on map”, then click at least two points. The icon travels through them in order.' : `${pts.length} points. The icon travels through them in order.`}</p>`;
+}
+function startPathDraw(id) {
+  cancelPick(); pause(); pathDraw = { id }; canvas.style.cursor = 'crosshair';
+  $('#mHint').textContent = 'Click the map to add path points · drag a point to move it · Alt+click removes it · Enter or “Finish drawing” when done';
+  notify('Click the map to add points to the path'); renderInspector(); draw();
+}
+function endPathDraw(silent) {
+  if (!pathDraw) return;
+  const a = proj.actions.find(x => x.id === pathDraw.id); pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT;
+  if (a) syncPathEnds(a);
+  saveLocal(); if (!silent) { renderInspector(); renderItems(); }
+  draw();
+}
+function pathAction(a, what) {
+  if (what === 'draw') { if (pathDraw?.id === a.id) { endPathDraw(); notify('Path ready'); } else startPathDraw(a.id); return; }
+  if (!(a.path || []).length) return;
+  checkpoint();
+  if (what === 'undo') a.path.pop(); else if (what === 'clear') a.path = []; else if (what === 'reverse') a.path.reverse();
+  syncPathEnds(a); changed(); renderInspector();
+}
 function shotFields(s) {
   const P = PRESETS[s.preset], has = k => P.fields.includes(k);
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
   if (has('autoFit') && s.target.kind === 'country') h += F.chk('autoFit', 'Fit the whole country in view', s.autoFit);
-  if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, `${a.name} (${a.from.name} → ${a.to.name})`])]);
+  if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, `${a.name} (${a.from?.name ?? '?'} → ${a.to?.name ?? '?'})`])]);
   if (has('zoom') && !(has('autoFit') && s.autoFit && s.target.kind === 'country')) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
@@ -243,6 +285,12 @@ function bindInspector(it) {
       checkpoint();
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }
       if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
+      if (key === 'mode') {
+        const def = (TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane).lift;
+        it.mode = v === 'path' ? 'path' : 'direct';
+        if (it.mode === 'path') { it.path ||= []; if (it.lift === def) it.lift = 0; } else { if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } if (it.lift === 0) it.lift = def; }
+        changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return;
+      }
       if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__hmode') { it.target = v === 'country' ? { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' } : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
@@ -255,6 +303,8 @@ function bindInspector(it) {
     };
   });
   $$('#mInspector [data-mpick]').forEach(el => el.onclick = () => startPick(el.dataset.mpick, el.dataset.kinds));
+  $$('#mInspector [data-mpath]').forEach(el => el.onclick = () => pathAction(it, el.dataset.mpath));
+  $$('#mInspector [data-mwdel]').forEach(el => el.onclick = () => { checkpoint(); it.path.splice(+el.dataset.mwdel, 1); syncPathEnds(it); changed(); renderInspector(); });
   if (!isShot(it) && it.labelStyle) bindLabelStyle($('#mInspector'), 'mItemLbl', () => it.labelStyle, v => { it.labelStyle = v; }, () => renderInspector());
 }
 function centerLonLat() { const l = screenToLonLat(lastView, proj.width / 2, proj.height / 2); return l ? [l.lon, l.lat] : [0, 0]; }
@@ -314,7 +364,38 @@ function startPick(key, kinds) {
 }
 function cancelPick() { pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; }
 const HINT = 'Add animations on the left · camera presets move the view for you · scrub the timeline to preview';
+function canvasXY(e) { const b = canvas.getBoundingClientRect(); return { sx: (e.clientX - b.left) / b.width * proj.width, sy: (e.clientY - b.top) / b.height * proj.height }; }
+function pathPointerDown(e) {
+  const a = proj.actions.find(x => x.id === pathDraw.id); if (!a || !lastView || !geo) return;
+  e.preventDefault();
+  const { sx, sy } = canvasXY(e), hs = pathHandles(lastView, a);
+  let hit = -1, bd = 14 * lastView.unit;
+  hs.forEach((h, i) => { const d = Math.hypot(h.x - sx, h.y - sy); if (d < bd) { bd = d; hit = i; } });
+  if (hit >= 0) {
+    checkpoint();
+    if (e.altKey) { a.path.splice(hit, 1); syncPathEnds(a); changed(); renderInspector(); return; }
+    pathDrag = { id: a.id, i: hit, moved: false }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    return;
+  }
+  const ll = screenToLonLat(lastView, sx, sy);
+  if (!ll) { notify('Click on the map surface'); return; }
+  if ((a.path || []).length >= 120) { notify('A path can have up to 120 points'); return; }
+  checkpoint(); (a.path ||= []).push({ lat: +ll.lat.toFixed(4), lon: +ll.lon.toFixed(4) });
+  syncPathEnds(a); changed(); renderInspector();
+}
+canvas.onpointermove = e => {
+  if (!pathDrag || !lastView) return;
+  const a = proj.actions.find(x => x.id === pathDrag.id), { sx, sy } = canvasXY(e), ll = a && screenToLonLat(lastView, sx, sy); if (!ll) return;
+  a.path[pathDrag.i] = { lat: +ll.lat.toFixed(4), lon: +ll.lon.toFixed(4) }; pathDrag.moved = true; draw();
+};
+canvas.onpointerup = canvas.onpointercancel = () => {
+  if (!pathDrag) return;
+  const a = proj.actions.find(x => x.id === pathDrag.id), moved = pathDrag.moved; pathDrag = null;
+  if (!moved) undoStack.pop(); else if (a) { syncPathEnds(a); changed(); renderInspector(); }
+  updateHistory();
+};
 canvas.onpointerdown = e => {
+  if (pathDraw) { pathPointerDown(e); return; }
   if (!pick || !lastView || !geo) return;
   const b = canvas.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * proj.width, sy = (e.clientY - b.top) / b.height * proj.height, ll = screenToLonLat(lastView, sx, sy);
   if (!ll) { notify('Click on the map surface'); return; }
@@ -351,6 +432,7 @@ function renderSettings() {
   $('#mProjectName').value = proj.name; $('#mFps').value = proj.fps; $('#mFpsLabel').textContent = proj.fps + ' FPS';
   syncMapDuration(); $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} × ${proj.height}`;
   $('#mTheme').value = proj.theme; $('#mGrat').checked = !!proj.graticule;
+  renderAreaSettings();
   const texture = { ...DEFAULT_TEXTURE, ...proj.texture };
   $('#mTexture').value = texture.type;
   $('#mTextureStrength').value = Math.round(texture.strength * 100);
@@ -363,6 +445,16 @@ function renderSettings() {
   $('#mGraticule').classList.toggle('active', !!proj.graticule);
   renderLabelPanel();
 }
+function renderAreaSettings() {
+  const ar = areaOf(proj), country = ar.mode === 'country', sel = $('#mAreaCountry');
+  $('#mAreaMode').value = ar.mode; $('#mAreaBox').hidden = !country;
+  if (![...sel.options].some(o => o.value === ar.country)) sel.insertAdjacentHTML('afterbegin', `<option value="${esc(ar.country)}">${esc(ar.country)}</option>`);
+  sel.value = ar.country; $('#mAreaNeighbors').value = ar.neighbors;
+  $('#mAreaFit').checked = ar.fit; $('#mAreaName').checked = ar.name; $('#mAreaCities').checked = ar.cities;
+  $('#mAreaPad').value = Math.round(ar.pad * 100); $('#mAreaPadValue').textContent = Math.round(ar.pad * 100) + '%'; $('#mAreaPad').disabled = !ar.fit;
+  const locked = country && ar.fit; $('#mRegion').disabled = $('#mStartZoom').disabled = locked;
+  $('#mAreaNote').textContent = locked ? 'The start view is framed on this country automatically. Tilt and rotation still apply.' : '';
+}
 function bindSettings() {
   const edit = fn => e => { pause(); checkpoint(); fn(e.target); saveLocal(); renderAll(); };
   $('#mProjectName').onchange = edit(el => proj.name = el.value.trim().slice(0, 100) || 'Untitled map');
@@ -370,6 +462,16 @@ function bindSettings() {
   $('#mDuration').onchange = edit(el => { const seconds = Number(el.value); if (el.value.trim() && Number.isFinite(seconds)) proj.frames = clamp(Math.round(seconds * proj.fps), 2, 1800); frame = Math.min(frame, proj.frames - 1); });
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   $('#mTheme').onchange = edit(el => proj.theme = el.value);
+  const area = patch => { proj.area = { ...DEFAULT_AREA, ...(proj.area || {}), ...patch }; };
+  $('#mAreaMode').onchange = edit(el => { area({ mode: el.value }); if (el.value === 'country' && geo && !geo.byName.has(areaOf(proj).country)) area({ country: DEFAULT_AREA.country }); });
+  $('#mAreaCountry').onchange = edit(el => area({ country: el.value }));
+  $('#mAreaNeighbors').onchange = edit(el => area({ neighbors: el.value }));
+  $('#mAreaFit').onchange = edit(el => area({ fit: el.checked }));
+  $('#mAreaName').onchange = edit(el => area({ name: el.checked }));
+  $('#mAreaCities').onchange = edit(el => area({ cities: el.checked }));
+  { let editing = false;
+    $('#mAreaPad').oninput = e => { pause(); if (!editing) { checkpoint(); editing = true; } area({ pad: clamp(+e.target.value / 100, .02, .45) }); $('#mAreaPadValue').textContent = Math.round(areaOf(proj).pad * 100) + '%'; draw(); };
+    $('#mAreaPad').onchange = () => { editing = false; saveLocal(); renderSettings(); }; }
   $('#mTexture').onchange = edit(el => { proj.texture = { ...DEFAULT_TEXTURE, ...proj.texture, type: el.value }; });
   for (const [id, key, lo, hi] of [['mTextureStrength', 'strength', 0, 1], ['mTextureScale', 'scale', .5, 3]]) {
     let editing = false;
@@ -501,9 +603,19 @@ function setMode(m) {
   $$('.modes [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   try { localStorage.setItem('frameflow-mode', m); } catch { /* ignore */ }
   window.dispatchEvent(new Event('frameflow:mode'));
-  if (m === 'map') { ensureGeo(); renderAll(); } else pause();
+  if (m === 'map') { ensureGeo(); renderAll(); } else { endPathDraw(true); pause(); }
 }
 $$('.modes [data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+window.addEventListener('keydown', e => {
+  if (!pathDraw || !document.body.classList.contains('mode-map')) return;
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+  if (e.key === 'Escape' || (e.key === 'Enter' && !typing)) { e.preventDefault(); e.stopImmediatePropagation(); endPathDraw(); notify('Path ready'); }
+  else if ((e.key === 'Backspace' || e.key === 'Delete') && !typing) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    const a = proj.actions.find(x => x.id === pathDraw.id);
+    if (a?.path?.length) { checkpoint(); a.path.pop(); syncPathEnds(a); changed(); renderInspector(); }
+  }
+}, true);
 window.addEventListener('keydown', e => {
   if (!document.body.classList.contains('mode-map')) return;
   if (e.key === 'Escape' && pick) { cancelPick(); return; }
@@ -514,7 +626,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('#mDelete').click(); }
 });
 
-function renderAll() { renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
+function renderAll() { if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
 
 // Fullscreen the entire Map Studio root. This avoids fullscreen/layout conflicts
 // with the nested grid and keeps playback controls available.

@@ -153,11 +153,13 @@ function buildSet(topo) {
         const x0 = xy[2 * i], y0 = xy[2 * i + 1], x1 = xy[2 * i + 2], y1 = xy[2 * i + 3], cr = x0 * y1 - x1 * y0;
         a2 += cr; cx += (x0 + x1) * cr; cy += (y0 + y1) * cr;
       }
-      const area = Math.abs(a2) / 2;
-      rings.push({ xy, n, hole: ri > 0, area, cx: a2 ? cx / (3 * a2) : xy[0], cy: a2 ? cy / (3 * a2) : xy[1] });
+      const area = Math.abs(a2) / 2, rcy = a2 ? cy / (3 * a2) : xy[1];
+      // `real` undoes Mercator's growth towards the poles, so Alaska or Svalbard do not look as big as they are drawn.
+      rings.push({ xy, n, hole: ri > 0, area, real: area * Math.cos(yToLat(rcy) * RAD) ** 2, cx: a2 ? cx / (3 * a2) : xy[0], cy: rcy });
     });
     if (!rings.length) continue;
     const outer = rings.filter(r => !r.hole), biggest = outer.reduce((m, r) => (r.area > m.area ? r : m), outer[0] || rings[0]);
+    const bigReal = outer.reduce((m, r) => Math.max(m, r.real), 0), mainRings = outer.filter(r => r.real >= bigReal * .3);
     const box = list => {
       const b = [Infinity, Infinity, -Infinity, -Infinity];
       for (const r of list) for (let i = 0; i < r.n; i++) {
@@ -169,7 +171,7 @@ function buildSet(topo) {
     const f = {
       name: g.properties?.name || String(g.id), tint: idx++ % 5, rings,
       bbox: box(rings),
-      mainBox: box(outer.filter(r => r.area >= biggest.area * .25)),
+      mainBox: box(mainRings.length ? mainRings : rings),
       cx: biggest.cx, cy: biggest.cy,
     };
     f.center = { lon: xToLon(f.cx), lat: yToLat(f.cy) };
@@ -217,6 +219,22 @@ export function countryAt(geo, lon, lat) {
     }
   }
   return null;
+}
+
+// ---------------------------------------------------------------- Map area: whole world or one country in detail
+export const AREA_MODES = { world: 'World map', country: 'One country (detailed)' };
+export const NEIGHBOR_MODES = { dim: 'Dimmed', show: 'Shown normally', hide: 'Hidden' };
+export const DEFAULT_AREA = { mode: 'world', country: 'Bangladesh', neighbors: 'dim', fit: true, pad: .12, name: true, cities: true };
+export const areaOf = proj => ({ ...DEFAULT_AREA, ...(proj.area || {}) });
+// Names used by the built-in city list that differ from the map data.
+const CITY_COUNTRY = { UAE: 'United Arab Emirates', 'Türkiye': 'Turkey', 'DR Congo': 'Dem. Rep. Congo', 'Côte d’Ivoire': "Côte d'Ivoire", USA: 'United States of America' };
+/** Built-in cities ([name, lat, lon, country], set as geo.cities by the app) that belong to a country. */
+export function citiesOf(geo, country) {
+  return (geo.cities || []).filter(c => (CITY_COUNTRY[c[3]] || c[3]) === country);
+}
+function focusFeature(proj, geo) {
+  const a = areaOf(proj);
+  return a.mode === 'country' ? geo.byName.get(a.country) || null : null;
 }
 
 // ---------------------------------------------------------------- Camera + projection
@@ -337,7 +355,66 @@ function resolveLoc(geo, loc, nearX) {
 
 // ---------------------------------------------------------------- Plane routes (great circles)
 const routeCache = new Map();
+
+// ---- Drawn paths: the traveler follows waypoints the user clicked, in order.
+export const PATH_CURVES = { smooth: 'Smooth curve', straight: 'Straight lines' };
+const PATH_STEPS = 28;
+/** Waypoints as world units, unwrapped so a path may cross the date line. */
+function pathWorld(a) {
+  const W = []; let prev = null;
+  for (const p of Array.isArray(a.path) ? a.path : []) {
+    if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
+    let X = lonToX(p.lon); if (prev !== null) X += Math.round(prev - X);
+    prev = X; W.push([X, latToY(p.lat)]);
+  }
+  return W;
+}
+function densifyPath(W, curve) {
+  const pts = [], idx = [], n = W.length;
+  if (curve === 'straight' || n < 3) {
+    for (let i = 0; i < n - 1; i++) {
+      idx.push(pts.length);
+      for (let k = 0; k < PATH_STEPS; k++) { const f = k / PATH_STEPS; pts.push([lerp(W[i][0], W[i + 1][0], f), lerp(W[i][1], W[i + 1][1], f)]); }
+    }
+    idx.push(pts.length); pts.push(W[n - 1].slice());
+    return { pts, idx };
+  }
+  // Centripetal Catmull-Rom through every waypoint: smooth, never overshoots or loops.
+  const ext = [[2 * W[0][0] - W[1][0], 2 * W[0][1] - W[1][1]], ...W, [2 * W[n - 1][0] - W[n - 2][0], 2 * W[n - 1][1] - W[n - 2][1]]];
+  const dist = (p, q) => Math.max(1e-6, Math.hypot(q[0] - p[0], q[1] - p[1])) ** .5;
+  for (let i = 0; i < n - 1; i++) {
+    const P0 = ext[i], P1 = ext[i + 1], P2 = ext[i + 2], P3 = ext[i + 3];
+    const t0 = 0, t1 = t0 + dist(P0, P1), t2 = t1 + dist(P1, P2), t3 = t2 + dist(P2, P3);
+    idx.push(pts.length);
+    for (let k = 0; k < PATH_STEPS; k++) {
+      const t = t1 + (t2 - t1) * k / PATH_STEPS;
+      const mix = (A, B, ta, tb) => [((tb - t) * A[0] + (t - ta) * B[0]) / (tb - ta), ((tb - t) * A[1] + (t - ta) * B[1]) / (tb - ta)];
+      const A1 = mix(P0, P1, t0, t1), A2 = mix(P1, P2, t1, t2), A3 = mix(P2, P3, t2, t3);
+      pts.push(mix(mix(A1, A2, t0, t2), mix(A2, A3, t1, t3), t1, t2));
+    }
+  }
+  idx.push(pts.length); pts.push(W[n - 1].slice());
+  return { pts, idx };
+}
+function pathRoute(a) {
+  const W = [];
+  for (const p of pathWorld(a)) if (!W.length || Math.hypot(p[0] - W[W.length - 1][0], p[1] - W[W.length - 1][1]) > 1e-7) W.push(p);
+  if (W.length < 2) return null;
+  const curve = a.curve === 'straight' ? 'straight' : 'smooth', key = `path|${curve}|${W.map(p => p[0].toFixed(7) + ',' + p[1].toFixed(7)).join(';')}`, hit = routeCache.get(a.id);
+  if (hit && hit.key === key) return hit;
+  const { pts, idx } = densifyPath(W, curve), N = pts.length, X = new Float64Array(N), Y = new Float64Array(N), cum = new Float64Array(N);
+  let minX = Infinity, maxX = -Infinity;
+  for (let i = 0; i < N; i++) {
+    X[i] = pts[i][0]; Y[i] = pts[i][1]; minX = Math.min(minX, X[i]); maxX = Math.max(maxX, X[i]);
+    if (i) cum[i] = cum[i - 1] + Math.hypot(X[i] - X[i - 1], Y[i] - Y[i - 1]);
+  }
+  const route = { key, n: N, X, Y, cum, total: cum[N - 1], mid: (minX + maxX) / 2, wpIdx: idx, A: { lon: xToLon(X[0]), lat: yToLat(Y[0]) }, B: { lon: xToLon(X[N - 1]), lat: yToLat(Y[N - 1]) } };
+  routeCache.set(a.id, route);
+  return route;
+}
+
 export function planeRoute(geo, a) {
+  if (a.mode === 'path') return pathRoute(a);
   const A = lonLatOf(geo, a.from), B = lonLatOf(geo, a.to);
   if (!A || !B) return null;
   const key = `${A.lat},${A.lon},${B.lat},${B.lon}`, hit = routeCache.get(a.id);
@@ -361,7 +438,7 @@ export function planeRoute(geo, a) {
   }
   const cum = new Float64Array(N + 1);
   for (let i = 1; i <= N; i++) cum[i] = cum[i - 1] + Math.hypot(X[i] - X[i - 1], Y[i] - Y[i - 1]);
-  const route = { key, n: N + 1, X, Y, cum, total: cum[N], A, B };
+  const route = { key, n: N + 1, X, Y, cum, total: cum[N], mid: (X[0] + X[N]) / 2, A, B };
   routeCache.set(a.id, route);
   return route;
 }
@@ -389,6 +466,16 @@ function fitZoom(b, W, H, pad, min = .6, max = 10) {
 }
 const turn = (a, b) => ((b - a + 540) % 360) - 180; // shortest signed angle
 
+/** The start view: the saved start camera, or (country map with "fit") the view that frames the chosen country. */
+export function startCam(proj, geo, W, H) {
+  const i = proj.camera.init, ar = areaOf(proj), f = ar.mode === 'country' && ar.fit ? geo.byName.get(ar.country) : null;
+  if (!f) return camFrom(i);
+  const b = f.mainBox, bw = b[2] - b[0], bh = b[3] - b[1], rot = (i.bearing || 0) * RAD, ac = Math.abs(Math.cos(rot)), as = Math.abs(Math.sin(rot));
+  const turned = [0, 0, bw * ac + bh * as, bw * as + bh * ac]; // box of the country once the map is rotated
+  const zoom = fitZoom(turned, W, H, ar.pad * 2, .5, 12) - (clamp(i.pitch || 0, 0, 75) / 75) * .45;
+  return { cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, zoom, bearing: i.bearing || 0, pitch: i.pitch || 0 };
+}
+
 // "Fly-to" path with smooth zoom-out-and-in (van Wijk & Nuij), progress k in 0..1.
 function fly(from, to, k, W, H) {
   const unit = Math.min(W, H) / 720, rho = 1.42, rho2 = rho * rho;
@@ -414,7 +501,7 @@ function shotState(s, from, tr, frame, c) {
       }, t, W, H);
     }
     case 'worldView': {
-      const w = camFrom(pr.camera.init); w.cx += Math.round(from.cx - w.cx);
+      const w = startCam(pr, geo, W, H); w.cx += Math.round(from.cx - w.cx);
       return fly(from, { ...w, pitch: 0, bearing: 0 }, t, W, H);
     }
     case 'pushIn': return { ...from, zoom: lerp(from.zoom, from.zoom + s.amount, t) };
@@ -450,7 +537,7 @@ function evalShot(s, from, frame, c) {
 
 /** Camera state at a frame: start view followed by each preset shot in order. */
 export function cameraAt(proj, geo, W, H, frame) {
-  const init = camFrom(proj.camera.init), shots = [...proj.shots].sort((a, b) => a.start - b.start), c = { geo, W, H, project: proj };
+  const init = startCam(proj, geo, W, H), shots = [...proj.shots].sort((a, b) => a.start - b.start), c = { geo, W, H, project: proj };
   let prev = null;
   for (const s of shots) {
     if (frame < s.start) break;
@@ -583,16 +670,76 @@ function drawBase(ctx, v, geo, th, proj) {
     for (const lat of [-60, -30, 0, 30, 60]) { const Y = latToY(lat); loadXY(v, new Float64Array([k0 - 4, Y, k0 + 5, Y]), 2, 0); emit(ctx, v, 2, false); }
     ctx.strokeStyle = th.grat; ctx.globalAlpha = th.gratA; ctx.lineWidth = Math.max(.6, v.unit * .8); ctx.stroke(); ctx.globalAlpha = 1;
   }
-  const set = geo.pick(v.cam.zoom);
+  const focus = focusFeature(proj, geo), neighbors = focus ? areaOf(proj).neighbors : 'show';
+  const set = focus ? geo.hi : geo.pick(v.cam.zoom); // a country map always uses the detailed outlines
   ctx.strokeStyle = th.border; ctx.lineWidth = th.bw * v.unit;
-  for (let k = k0 - 1; k <= k0 + 1; k++) for (const f of set.features) {
-    if (!bboxVisible(v, f.bbox, k)) continue;
+  const paint = (f, k, fill, borderA, lw, raised) => {
     ctx.beginPath();
     for (const r of f.rings) { loadXY(v, r.xy, r.n, k); emit(ctx, v, r.n, true); }
-    ctx.fillStyle = proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint];
-    ctx.fill('evenodd');
-    ctx.globalAlpha = th.borderA; ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = fill;
+    if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
+    ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  const fillOf = (f, k) => (proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
+  for (let k = k0 - 1; k <= k0 + 1; k++) for (const f of set.features) {
+    if (focus && (f.name === focus.name || neighbors === 'hide')) continue; // the chosen country is drawn last, on top
+    if (!bboxVisible(v, f.bbox, k)) continue;
+    if (focus && neighbors === 'dim') paint(f, k, mixColor(th.land[f.tint], th.ocean, .58), th.borderA * .45, th.bw * v.unit, false);
+    else paint(f, k, fillOf(f, k), th.borderA, th.bw * v.unit, false);
   }
+  if (focus) {
+    const f = set.byName.get(focus.name);
+    if (f) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, f.bbox, k)) paint(f, k, fillOf(f, k), 1, th.bw * v.unit * 1.7, true);
+  }
+}
+/** A spot inside the country, as far from its cities as possible, where the country name can sit without covering a city. */
+function nameAnchor(f, cities, midX) {
+  const key = cities.map(c => c[0]).join('|');
+  if (f._anchor && f._anchor.key === key) return f._anchor;
+  const b = f.mainBox, cs = cities.map(c => { const X0 = lonToX(c[2]); return [X0 + Math.round(midX - X0), latToY(c[1])]; });
+  const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, N = 17;
+  let best = null;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const x = b[0] + (b[2] - b[0]) * (i + .5) / N, y = b[1] + (b[3] - b[1]) * (j + .5) / N;
+    let inside = false; for (const r of f.rings) if (inRing(r, x, y)) inside = !inside;
+    if (!inside) continue;
+    let far = cs.length ? Infinity : 0; for (const c of cs) far = Math.min(far, Math.hypot(x - c[0], y - c[1]));
+    const size = Math.max(b[2] - b[0], b[3] - b[1]), score = far / size - .6 * Math.hypot(x - cx, y - cy) / size;
+    if (!best || score > best.score) best = { x, y, score };
+  }
+  f._anchor = { key, x: best ? best.x : cx, y: best ? best.y : cy };
+  return f._anchor;
+}
+/** Country map extras: the country's name and its main cities (labels are nudged apart so they stay readable). */
+function drawAreaDetail(ctx, v, geo, th, proj, labels) {
+  const f = focusFeature(proj, geo); if (!f) return;
+  const ar = areaOf(proj), b = f.mainBox, mid = (b[0] + b[2]) / 2, off = Math.round(v.cx - mid), st = labelStyleOf(proj);
+  const cities = ar.cities ? citiesOf(geo, f.name).slice(0, 24) : [];
+  const NAME_STYLE = { shape: 'none', halo: true, weight: 800, caps: true, spacing: 14 };
+  const box = (x, y, text, scale, over) => { // approximate label rectangle on screen
+    const o = { ...st, ...over }, fs = Math.max(4, o.size * v.unit * scale), w = text.length * fs * (o.caps ? .8 : .6) * (1 + o.spacing / 100) + (o.shape === 'none' ? fs * .6 : fs * 1.5);
+    return { x0: x - w / 2, x1: x + w / 2, y0: y - fs, y1: y + fs, w };
+  };
+  const placed = [], hits = r => placed.some(p => r.x0 < p.x1 && r.x1 > p.x0 && r.y0 < p.y1 && r.y1 > p.y0);
+  const dots = cities.map(c => { const X0 = lonToX(c[2]), q = project(v, X0 + Math.round(mid - X0) + off, latToY(c[1])); return { c, q }; });
+  for (const { q } of dots) placed.push({ x0: q.x - 8 * v.unit, x1: q.x + 8 * v.unit, y0: q.y - 8 * v.unit, y1: q.y + 8 * v.unit });
+  if (ar.name) {
+    const a = nameAnchor(f, cities, mid), q = project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
+    placed.push(r);
+    labels.push({ x: q.x, y: q.y, text: f.name, alpha: .96, scale: 1.6, over: NAME_STYLE });
+  }
+  ctx.save();
+  for (const { c, q } of dots) {
+    ctx.globalAlpha = 1; ctx.fillStyle = th.pillText; ctx.strokeStyle = th.pill; ctx.lineWidth = 2.4 * v.unit;
+    ctx.beginPath(); ctx.arc(q.x, q.y, 4.2 * v.unit, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
+    const w = box(0, 0, c[0], .82).w, u = v.unit;
+    const spots = [[0, -17 * u], [0, 17 * u], [w / 2 + 9 * u, 0], [-w / 2 - 9 * u, 0], [0, -34 * u], [0, 34 * u]];
+    let pick = spots[0];
+    for (const sp of spots) { if (!hits(box(q.x + sp[0], q.y + sp[1], c[0], .82))) { pick = sp; break; } }
+    placed.push(box(q.x + pick[0], q.y + pick[1], c[0], .82));
+    labels.push({ x: q.x + pick[0], y: q.y + pick[1], text: c[0], alpha: 1, scale: .82 });
+  }
+  ctx.restore();
 }
 function vignette(ctx, v, th) {
   if (!th.vignette) return;
@@ -835,7 +982,7 @@ function loadRoute(v, r, s, off, lift) { // view-space points from the start of 
 }
 function drawPlane(ctx, v, geo, th, a, frame, labels) {
   const r = planeRoute(geo, a), alpha = actAlpha(a, frame); if (!r || alpha <= 0) return;
-  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), s = ease(a.easing, t), lift = a.lift * v.unit, off = Math.round(v.cx - (r.X[0] + r.X[r.n - 1]) / 2);
+  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), s = ease(a.easing, t), lift = a.lift * v.unit, off = Math.round(v.cx - r.mid);
   const E = u => lift * Math.sin(Math.PI * u), w = a.width * v.unit;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (a.showPath) { // faint full route
@@ -848,6 +995,14 @@ function drawPlane(ctx, v, geo, th, a, frame, labels) {
     if (a.dashed) ctx.setLineDash([10 * v.unit, 8 * v.unit]);
     glowStroke(ctx, a.color, w, alpha, a.glow); ctx.setLineDash([]);
   }
+  // points of a drawn path: hollow until the traveler has passed them
+  if (r.wpIdx && a.showWaypoints !== false) {
+    for (let w = 1; w < r.wpIdx.length - 1; w++) {
+      const i = r.wpIdx[w], u = r.cum[i] / (r.total || 1), q = project(v, r.X[i] + off, r.Y[i], lift * Math.sin(Math.PI * u)), passed = s >= u - 1e-6;
+      ctx.globalAlpha = alpha; ctx.lineWidth = 2.2 * v.unit; ctx.strokeStyle = a.color; ctx.fillStyle = passed ? a.color : '#fff';
+      ctx.beginPath(); ctx.arc(q.x, q.y, 3.8 * v.unit, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+  }
   // ends
   const A = project(v, r.X[0] + off, r.Y[0]), B = project(v, r.X[r.n - 1] + off, r.Y[r.n - 1]);
   for (const [pt, hit] of [[A, true], [B, s >= 1]]) {
@@ -856,8 +1011,11 @@ function drawPlane(ctx, v, geo, th, a, frame, labels) {
     if (hit && pt === B) { const q = ((frame - a.start - a.dur) / 40) % 1; if (frame >= a.start + a.dur) { ctx.globalAlpha = alpha * (1 - q) * .7; ctx.beginPath(); ctx.arc(pt.x, pt.y, (6 + q * 22) * v.unit, 0, Math.PI * 2); ctx.stroke(); } }
   }
   if (a.showLabels) {
-    labels.push({ x: A.x, y: A.y - 24 * v.unit, text: a.fromLabel || a.from.name, alpha, scale: 1 });
-    labels.push({ x: B.x, y: B.y - 24 * v.unit, text: a.toLabel || a.to.name, alpha: alpha * clamp01(s * 4), scale: 1 });
+    // A drawn path only names its ends when they sit on a known city or the user typed a label (never raw coordinates).
+    const nameOf = (custom, loc) => custom || (a.mode === 'path' && (!loc || loc.kind === 'point') ? '' : loc?.name || '');
+    const t1 = nameOf(a.fromLabel, a.from), t2 = nameOf(a.toLabel, a.to);
+    if (t1) labels.push({ x: A.x, y: A.y - 24 * v.unit, text: t1, alpha, scale: 1 });
+    if (t2) labels.push({ x: B.x, y: B.y - 24 * v.unit, text: t2, alpha: alpha * clamp01(s * 4), scale: 1 });
   }
   // aircraft + ground shadow
   if (t > 0 || frame >= a.start) {
@@ -870,6 +1028,34 @@ function drawPlane(ctx, v, geo, th, a, frame, labels) {
     drawTravelIcon(ctx, kind, g.x + e * .22, g.y + e * .34, ang, size * .86, '#000', alpha * .18 / sh, phase, a.symbol, true);
     drawTravelIcon(ctx, kind, body.x, body.y, ang, size, a.planeColor, alpha, phase, a.symbol, false);
   }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- Path editor (preview overlay only)
+/** Screen positions of a drawn path's points, for the overlay and for picking them with the mouse. */
+export function pathHandles(v, a) {
+  const W = pathWorld(a); if (!W.length) return [];
+  const r = pathRoute(a), xs = W.map(q => q[0]), mid = r ? r.mid : (Math.min(...xs) + Math.max(...xs)) / 2, off = Math.round(v.cx - mid);
+  return W.map(q => { const s = project(v, q[0] + off, q[1]); return { x: s.x, y: s.y }; });
+}
+export function drawPathEditor(ctx, v, a) {
+  const hs = pathHandles(v, a); if (!hs.length) return;
+  const r = pathRoute(a);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (r) {
+    const xy = new Float64Array(r.n * 2), off = Math.round(v.cx - r.mid);
+    for (let i = 0; i < r.n; i++) { xy[2 * i] = r.X[i]; xy[2 * i + 1] = r.Y[i]; }
+    ctx.beginPath(); loadXY(v, xy, r.n, off); emit(ctx, v, r.n, false);
+    ctx.globalAlpha = .4; ctx.strokeStyle = '#000'; ctx.lineWidth = 6 * v.unit; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit; ctx.setLineDash([8 * v.unit, 6 * v.unit]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.font = `700 ${Math.max(8, Math.round(10 * v.unit))}px Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  hs.forEach((h, i) => {
+    ctx.beginPath(); ctx.arc(h.x, h.y, 9 * v.unit, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#7cf08f' : i === hs.length - 1 && hs.length > 1 ? '#ffd166' : '#ffffff'; ctx.fill();
+    ctx.lineWidth = 2.4 * v.unit; ctx.strokeStyle = '#10161b'; ctx.stroke();
+    ctx.fillStyle = '#10161b'; ctx.fillText(String(i + 1), h.x, h.y + .5 * v.unit);
+  });
   ctx.restore();
 }
 
@@ -908,6 +1094,7 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   drawBase(ctx, v, geo, th, proj);
+  drawAreaDetail(ctx, v, geo, th, proj, labels);
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
   for (const a of proj.actions) if (a.type === 'highlight') tag(a, () => drawHighlight(ctx, v, geo, th, a, frame, labels));
   // Composite texture over country highlights, underneath borders and labels.
@@ -915,7 +1102,7 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
   for (const a of proj.actions) if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels));
   for (const a of proj.actions) if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
-  for (const l of labels) drawLabel(ctx, v, th, l, labelStyleOf(proj, l.item));
+  for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
   ctx.restore();
   return v;
@@ -932,7 +1119,7 @@ const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });
 export const PRESETS = {
   flyTo: { label: 'Fly to', icon: '↘', hint: 'Smooth zoom-and-glide to a place', def: { dur: 60, zoom: 5, pitch: 0, bearing: 0, autoFit: false }, fields: ['target', 'zoom', 'pitch', 'bearing', 'autoFit'] },
   swoop: { label: 'Cinematic swoop', icon: '↺', hint: 'Fly in while tilting and turning', def: { dur: 80, zoom: 5.5, pitch: 58, bearing: 35, autoFit: false }, fields: ['target', 'zoom', 'pitch', 'bearing', 'autoFit'] },
-  worldView: { label: 'Back to world', icon: '◍', hint: 'Pull out to the start view', def: { dur: 60 }, fields: [] },
+  worldView: { label: 'Back to start view', icon: '◍', hint: 'Pull out to the start view', def: { dur: 60 }, fields: [] },
   pushIn: { label: 'Push in', icon: '⊕', hint: 'Slow zoom in', def: { dur: 60, amount: .9 }, fields: ['amount'] },
   pullBack: { label: 'Pull back', icon: '⊖', hint: 'Slow zoom out', def: { dur: 60, amount: 1.2 }, fields: ['amount'] },
   orbit: { label: 'Orbit', icon: '⟳', hint: 'Rotate around the view', def: { dur: 90, degrees: 90, pitch: 55, amount: .3 }, fields: ['degrees', 'pitch', 'amount'] },
@@ -947,7 +1134,7 @@ export function makeAction(type, start, extra = {}) {
   const base = { id: uid(), type, name: ACTION_TYPES[type].label, start, dur: ACTION_TYPES[type].dur, easing: 'easeInOut', keep: true };
   const own = {
     border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18 },
-    plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true },
+    plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
     highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400 },
     pin: { place: city('Paris', 48.8566, 2.3522), label: '', showLabel: true, color: '#e63946', size: 1 },
   }[type];
@@ -959,7 +1146,7 @@ export function makeShot(preset, start, extra = {}) {
 }
 
 export function newMapProject() {
-  return { version: 1, kind: 'map', name: 'Untitled map', width: 1280, height: 720, fps: 30, frames: 240, theme: 'earth', texture: { ...DEFAULT_TEXTURE }, labelStyle: { ...DEFAULT_LABEL_STYLE }, graticule: true, camera: { init: { ...DEFAULT_CAM } }, shots: [], actions: [] };
+  return { version: 1, kind: 'map', name: 'Untitled map', width: 1280, height: 720, fps: 30, frames: 240, theme: 'earth', texture: { ...DEFAULT_TEXTURE }, labelStyle: { ...DEFAULT_LABEL_STYLE }, area: { ...DEFAULT_AREA }, graticule: true, camera: { init: { ...DEFAULT_CAM } }, shots: [], actions: [] };
 }
 export function demoMapProject() {
   const p = newMapProject(); p.name = 'Across the Atlantic'; p.frames = 330;
@@ -984,6 +1171,21 @@ const ENUMS = { theme: Object.keys(THEMES), preset: Object.keys(PRESETS), easing
 const isLoc = l => l && ['city', 'point', 'country'].includes(l.kind) && typeof l.name === 'string' && l.name.length < 200 && (l.kind === 'country' || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360));
 const num = (v, a, b) => Number.isFinite(v) && v >= a && v <= b;
 const col = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+function checkArea(s) {
+  const bad = () => { throw Error('Invalid map area.'); };
+  if (!s || typeof s !== 'object' || Array.isArray(s)) bad();
+  if (s.mode !== undefined && !Object.hasOwn(AREA_MODES, s.mode)) bad();
+  if (s.country !== undefined && (typeof s.country !== 'string' || !s.country || s.country.length > 100)) bad();
+  if (s.neighbors !== undefined && !Object.hasOwn(NEIGHBOR_MODES, s.neighbors)) bad();
+  if (s.pad !== undefined && !num(s.pad, .02, .45)) bad();
+  for (const k of ['fit', 'name', 'cities']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
+}
+function checkPath(a) {
+  const bad = () => { throw Error('Invalid travel path.'); };
+  if (!Array.isArray(a.path) || a.path.length > 120) bad();
+  for (const p of a.path) if (!p || !num(p.lat, -90, 90) || !num(p.lon, -540, 540)) bad();
+  if (a.curve !== undefined && !Object.hasOwn(PATH_CURVES, a.curve)) bad();
+}
 function checkLabelStyle(s) {
   if (s === undefined) return;
   const bad = () => { throw Error('Invalid label style.'); };
@@ -1007,6 +1209,7 @@ export function validateMapProject(p) {
   const i = p.camera?.init;
   if (!i || !num(i.lon, -540, 540) || !num(i.lat, -90, 90) || !num(i.zoom, 0, 14) || !num(i.bearing ?? 0, -3600, 3600) || !num(i.pitch ?? 0, 0, 75)) throw Error('Invalid start view.');
   checkLabelStyle(p.labelStyle);
+  if (p.area !== undefined) checkArea(p.area);
   const ids = new Set();
   for (const it of [...p.actions, ...p.shots]) {
     if (typeof it.id !== 'string' || ids.has(it.id) || typeof it.name !== 'string') throw Error('Invalid item.');
@@ -1016,7 +1219,9 @@ export function validateMapProject(p) {
   for (const a of p.actions) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
     if (a.type === 'border' && !((a.target?.kind === 'all') || (a.target?.kind === 'country' && typeof a.target.name === 'string'))) throw Error('Invalid border target.');
-    if (a.type === 'plane' && !(isLoc(a.from) && isLoc(a.to))) throw Error('Invalid plane route.');
+    if (a.type === 'plane' && a.mode !== undefined && !['direct', 'path'].includes(a.mode)) throw Error('Invalid travel mode.');
+    if (a.type === 'plane' && a.mode === 'path') checkPath(a);
+    else if (a.type === 'plane' && !(isLoc(a.from) && isLoc(a.to))) throw Error('Invalid plane route.');
     checkLabelStyle(a.labelStyle);
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');

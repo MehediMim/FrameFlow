@@ -17,6 +17,7 @@ export function validateExtras(project) {
   const b = project.backgroundEffect;
   const number = (v, lo, hi) => Number.isFinite(v) && v >= lo && v <= hi;
   const color = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+  for(const shot of project.cameraShots||[])for(const key of ['frontBlur','backBlur'])if(shot[key]!==undefined&&!number(shot[key],0,80))throw Error('Invalid camera blur.');
   if (b !== undefined && (!b || !Object.hasOwn(BACKGROUND_STYLES, b.style) || typeof b.animated !== 'boolean' || !number(b.speed, 0, 4) || !number(b.spacing, 20, 200) || !number(b.opacity, 0, 1) || !color(b.color))) throw Error('Invalid animated background settings.');
   for (const layer of project.layers) if (layer.type === 'table') {
     const t = layer.table;

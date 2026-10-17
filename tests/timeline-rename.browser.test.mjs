@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -72,7 +72,7 @@ try {
     HTMLAnchorElement.prototype.click=function(){};
   })()`);
   const click = async selector => {
-    const point=await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(selector)});el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+    const point=await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(selector)});for(let p=el.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();if(!r.width||!r.height)throw Error('Control is hidden: '+${JSON.stringify(selector)});return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
     await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1});
     await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:1});
   };
@@ -171,6 +171,85 @@ try {
     await click(scoped(fullscreen));
     await waitFor('!document.fullscreenElement');
     console.log(`${mode}: preview zoom, PNG and fullscreen passed`);
+  }
+  if(process.argv.includes('--lines')) {
+    await evaluate(`document.querySelector('.modes [data-mode="motion"]').click()`);
+    await click('#drawStraightLine');
+    const rect=await evaluate(`(()=>{document.querySelector('#canvas').scrollIntoView({block:'center'});const r=document.querySelector('#canvas').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`);
+    const drag=async points=>{
+      for(let i=0;i<points.length;i++){
+        const [x,y]=points[i],point={x:rect.x+x*rect.w,y:rect.y+y*rect.h};
+        await cdp('Input.dispatchMouseEvent',{type:i===0?'mousePressed':'mouseMoved',...point,button:'left',buttons:1,clickCount:1});
+      }
+      const [x,y]=points.at(-1);
+      await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',x:rect.x+x*rect.w,y:rect.y+y*rect.h,button:'left',clickCount:1});
+    };
+    await drag([[.2,.3],[.7,.3]]);
+    await waitFor(`document.querySelector('#inspector').textContent.includes('DRAWN LINE')`);
+    await evaluate(`(()=>{for(const [k,v]of [['vectorStroke','#ff0000'],['vectorStrokeWidth','14']]){const n=document.querySelector('[data-vector="'+k+'"]');n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
+    const saved=await evaluate(`JSON.parse(localStorage.getItem('frameflow-project-v1')).layers.at(-1)`);
+    assert.ok(saved.isDrawnLine && saved.svgMarkup.includes(' L'));
+    assert.equal(saved.vectorStroke,'#ff0000');assert.equal(saved.vectorStrokeWidth,14);
+    await waitFor(`(()=>{const c=document.querySelector('#canvas'),p=c.getContext('2d').getImageData(Math.round(c.width*.45),Math.round(c.height*.3),1,1).data;return p[0]>200&&p[1]<40&&p[2]<40})()`);
+    await click('#drawFreehandLine');await drag([[.3,.5],[.4,.6],[.5,.4],[.6,.5]]);
+    await waitFor(`JSON.parse(localStorage.getItem('frameflow-project-v1')).layers.filter(l=>l.isDrawnLine).length===2`);
+    await click('[data-camera-add="focus"]');
+    await waitFor(`!!document.querySelector('[data-cam="frontBlur"]')`);
+    await evaluate(`(()=>{for(const [k,v]of [['frontBlur','9'],['backBlur','27']]){const n=document.querySelector('[data-cam="'+k+'"]');n.value=v;n.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
+    const shot=await evaluate(`JSON.parse(localStorage.getItem('frameflow-project-v1')).cameraShots.at(-1)`);
+    assert.equal(shot.frontBlur,9);assert.equal(shot.backBlur,27);
+    await cdp('Page.reload');await waitFor(`!!document.querySelector('#drawStraightLine')`);
+    assert.equal(await evaluate(`JSON.parse(localStorage.getItem('frameflow-project-v1')).layers.filter(l=>l.isDrawnLine).length`),2);
+    console.log('Straight/freehand drawing, rendered line color/width, camera blur controls and reload passed');
+  }
+  if(process.env.FRAMEFLOW_MEDIA_TEST==='1'||process.argv.includes('--media')) {
+    await evaluate(`document.querySelector('.modes [data-mode="motion"]').click()`);
+    await evaluate(`(() => {for(const [id,value] of [['frame','0'],['duration','1'],['size','1280,720']]){const n=document.getElementById(id);n.value=value;n.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
+    console.log('Creating a video fixture with changing frames and original sound');
+    const fixture=await evaluate(`(async()=>{
+      const {exportMapVideo}=await import('./map-video-export.mjs');
+      const c=document.createElement('canvas');c.width=96;c.height=64;const g=c.getContext('2d');
+      const audio=new OfflineAudioContext(1,48000,48000).createBuffer(1,48000,48000),samples=audio.getChannelData(0);
+      for(let i=0;i<samples.length;i++)samples[i]=.15*Math.sin(2*Math.PI*440*i/48000);
+      const blob=await exportMapVideo({canvas:c,fps:24,frames:24,draw:f=>{g.fillStyle=f<12?'#ff0000':'#0000ff';g.fillRect(0,0,96,64)},audio:{layers:[{buffer:audio,start:0,source:0,duration:1,volume:1}]}});
+      return await new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.readAsDataURL(blob)});
+    })()`);
+    const fixtureFile=join(profile,'motion-sound.webm');await writeFile(fixtureFile,Buffer.from(fixture.split(',')[1],'base64'));
+    const doc=await cdp('DOM.getDocument');const input=await cdp('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'#videoFile'});
+    await cdp('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[fixtureFile]});
+    await waitFor(`!!document.querySelector('#videoMuted')`);
+    await waitFor(`JSON.parse(localStorage.getItem('frameflow-project-v1')).layers.some(l=>l.type==='video')`);
+    await waitFor(`document.querySelector('#inspector').textContent.includes('Original sound follows')`);
+    const audioExpr=`(await import('./audio-reference.mjs?v=motion-media-1')).getAudioSnapshot('motion')`;
+    assert.ok(await evaluate(`(async()=>!!(${audioExpr})?.layers.some(l=>l.buffer.duration>.9))()`),'video sound must be available for playback and export');
+    await click('#videoMuted');
+    assert.equal(await evaluate(`(async()=>${audioExpr})()`),null,'muting must remove original sound from export');
+    await click('#videoMuted');
+    const seek=async time=>evaluate(`(()=>{const n=document.querySelector('#frame');n.value=${time};n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const pixel=`document.querySelector('#canvas').getContext('2d').getImageData(700,400,1,1).data`;
+    await seek(0);await waitFor(`(()=>{const p=${pixel};return p[0]>180&&p[2]<60})()`);
+    await seek(.75);await waitFor(`(()=>{const p=${pixel};return p[2]>180&&p[0]<60})()`);
+    console.log('Video import, sound, mute and frame seeking passed');
+    await seek(0);await click('#inspector [data-motion-path="draw"]');
+    const bounds=await evaluate(`(()=>{const r=document.querySelector('#canvas').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`);
+    for(const [x,y] of [[.25,.35],[.5,.65],[.75,.35]]) {
+      const point={x:bounds.x+bounds.w*x,y:bounds.y+bounds.h*y};
+      await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1});
+      await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:1});
+    }
+    await click('#inspector [data-motion-path="draw"]');
+    await evaluate(`(()=>{const n=document.querySelector('[data-path-field="dur"]');n.value=.3;n.dispatchEvent(new Event('change',{bubbles:true}));const d=document.querySelector('#duration');d.value=1;d.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const movement=await evaluate(`JSON.parse(localStorage.getItem('frameflow-project-v1')).layers.find(l=>l.type==='video')`);
+    assert.equal(movement.motionPath.points.length,3);assert.equal(movement.motionPath.dur,9);
+    assert.ok(movement.keys.x.length>3 && movement.keys.y.length===movement.keys.x.length,'smooth path must generate timed position keys');
+    assert.equal(movement.keys.x[0].v,movement.motionPath.points[0].x);assert.equal(movement.keys.x.at(-1).v,movement.motionPath.points.at(-1).x);
+    await evaluate(`HTMLAnchorElement.prototype.click=function(){fetch(this.href).then(r=>r.blob()).then(blob=>{window.__motionExport=blob;window.__motionExportName=this.download;});}`);
+    await click('#export');
+    await waitFor(`!!window.__motionExport || document.querySelector('#exportStatus')?.textContent.startsWith('Export failed')`);
+    assert.ok(await evaluate(`!!window.__motionExport`),await evaluate(`document.querySelector('#exportStatus').textContent`));
+    const encoded=await evaluate(`(async()=>{const b=window.__motionExport;const text=new TextDecoder('latin1').decode(await b.arrayBuffer());return {size:b.size,type:b.type,audio:text.includes('A_OPUS'),name:window.__motionExportName};})()`);
+    assert.ok(encoded.size>1000 && encoded.type==='video/webm' && encoded.audio && encoded.name.endsWith('.webm'),'export must include encoded video frames and original audio');
+    console.log('Movement path drawing and video export with original sound passed');
   }
   assert.deepEqual(errors, [], 'No uncaught browser errors');
 } finally {

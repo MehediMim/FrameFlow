@@ -1,5 +1,5 @@
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
-import { poseAt } from './engine.mjs';
+import { poseAt } from './engine.mjs?v=motion-media-1';
 // FrameFlow Motion Studio: layered 2.5D camera with focus tracking and depth of field.
 // Camera motion is deterministic for a given timeline frame (including export).
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
@@ -40,7 +40,7 @@ export function makeCameraShot(p,preset,frame,selectedId=null){
  rotationA:0,rotationB:preset==='shake'?0:0,yawA:m[0],yawB:m[1],pitchA:m[2],pitchB:m[3],dollyA:m[4],dollyB:m[5],
  perspective:1200,easing:'easeInOut',strength:12,focusLayerId:focusId,
  depthOfField:['focus','rackFocus','cinematic'].includes(preset),
- aperture:preset==='rackFocus'?24:20,blurBehindOnly:preset!=='rackFocus',trackFocus:preset==='focus',
+ ...(preset==='rackFocus'?{}:{frontBlur:0,backBlur:20}),aperture:preset==='rackFocus'?24:20,blurBehindOnly:preset!=='rackFocus',trackFocus:preset==='focus',
  focusFromDepth:preset==='rackFocus'?300:null,
  endBehavior:'return',returnTime:Math.min(.7,Math.max(.16,dur/p.fps*.28))};
  // A/B are absolute camera coordinates for the inspector, captured at the playhead.
@@ -64,7 +64,7 @@ function keyGroup(layer,k,f){const keys=layer.keys?.[k]||[];if(!keys.length)retu
 // composited on the camera pose already in progress at the evaluation frame;
 // overlapping shots do not reset the camera to a frozen preset pose.
 const neutralCamera=()=>({zoom:1,x:0,y:0,rotation:0,yaw:0,pitch:0,dolly:0,
- perspective:1200,depthOfField:false,aperture:0,focusLayerId:'',focusDepth:0,blurBehindOnly:true});
+ perspective:1200,depthOfField:false,frontBlur:null,backBlur:null,aperture:0,focusLayerId:'',focusDepth:0,blurBehindOnly:true});
 const blend=(a,b,t)=>a+(b-a)*t;
 export function cameraAt(p,f){
  const state=neutralCamera();
@@ -105,6 +105,10 @@ export function cameraAt(p,f){
   if(s.depthOfField){
    const aperture=clamp(finite(s.aperture,18),0,45);
    state.aperture=blend(state.aperture,aperture,weight);
+   if(Number.isFinite(s.frontBlur)||Number.isFinite(s.backBlur)){
+    state.frontBlur=blend(state.frontBlur??0,clamp(finite(s.frontBlur),0,80),weight);
+    state.backBlur=blend(state.backBlur??0,clamp(finite(s.backBlur),0,80),weight);
+   }
    if(weight>.0001){
     state.focusLayerId=s.focusLayerId||'';
     state.blurBehindOnly=s.blurBehindOnly!==false;
@@ -113,7 +117,7 @@ export function cameraAt(p,f){
       ?blend(s.focusFromDepth,depth,u):depth;
     state.focusDepth=blend(state.focusDepth,focus,weight);
    }
-   state.depthOfField=state.aperture>.001;
+   state.depthOfField=state.aperture>.001||(state.frontBlur??0)>.001||(state.backBlur??0)>.001;
   }
  }
  return state;
@@ -166,7 +170,14 @@ export function screenToCameraPoint(p,f,sx,sy){
 }
 export function layerBlur(p,layer,camera){
  const own=clamp(finite(layer.blur,0),0,80);
- if(!camera.depthOfField||!camera.aperture)return own;
+ if(!camera.depthOfField)return own;
+ if(Number.isFinite(camera.frontBlur)||Number.isFinite(camera.backBlur)){
+  const subject=p.layers.findIndex(l=>l.id===camera.focusLayerId),idx=p.layers.findIndex(l=>l.id===layer.id);
+  const distance=subject>=0?subject-idx:depthForLayer(p,layer)-camera.focusDepth;
+  const amount=distance<0?camera.frontBlur:distance>0?camera.backBlur:0;
+  return clamp(Math.hypot(own,finite(amount)),0,80);
+ }
+ if(!camera.aperture)return own;
  const distance=depthForLayer(p,layer)-camera.focusDepth;
  const diff=camera.blurBehindOnly?Math.max(0,distance):Math.abs(distance);
  return clamp(Math.hypot(own,clamp(diff*.085*camera.aperture/18,0,50)),0,80);
@@ -209,8 +220,10 @@ export function attachMotionCamera(host){
   <label>Focus subject<select data-cam="focusLayerId"><option value="">Manual focus depth</option>${p.layers.filter(l=>l.type!=='group').map(l=>`<option value="${esc(l.id)}" ${l.id===s.focusLayerId?'selected':''}>${esc(l.name)}</option>`).join('')}</select></label>
   <label class="m-chk"><input type="checkbox" data-cam="trackFocus" ${s.trackFocus?'checked':''}> Track subject with camera</label>
   <label class="m-chk"><input type="checkbox" data-cam="depthOfField" ${s.depthOfField?'checked':''}> Enable depth of field</label>
-  <label class="m-chk"><input type="checkbox" data-cam="blurBehindOnly" ${s.blurBehindOnly!==false?'checked':''}> Blur layers behind subject only</label>
-  <label>Blur strength / aperture<input data-cam="aperture" type="range" min="0" max="45" step="1" value="${finite(s.aperture,20)}"><span class="ff-fx-value">${finite(s.aperture,20)}</span></label>
+  <label>Layers above subject blur (px)<input data-cam="frontBlur" type="range" min="0" max="80" step="1" value="${finite(s.frontBlur,s.blurBehindOnly!==false?0:20)}"><span class="ff-fx-value">${finite(s.frontBlur,s.blurBehindOnly!==false?0:20)} px</span></label>
+  <label>Layers behind subject blur (px)<input data-cam="backBlur" type="range" min="0" max="80" step="1" value="${finite(s.backBlur,20)}"><span class="ff-fx-value">${finite(s.backBlur,20)} px</span></label>
+  <p class="mini-label">0 keeps that side sharp. Above and behind follow layer order around the focus subject. The subject keeps its own layer blur.</p>
+  ${!Number.isFinite(s.frontBlur)&&!Number.isFinite(s.backBlur)?'<p class="mini-label">Saved depth-based blur is active until you adjust either slider.</p>':''}
   <label>Manual focus depth<input data-cam="focusDepth" type="number" min="-500" max="500" step="5" value="${finite(s.focusDepth)}"></label>
   <label>Rack focus start depth<input data-cam="focusFromDepth" type="number" min="-500" max="500" step="5" value="${finite(s.focusFromDepth,300)}"></label>
   <div class="section-title">END BEHAVIOR</div>
@@ -230,7 +243,9 @@ export function attachMotionCamera(host){
     else if(k==='dur')s.dur=clamp(Math.round(Number(v)*p.fps),1,p.frames-s.start);
     else if(['name','easing','focusLayerId','endBehavior'].includes(k))s[k]=v;
     else if(el.type==='checkbox')s[k]=v;
-    else s[k]=Number(v);
+    else {if(['frontBlur','backBlur'].includes(k)){
+     s.frontBlur=finite(s.frontBlur,s.blurBehindOnly!==false?0:20);s.backBlur=finite(s.backBlur,20);
+    }s[k]=Number(v);}
    }
    host.changed();
   }));

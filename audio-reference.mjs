@@ -6,11 +6,11 @@ const copy = layers => layers.map(l => ({...l})); // AudioBuffers and waveform c
 const clamp = (n,a,b) => Math.max(a,Math.min(b,n));
 export function getAudioSnapshot(studio) {
   const s = studios.get(studio); if (s?.loading) throw Error('Audio is still loading. Wait before exporting.');
-  const layers = s?.layers.filter(l => !l.muted && l.volume > 0).map(l => ({...l}));
+  const layers = s ? [...s.layers, ...(s.extraLayers?.() || [])].filter(l => !l.muted && l.volume > 0).map(l => ({...l})) : [];
   return layers?.length ? {layers} : null;
 }
 export function registerAudioStudio(studio, host) {
-  const state = { layers: [], history: [], future: [], loading: false, generation: 0 };
+  const state = { layers: [], history: [], future: [], loading: false, generation: 0, extraLayers: host.getExtraAudioLayers };
   studios.set(studio, state);
   let context, sources = [], anchor, playing = false, drag = null, pendingReplace = null;
   const $ = s => document.querySelector(s);
@@ -22,13 +22,15 @@ export function registerAudioStudio(studio, host) {
   function stop() {for(const {source,gain} of sources){try{source.stop();}catch{}source.disconnect();gain.disconnect();}sources=[];anchor=null;}
   function audioContext() {return context ||= new (window.AudioContext || window.webkitAudioContext)();}
   function sync(force=false) {
-    if(!playing || !state.layers.length){stop();return;}
+    const layers = [...state.layers, ...(state.extraLayers?.() || [])];
+    if(!playing || !layers.length){stop();return;}
     const ctx=audioContext(),t=time();
-    if(!force && anchor && Math.abs(t-(anchor.time+ctx.currentTime-anchor.clock))<.12)return;
+    const sameLayers=anchor&&layers.length===anchor.layers.length&&layers.every((l,i)=>['buffer','start','source','duration','volume','muted'].every(k=>l[k]===anchor.layers[i][k]));
+    if(!force && sameLayers && Math.abs(t-(anchor.time+ctx.currentTime-anchor.clock))<.12)return;
     stop();
     if(ctx.state!=='running'){ctx.resume().then(()=>sync(true)).catch(()=>notify('Click Play to enable audio.'));return;}
-    anchor={time:t,clock:ctx.currentTime};
-    for(const l of state.layers){
+    anchor={time:t,clock:ctx.currentTime,layers:copy(layers)};
+    for(const l of layers){
       if(l.muted||!l.volume)continue;
       const skip=Math.max(0,t-l.start),len=Math.min(l.duration-skip,duration()-Math.max(t,l.start));if(len<=0)continue;
       const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=l.buffer;gain.gain.value=l.volume;source.connect(gain);gain.connect(ctx.destination);
@@ -121,7 +123,7 @@ export function registerAudioStudio(studio, host) {
   window.addEventListener('pointerup',()=>{if(drag){drag=null;refresh();}});
   for(const type of ['ff-play','ff-frame'])window.addEventListener(type,e=>{if(e.detail.studio!==studio)return;playing=e.detail.playing;sync(type==='ff-play');});
   window.addEventListener('blur',()=>{if(drag){drag=null;refresh();}});
-  return {renderList,renderTimeline,renderInspector,remove,duplicate,history,isSelected:()=>!!current(),
+  return {renderList,renderTimeline,renderInspector,remove,duplicate,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
     handlesHistory:()=>!!current()||(!host.getSelected()&&!!(state.history.length||state.future.length)),
     historyState:()=>current()||(!host.getSelected()&&(state.history.length||state.future.length))?{undo:!!state.history.length,redo:!!state.future.length}:null,
     reset(){++state.generation;state.loading=false;state.layers=[];state.history=[];state.future=[];stop();},count:()=>state.layers.length};

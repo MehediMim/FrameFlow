@@ -3,12 +3,12 @@ import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from '
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
-import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=timeline-rename-2';
+import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
 import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs';
 import { CITIES, REGIONS } from './map-places.mjs';
-import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
+import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=motion-media-1';
 import { exportMapVideo } from './map-video-export.mjs';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs';

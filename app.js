@@ -1,12 +1,15 @@
+import { installLineDrawing } from './motion-lines.mjs';
+import { createMotionVideoStore } from './motion-video.mjs';
+import { installMotionPathEditor } from './motion-path-ui.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
 import { drawShape, shapeInspector, bindShapeInspector } from './motion-shapes.mjs';
 import { installAlignBar } from './motion-align.mjs';
-import { applyCamera, attachMotionCamera, cameraAt, applyLayerDepth, unprojectLayerPoint, screenToCameraPoint, layerBlur, depthForLayer } from './motion-camera.mjs?v=timeline-rename-2';
+import { applyCamera, attachMotionCamera, cameraAt, applyLayerDepth, unprojectLayerPoint, screenToCameraPoint, layerBlur, depthForLayer } from './motion-camera.mjs?v=lines-blur-1';
 import {drawTextTexture,textTextureInspector,bindTextTextureInspector} from './motion-texture.mjs';
-import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=timeline-rename-2';
+import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
-let cameraUI = null;
+let cameraUI = null, motionPathUI = null, lineDrawingUI = null;
 import { sanitizeSvg, drawVector, vectorInspector, bindVectorInspector, preloadVectors, pinAt, setPinKey } from './vector-layers.mjs';
 
 import { installMotionElements } from './motion-elements.mjs';
@@ -19,13 +22,13 @@ import { BACKGROUND_STYLES, DEFAULT_BACKGROUND, DEFAULT_TABLE, TABLE_THEMES, TAB
 
 import { exportMapVideo as exportFrameVideo } from './map-video-export.mjs';
 
-import{PROPS,easings,valueAt,poseAt,putKey,validateProject,fontStack,cleanFont,loadFont,loadFonts,fontPickerHtml,bindFontPicker}from'./engine.mjs';
+import{PROPS,easings,valueAt,poseAt,putKey,validateProject,fontStack,cleanFont,loadFont,loadFonts,fontPickerHtml,bindFontPicker}from'./engine.mjs?v=motion-media-1';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)],canvas=$('#canvas'),ctx=canvas.getContext('2d');
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-const icons={vector:'✧',text:'T',rect:'▢',circle:'○',image:'▧',table:'▤',chart:'▥',list:'☷',diagram:'◇',group:'▣'};
+const icons={video:'V',vector:'✧',text:'T',rect:'▢',circle:'○',image:'▧',table:'▤',chart:'▥',list:'☷',diagram:'◇',group:'▣'};
 
 const fxStyle=document.createElement('style');fxStyle.textContent=`
 /* Inline FX: one timeline row per layer, even if it has many effects. */
@@ -46,9 +49,10 @@ let project,selected,frame=45,playing=false,loop=true,showGrid=false,raf,startTi
 
 
 
+const videos=createMotionVideoStore({redraw:()=>{if(project&&!exporting)requestAnimationFrame(draw)},audioReady:()=>{audioUI?.syncPlayback();if(project&&current()?.type==='video')renderInspector();}});
 const uid=()=>crypto.randomUUID();
 
-function layer(type,extra={}){return{id:uid(),name:{vector:'Vector',text:'Text',rect:'Rectangle',circle:'Ellipse',image:'Image',table:'Table',chart:'Chart',list:'List',diagram:'Diagram',group:'Group'}[type],type,x:640,y:360,w:260,h:160,scale:1,rotation:0,opacity:1,blur:0,color:'#b6f36e',radius:24,text:'Your next idea',fontSize:80,fontWeight:700,fontFamily:'Arial',visible:true,in:0,out:179,keys:{},fxClips:[],...extra}}
+function layer(type,extra={}){return{id:uid(),name:{video:'Video',vector:'Vector',text:'Text',rect:'Rectangle',circle:'Ellipse',image:'Image',table:'Table',chart:'Chart',list:'List',diagram:'Diagram',group:'Group'}[type],type,x:640,y:360,w:260,h:160,scale:1,rotation:0,opacity:1,blur:0,color:'#b6f36e',radius:24,text:'Your next idea',fontSize:80,fontWeight:700,fontFamily:'Arial',visible:true,in:0,out:179,keys:{},fxClips:[],...extra}}
 
 function demo(){const p={version:1,name:'Make your move',width:1920,height:1080,fps:30,frames:180,bg:'#e7e9e1',layers:[]};const a=layer('text',{name:'Studio label',text:'FRAMEFLOW  /  MOTION STUDIES',fontSize:19,fontWeight:600,color:'#3c4a3d',x:352,y:107});const b=layer('text',{name:'Main headline',text:'Make your\nnext move.',fontSize:112,fontWeight:700,color:'#1c2920',x:411,y:337});const c=layer('text',{name:'Subheading',text:'A little motion. Endless possibility.',fontSize:23,fontWeight:400,color:'#62705f',x:358,y:522});const d=layer('rect',{name:'Dark card',x:974,y:340,w:320,h:390,color:'#20362b',rotation:-9,radius:36});const e=layer('circle',{name:'Lime orbit',x:987,y:287,w:245,h:245,color:'#b6f36e'});const f=layer('text',{name:'Orbit mark',text:'↗',x:987,y:283,fontSize:150,fontWeight:400,color:'#263b24'});const g=layer('text',{name:'Card caption',text:'CREATE. MOVE. REPEAT.',x:973,y:462,fontSize:16,fontWeight:600,color:'#c9dec6',rotation:-9});p.layers=[a,b,c,d,e,f,g];for(const l of[a,b,c]){putKey(l,'y',0,l.y+80,'easeOut');putKey(l,'y',30,l.y,'easeInOut');putKey(l,'opacity',0,0,'easeOut');putKey(l,'opacity',25,1,'linear')}for(const l of[d,e,f,g]){putKey(l,'scale',0,.3,'backOut');putKey(l,'scale',40,1,'easeInOut');putKey(l,'rotation',0,l.rotation-35,'easeOut');putKey(l,'rotation',40,l.rotation,'easeInOut')}putKey(e,'y',40,287);putKey(e,'y',95,312);putKey(e,'y',150,287);putKey(f,'y',40,283);putKey(f,'y',95,308);putKey(f,'y',150,283);return p}
 
@@ -78,7 +82,7 @@ function layerAABB(id){const raw=project.layers.find(l=>l.id===id);if(!raw||raw.
 function moveLayerScene(id,dx,dy){const raw=project.layers.find(l=>l.id===id);if(!raw)return;const g=groupPose(groupOf(raw),frame);if(g){const r=-g.rotation*Math.PI/180;[dx,dy]=[(dx*Math.cos(r)-dy*Math.sin(r))/g.scale,(dx*Math.sin(r)+dy*Math.cos(r))/g.scale]}const rd=v=>Math.round(v*100)/100;editProp(raw,'x',rd(valueAt(raw,'x',frame)+dx));editProp(raw,'y',rd(valueAt(raw,'y',frame)+dy))}
 function drawMultiOverlay(){const ids=multiIds();if(playing||ids.length<2)return;const bs=ids.map(layerAABB).filter(Boolean);if(bs.length<2)return;ctx.save();applyCamera(ctx,project,frame);ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.strokeStyle='#7aac41';for(const b of bs)ctx.strokeRect(b.x-4,b.y-4,b.w+8,b.h+8);const x0=Math.min(...bs.map(b=>b.x)),y0=Math.min(...bs.map(b=>b.y)),x1=Math.max(...bs.map(b=>b.x+b.w)),y1=Math.max(...bs.map(b=>b.y+b.h));ctx.setLineDash([]);ctx.lineWidth=1.5;ctx.strokeStyle='#b6f36e';ctx.strokeRect(x0-10,y0-10,x1-x0+20,y1-y0+20);ctx.restore()}
 
-function loadImages(){for(const l of project.layers){if(l.type==='image'&&!images.has(l.src)){const im=new Image;im.onload=()=>draw();im.src=l.src;images.set(l.src,im)}}}
+function loadImages(){for(const l of project.layers){if(l.type==='video')videos.ensure(l.src);if(l.type==='image'&&!images.has(l.src)){const im=new Image;im.onload=()=>draw();im.src=l.src;images.set(l.src,im)}}}
 
 function groupOf(l,scene=project){return l.parentId?scene.layers.find(g=>g.id===l.parentId&&g.type==='group'):null}
 
@@ -106,13 +110,13 @@ function layerCenter(l,parent,at){
  const r=g.rotation*Math.PI/180,dx=l.x-g.anchorX,dy=l.y-g.anchorY;
  return {x:g.x+g.scale*(dx*Math.cos(r)-dy*Math.sin(r)),y:g.y+g.scale*(dx*Math.sin(r)+dy*Math.cos(r))};
 }
-function paintMotionLayer(target,raw,l,parent,at,scene,overlay,cam){
+function paintMotionLayer(target,raw,l,parent,at,scene,overlay,cam,media=videos){
  target.save();applyLayerDepth(target,scene,raw,cam,layerCenter(l,parent,at));
  applyGroup(target,groupPose(parent,at));target.translate(l.x,l.y);
  target.rotate(l.rotation*Math.PI/180);target.scale(l.scale,l.scale);
  target.globalAlpha*=Math.max(0,Math.min(1,l.opacity));target.fillStyle=l.color;
  const {w,h}=bounds(l);
- if(l.type==='diagram'){drawGraph(target,l,at)}else if(l.type==='list'){drawStructured(target,l,at)}else if(l.type==='table'){drawTable(target,l,at)}else if(l.type==='chart'){drawChart(target,l,at)}else if(l.type==='vector'){drawVector(target,l,at,w,h,overlay && selected===raw.id)}else if(l.type==='rect'||l.type==='circle'){drawShape(target,l,at,scene.fps)}else if(l.type==='text'){target.font=`${l.fontWeight||700} ${l.fontSize||80}px ${fontStack(l.fontFamily)}`;target.textAlign='center';target.textBaseline='middle';drawTextTexture(target,l,fontStack)}else{const im=images.get(l.src);if(im?.complete&&im.naturalWidth)target.drawImage(im,-w/2,-h/2,w,h)}
+ if(l.type==='video'){const video=media.get(l.src);if(video?.readyState>=2)target.drawImage(video,-w/2,-h/2,w,h)}else if(l.type==='diagram'){drawGraph(target,l,at)}else if(l.type==='list'){drawStructured(target,l,at)}else if(l.type==='table'){drawTable(target,l,at)}else if(l.type==='chart'){drawChart(target,l,at)}else if(l.type==='vector'){drawVector(target,l,at,w,h,overlay && selected===raw.id)}else if(l.type==='rect'||l.type==='circle'){drawShape(target,l,at,scene.fps)}else if(l.type==='text'){target.font=`${l.fontWeight||700} ${l.fontSize||80}px ${fontStack(l.fontFamily)}`;target.textAlign='center';target.textBaseline='middle';drawTextTexture(target,l,fontStack)}else{const im=images.get(l.src);if(im?.complete&&im.naturalWidth)target.drawImage(im,-w/2,-h/2,w,h)}
  target.restore();
 }
 // Crop each blur pass to the transformed layer bounds. This avoids repeatedly
@@ -131,7 +135,7 @@ function blurredLayerCrop(target,raw,l,parent,scene,at,cam,blur){
  const y1=Math.min(scene.height,Math.ceil(Math.max(...points.map(p=>p.y))+pad));
  return x1>x0&&y1>y0?{x:x0,y:y0,w:x1-x0,h:y1-y0}:null;
 }
-function drawScene(target,at,overlay=false,scene=project){
+function drawScene(target,at,overlay=false,scene=project,media=videos){
  const c=target.canvas;
  if(c.width!==scene.width||c.height!==scene.height){c.width=scene.width;c.height=scene.height;}
  target.setTransform(1,0,0,1,0,0);target.globalAlpha=1;target.globalCompositeOperation='source-over';target.filter='none';
@@ -144,13 +148,13 @@ function drawScene(target,at,overlay=false,scene=project){
   const parent=groupOf(raw,scene);
   if(parent&&(parent.visible===false||at<parent.in||at>parent.out))continue;
   const l=poseAt(raw,at),blur=layerBlur(scene,{...raw,blur:l.blur??0},cam);
-  if(blur<=.05){paintMotionLayer(target,raw,l,parent,at,scene,overlay,cam);continue;}
+  if(blur<=.05){paintMotionLayer(target,raw,l,parent,at,scene,overlay,cam,media);continue;}
   const crop=blurredLayerCrop(target,raw,l,parent,scene,at,cam,blur);if(!crop)continue;
   if(fxCanvas.width!==crop.w||fxCanvas.height!==crop.h){fxCanvas.width=crop.w;fxCanvas.height=crop.h;}
   fxCtx.setTransform(1,0,0,1,0,0);fxCtx.filter='none';fxCtx.globalAlpha=1;
   fxCtx.clearRect(0,0,crop.w,crop.h);
   fxCtx.save();fxCtx.translate(-crop.x,-crop.y);applyCamera(fxCtx,scene,at,cam);
-  paintMotionLayer(fxCtx,raw,l,parent,at,scene,false,cam);fxCtx.restore();
+  paintMotionLayer(fxCtx,raw,l,parent,at,scene,false,cam,media);fxCtx.restore();
   // The blurred image contains *only this layer*, with padded transparent margins.
   target.save();target.setTransform(1,0,0,1,0,0);target.globalAlpha=1;
   target.filter=`blur(${blur.toFixed(2)}px)`;target.drawImage(fxCanvas,crop.x,crop.y);target.restore();
@@ -181,7 +185,7 @@ const usedFonts=scene=>scene.layers.flatMap(l=>l.type==='text'?[l.fontFamily||'A
 
 function syncFonts(){for(const n of usedFonts(project)){const k=cleanFont(n);if(seenFonts.has(k))continue;seenFonts.add(k);loadFont(k).then(()=>draw())}}
 
-function draw(){syncFonts();drawScene(ctx,frame,true);drawMultiOverlay();alignBar?.refresh()}
+function draw(){syncFonts();videos.syncPreview(project,frame);drawScene(ctx,frame,true);drawMultiOverlay();motionPathUI?.drawOverlay();lineDrawingUI?.drawOverlay();alignBar?.refresh()}
 
 window.addEventListener('ff-vector-loaded',()=>{if(project)draw()});
 
@@ -346,13 +350,21 @@ function bindLayerFX(l){
  dauto.onchange=()=>{checkpoint();if(dauto.checked)delete l.depth;else l.depth=depthForLayer(project,l);changed()};
  depth.onchange=()=>{const v=Number(depth.value);if(!Number.isFinite(v))return;checkpoint();l.depth=Math.max(-500,Math.min(500,v));changed()};
 }
-function renderInspector(){if(cameraUI?.inspect())return;if(audioUI?.renderInspector())return;window.ffVectorFps=project.fps;const l=current();if(!l){$('#inspector').innerHTML='<p class="muted">Select a layer to edit its properties.<br><br>Add text, a shape, an image, or a table to start.</p>';return}const props=['text','group'].includes(l.type)?['x','y','scale','rotation','opacity']:PROPS.filter(x=>x!=='blur');$('#inspector').innerHTML=`<div class="inspector-title"><span>${icons[l.type]}</span> ${esc(l.name)}</div>${l.type==='group'?'<p class="mini-label">Group keyframes transform all children together. Change a group property at a new time to create its keyframe automatically. Click a child while the group is selected to move the whole group; Alt-click selects the group from a child.</p>':''}${l.type==='list'?structuredInspector(l,esc):l.type==='diagram'?graphInspector(l):''}${l.type==='table'?tableInspector(l):''}${l.type==='chart'?chartInspector(l):''}${l.type==='vector'?vectorInspector(l):''}${animationInspector(l)}${['rect','circle'].includes(l.type)?shapeInspector(l):''}${layerFXInspector(l)}${l.type==='text'?`<label>Text<textarea id="textContent">${esc(l.text)}</textarea></label>${fontPickerHtml('fontFamily','Font',l.fontFamily)}<div class="two"><label>Font size<input id="fontSize" type="number" min="8" max="800" value="${l.fontSize}"></label><label>Weight<select id="fontWeight"><option value="400">Regular</option><option value="600">Semibold</option><option value="700">Bold</option></select></label></div>${textTextureInspector(l)}`:''}<div class="section-title" style="margin-top:18px">TRANSFORM <span>◆</span></div>${props.map(prop=>{const keys=l.keys[prop]||[],at=keys.some(k=>k.f===frame),v=valueAt(l,prop,frame);return`<div class="property"><label for="p-${prop}">${labels[prop]}</label><input id="p-${prop}" data-prop="${prop}" type="number" step="${['scale','opacity'].includes(prop)?'.01':'1'}" value="${Number(v.toFixed(2))}"><button class="key ${keys.length?'animated':''} ${at?'current':''}" data-key="${prop}" title="${at?'Remove':'Add'} keyframe at frame ${frame}">${at?'◆':'◇'}</button></div>`}).join('')}<label class="color-row">${['image','group','vector'].includes(l.type)?'':'Fill / accent color'}${['image','group','vector'].includes(l.type)?'':`<input id="fillColor" type="color" value="${l.color}">`}</label><label>Easing from this frame<select id="easing">${Object.keys(easings).map(e=>`<option value="${e}">${({linear:'Linear',easeIn:'Ease in',easeOut:'Ease out',easeInOut:'Ease in & out',backOut:'Overshoot',hold:'Hold'})[e]}</option>`).join('')}</select></label><div class="two"><label>In time (s)<input id="inFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.in/project.fps).toFixed(3)}"></label><label>Out time (s)<input id="outFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.out/project.fps).toFixed(3)}"></label></div><p class="mini-label">Drag any green corner handle to scale around the center anchor. ◆ A filled diamond marks a keyframe here. Auto-key adds keys to animated properties when you edit.</p>`;
+function videoInspector(l){
+ const state=videos.status(l.src)?.audioState;
+ return `<div class="section-title" style="margin-top:18px">VIDEO</div><p class="mini-label">${esc(l.videoFileName||l.name)} / ${l.videoDuration.toFixed(2)} seconds</p><label>Source start (s)<input id="videoSourceStart" type="number" min="0" max="${Math.max(0,l.videoDuration-.001)}" step="0.01" value="${l.videoOffset}"></label><label class="m-chk"><input id="videoMuted" type="checkbox" ${l.videoMuted?'checked':''}> Mute video sound</label><p class="mini-label">${state==='silent'?'No decodable audio track in this file.':state==='ready'?'Original sound follows the video timing and is included in export.':'Loading video sound...'}</p>`;
+}
+function bindVideoInspector(l){
+ $('#videoMuted').onchange=e=>{pause();checkpoint();l.videoMuted=e.target.checked;changed()};
+ $('#videoSourceStart').onchange=e=>{const n=Number(e.target.value);if(!Number.isFinite(n)||n<0||n>=l.videoDuration){renderInspector();return;}pause();checkpoint();l.videoOffset=n;changed()};
+}
+function renderInspector(){if(cameraUI?.inspect())return;if(audioUI?.renderInspector())return;window.ffVectorFps=project.fps;const l=current();if(!l){$('#inspector').innerHTML='<p class="muted">Select a layer to edit its properties.<br><br>Add text, a shape, an image, or a table to start.</p>';return}const props=['text','group'].includes(l.type)?['x','y','scale','rotation','opacity']:PROPS.filter(x=>x!=='blur');$('#inspector').innerHTML=`<div class="inspector-title"><span>${icons[l.type]}</span> ${esc(l.name)}</div>${l.type==='group'?'<p class="mini-label">Group keyframes transform all children together. Change a group property at a new time to create its keyframe automatically. Click a child while the group is selected to move the whole group; Alt-click selects the group from a child.</p>':''}${l.type==='list'?structuredInspector(l,esc):l.type==='diagram'?graphInspector(l):''}${l.type==='table'?tableInspector(l):''}${l.type==='chart'?chartInspector(l):''}${l.type==='vector'?vectorInspector(l):''}${l.type==='video'?videoInspector(l):''}${motionPathUI?.fields(l)||''}${animationInspector(l)}${['rect','circle'].includes(l.type)?shapeInspector(l):''}${layerFXInspector(l)}${l.type==='text'?`<label>Text<textarea id="textContent">${esc(l.text)}</textarea></label>${fontPickerHtml('fontFamily','Font',l.fontFamily)}<div class="two"><label>Font size<input id="fontSize" type="number" min="8" max="800" value="${l.fontSize}"></label><label>Weight<select id="fontWeight"><option value="400">Regular</option><option value="600">Semibold</option><option value="700">Bold</option></select></label></div>${textTextureInspector(l)}`:''}<div class="section-title" style="margin-top:18px">TRANSFORM <span>◆</span></div>${props.map(prop=>{const keys=l.keys[prop]||[],at=keys.some(k=>k.f===frame),v=valueAt(l,prop,frame);return`<div class="property"><label for="p-${prop}">${labels[prop]}</label><input id="p-${prop}" data-prop="${prop}" type="number" step="${['scale','opacity'].includes(prop)?'.01':'1'}" value="${Number(v.toFixed(2))}"><button class="key ${keys.length?'animated':''} ${at?'current':''}" data-key="${prop}" title="${at?'Remove':'Add'} keyframe at frame ${frame}">${at?'◆':'◇'}</button></div>`}).join('')}<label class="color-row">${['image','video','group','vector'].includes(l.type)?'':'Fill / accent color'}${['image','video','group','vector'].includes(l.type)?'':`<input id="fillColor" type="color" value="${l.color}">`}</label><label>Easing from this frame<select id="easing">${Object.keys(easings).map(e=>`<option value="${e}">${({linear:'Linear',easeIn:'Ease in',easeOut:'Ease out',easeInOut:'Ease in & out',backOut:'Overshoot',hold:'Hold'})[e]}</option>`).join('')}</select></label><div class="two"><label>In time (s)<input id="inFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.in/project.fps).toFixed(3)}"></label><label>Out time (s)<input id="outFrame" type="number" min="0" max="${+((project.frames-1)/project.fps).toFixed(3)}" step="0.001" value="${+(l.out/project.fps).toFixed(3)}"></label></div><p class="mini-label">Drag any green corner handle to scale around the center anchor. ◆ A filled diamond marks a keyframe here. Auto-key adds keys to animated properties when you edit.</p>`;
 
-if(['rect','circle'].includes(l.type))bindShapeInspector(l,{checkpoint,changed});if(l.type==='list')bindStructuredInspector(l,{checkpoint,changed,pause,notify});if(l.type==='diagram')bindGraphInspector(l,{checkpoint,changed,pause,notify});if(l.type==='table')bindTableInspector(l);if(l.type==='chart')bindChartInspector(l);if(l.type==='vector')bindVectorInspector(l,(item,key,value)=>{checkpoint();item[key]=value;changed()},project.fps);bindAnimationInspector(l);bindLayerFX(l);
+if(['rect','circle'].includes(l.type))bindShapeInspector(l,{checkpoint,changed});if(l.type==='list')bindStructuredInspector(l,{checkpoint,changed,pause,notify});if(l.type==='diagram')bindGraphInspector(l,{checkpoint,changed,pause,notify});if(l.type==='table')bindTableInspector(l);if(l.type==='chart')bindChartInspector(l);if(l.type==='vector')bindVectorInspector(l,(item,key,value)=>{checkpoint();item[key]=value;changed()},project.fps);bindAnimationInspector(l);bindLayerFX(l);motionPathUI?.bind(l);if(l.motionPath)for(const p of ['x','y']){const b=$('[data-key="'+p+'"]');if(b){b.disabled=true;b.title='Use Edit path or path timing to change movement';}}if(l.type==='video')bindVideoInspector(l);
 
 $$('[data-prop]').forEach(el=>el.onchange=()=>{let v=Number(el.value);if(!Number.isFinite(v))return;const prop=el.dataset.prop;if(prop==='opacity')v=Math.max(0,Math.min(1,v));if(prop==='scale')v=Math.max(.01,Math.min(20,v));if(prop==='w'||prop==='h')v=Math.max(1,Math.min(10000,v));checkpoint();editProp(l,prop,v);changed()});$$('[data-key]').forEach(el=>el.onclick=()=>{pause();checkpoint();const prop=el.dataset.key,keys=l.keys[prop]||[],at=keys.findIndex(k=>k.f===frame),v=valueAt(l,prop,frame);if(at>=0){keys.splice(at,1);if(!keys.length)l[prop]=v}else putKey(l,prop,frame,v,$('#easing').value);changed()});if(l.type==='text'){bindTextTextureInspector(l,{checkpoint,changed,draw});$('#fontWeight').value=l.fontWeight;$('#textContent').onchange=e=>{checkpoint();l.text=e.target.value;changed()};$('#fontSize').onchange=e=>{checkpoint();l.fontSize=Math.max(8,Math.min(800,+e.target.value||80));changed()};$('#fontWeight').onchange=e=>{checkpoint();l.fontWeight=+e.target.value;changed()};bindFontPicker('fontFamily',n=>{checkpoint();l.fontFamily=n;changed()})}if($('#fillColor'))$('#fillColor').onchange=e=>{checkpoint();l.color=e.target.value;changed()};const anyKey=Object.values(l.keys).flat().find(k=>k.f===frame);$('#easing').value=anyKey?.e||'easeInOut';$('#easing').onchange=e=>{const ks=Object.values(l.keys).flat().filter(k=>k.f===frame);if(!ks.length){notify('Add a keyframe here before changing easing');return}checkpoint();ks.forEach(k=>k.e=e.target.value);changed()};$('#inFrame').onchange=e=>{checkpoint();l.in=Math.max(0,Math.min(l.out,Math.round(+e.target.value*project.fps)||0));changed()};$('#outFrame').onchange=e=>{checkpoint();l.out=Math.max(l.in,Math.min(project.frames-1,Math.round(+e.target.value*project.fps)||0));changed()}}
 
-function editProp(l,prop,v){const keys=l.keys[prop]||[],at=keys.find(k=>k.f===frame);if(at)at.v=v;else if(keys.length&&($('#autoKey').checked||l.type==='group'))putKey(l,prop,frame,v);else if(keys.length){const delta=v-valueAt(l,prop,frame);keys.forEach(k=>k.v+=delta);l[prop]+=delta}else l[prop]=v}
+function editProp(l,prop,v){if(l.motionPath&&l.motionPath.points.length&&['x','y'].includes(prop)){const points=l.motionPath.points.map(p=>p[prop]),delta=Math.max(-20000-Math.min(...points),Math.min(20000-Math.max(...points),v-valueAt(l,prop,frame)));for(const p of l.motionPath.points)p[prop]+=delta;for(const k of l.keys[prop]||[])k.v+=delta;l[prop]+=delta;return;}const keys=l.keys[prop]||[],at=keys.find(k=>k.f===frame);if(at)at.v=v;else if(keys.length&&($('#autoKey').checked||l.type==='group'))putKey(l,prop,frame,v);else if(keys.length){const delta=v-valueAt(l,prop,frame);keys.forEach(k=>k.v+=delta);l[prop]+=delta}else l[prop]=v}
 
 function renderTimeline(){
 
@@ -382,7 +394,7 @@ function renderTimeline(){
 
  $('#trackLabels').style.transform=`translateY(-${$('#scroll').scrollTop}px)`;
 
- $$('.diamond').forEach(el=>el.onpointerdown=e=>{e.preventDefault();e.stopPropagation();pause();const id=el.dataset.layer,f=+el.dataset.f;selected=id;selectedKey={id,f};if(e.altKey){checkpoint();const l=current();for(const prop of PROPS){const v=valueAt(l,prop,f);l.keys[prop]=(l.keys[prop]||[]).filter(k=>k.f!==f);if(!l.keys[prop].length)l[prop]=v}changed();return}checkpoint();keyDrag={id,from:f,to:f,keys:JSON.parse(JSON.stringify(current().keys))};setFrame(f);renderLayers();renderTimeline()});
+ $$('.diamond').forEach(el=>el.onpointerdown=e=>{e.preventDefault();e.stopPropagation();pause();const id=el.dataset.layer,f=+el.dataset.f;selected=id;selectedKey={id,f};if(current()?.motionPath&&!Object.entries(current().keys).some(([p,ks])=>!['x','y'].includes(p)&&ks.some(k=>k.f===f))){setFrame(f);notify('Use Edit path or path timing to change this movement.');return;}if(e.altKey){checkpoint();const l=current();for(const prop of PROPS){if(l.motionPath&&['x','y'].includes(prop))continue;const v=valueAt(l,prop,f);l.keys[prop]=(l.keys[prop]||[]).filter(k=>k.f!==f);if(!l.keys[prop].length)l[prop]=v}changed();return}checkpoint();keyDrag={id,from:f,to:f,keys:JSON.parse(JSON.stringify(current().keys))};setFrame(f);renderLayers();renderTimeline()});
 
  $$('[data-fx-clip]').forEach(el=>el.onpointerdown=e=>{
   if(e.button!==0)return;e.preventDefault();e.stopPropagation();pause();
@@ -400,7 +412,7 @@ function renderTimeline(){
 
   const mode=e.target.closest('[data-trim]')?.dataset.trim||'move';checkpoint();selected=l.id;selectedKey=null;
 
-  clipDrag={id:l.id,mode,startX:e.clientX,startIn:l.in,startOut:l.out,keys:JSON.parse(JSON.stringify(l.keys)),fxClips:JSON.parse(JSON.stringify(l.fxClips||[]))};
+  clipDrag={id:l.id,mode,startX:e.clientX,startIn:l.in,startOut:l.out,keys:JSON.parse(JSON.stringify(l.keys)),fxClips:JSON.parse(JSON.stringify(l.fxClips||[])),motionPath:l.motionPath?JSON.parse(JSON.stringify(l.motionPath)):null,videoOffset:l.videoOffset};
 
   renderLayers();renderInspector();
 
@@ -437,16 +449,16 @@ function updateClipDrag(e){
 
  if(d.mode==='move'){
 
-  const shift=Math.max(-d.startIn,Math.min(project.frames-1-d.startOut,offset));
+  const shift=Math.max(-d.startIn,d.motionPath?-d.motionPath.start:-d.startIn,Math.min(project.frames-1-d.startOut,offset));
 
-  l.in=d.startIn+shift;l.out=d.startOut+shift;
+  l.in=d.startIn+shift;l.out=d.startOut+shift;if(d.motionPath)l.motionPath={...structuredClone(d.motionPath),start:d.motionPath.start+shift};
 
   l.keys=JSON.parse(JSON.stringify(d.keys));
 
   for(const keys of Object.values(l.keys))for(const k of keys)k.f+=shift;
   l.fxClips=(d.fxClips||[]).map(fx=>({...fx,start:fx.start+shift,...(fx.returnStart!==undefined?{returnStart:fx.returnStart+shift}:{})}));
 
- }else if(d.mode==='left')l.in=Math.max(0,Math.min(d.startOut,d.startIn+offset));
+ }else if(d.mode==='left'){l.in=Math.max(0,Math.min(d.startOut,d.startIn+offset));if(l.type==='video'){const shift=Math.max(-d.videoOffset*project.fps,Math.min((l.videoDuration-d.videoOffset)*project.fps-1,l.in-d.startIn));l.in=Math.round(d.startIn+shift);l.videoOffset=Math.max(0,d.videoOffset+(l.in-d.startIn)/project.fps);}}
 
  else l.out=Math.max(d.startIn,Math.min(project.frames-1,d.startOut+offset));
 
@@ -529,12 +541,12 @@ canvas.onpointerdown=e=>{if(e.button!==0)return;pause();const p=point(e);
  const node=graphHit(pose,local);if(node>=0){checkpoint();drag={kind:'graph-node',id:graphLayer.id,node};canvas.setPointerCapture(e.pointerId);return;}}
  let hit;for(const raw of[...project.layers].reverse()){if(raw.type==='group'||raw.visible===false||frame<raw.in||frame>raw.out)continue;const parent=groupOf(raw);if(parent&&parent.visible===false)continue;const l=poseAt(raw,frame),gp=groupPose(parent,frame);let pp=unprojectLayerPoint(project,raw,cameraAt(project,frame),p,layerCenter(l,parent,frame));if(gp){const ang=-gp.rotation*Math.PI/180,dx=p.x-gp.x,dy=p.y-gp.y;pp={x:gp.anchorX+(dx*Math.cos(ang)-dy*Math.sin(ang))/gp.scale,y:gp.anchorY+(dx*Math.sin(ang)+dy*Math.cos(ang))/gp.scale}}const a=-l.rotation*Math.PI/180,dx=pp.x-l.x,dy=pp.y-l.y,x=(dx*Math.cos(a)-dy*Math.sin(a))/l.scale,y=(dx*Math.sin(a)+dy*Math.cos(a))/l.scale,{w,h}=bounds(l);if(Math.abs(x)<=w/2+10&&Math.abs(y)<=h/2+10){hit=raw;break}}if(hit){if(hit.parentId&&(e.altKey||selected===hit.parentId))hit=groupOf(hit);const keepMulti=multiIds().includes(hit.id),others=keepMulti?multiIds().filter(i=>i!==hit.id).map(i=>project.layers.find(z=>z.id===i)).filter(Boolean).map(o=>({id:o.id,x:valueAt(o,'x',frame),y:valueAt(o,'y',frame),parent:groupPose(groupOf(o),frame)})):[];if(keepMulti){selected=hit.id;selectedKey=null;cameraUI?.clear();renderLayers();renderInspector();draw()}else select(hit.id);checkpoint();drag={kind:'move',start:point(e,hit),x:valueAt(hit,'x',frame),y:valueAt(hit,'y',frame),parent:groupPose(groupOf(hit),frame),others};canvas.setPointerCapture(e.pointerId)}else select(null)};
 
-window.addEventListener('pointermove',e=>{if(fxDrag){updateFxDrag(e);return}if(clipDrag){updateClipDrag(e);return}if(keyDrag){const to=frameFromEvent(e),l=current();l.keys=JSON.parse(JSON.stringify(keyDrag.keys));if(to!==keyDrag.from){for(const prop of PROPS){let ks=l.keys[prop]||[],moving=ks.find(k=>k.f===keyDrag.from);if(moving){ks=ks.filter(k=>k.f!==to||k===moving);moving.f=to;ks.sort((a,b)=>a.f-b.f);l.keys[prop]=ks}}}keyDrag.to=to;selectedKey={id:l.id,f:to};setFrame(to);renderTimeline();return}if(!drag)return;if(drag.kind==='puppet'){const layer=project.layers.find(z=>z.id===drag.id);if(layer?.puppetPin){const pos=canvasToPin(layer,point(e,layer),frame);setPinKey(layer,frame,pos.x,pos.y);draw();}return;}if(drag.kind==='layer-scale'){const layer=project.layers.find(z=>z.id===drag.id);if(!layer)return;let q=point(e,layer);const gp=drag.parent;if(gp){const a=-gp.rotation*Math.PI/180,dx=q.x-gp.x,dy=q.y-gp.y;q={x:gp.anchorX+(dx*Math.cos(a)-dy*Math.sin(a))/gp.scale,y:gp.anchorY+(dx*Math.sin(a)+dy*Math.cos(a))/gp.scale};}const pose=drag.anchor,a=-pose.rotation*Math.PI/180,dx=q.x-pose.x,dy=q.y-pose.y,dist=Math.hypot(dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a));editProp(layer,'scale',Math.max(.01,Math.min(20,drag.initial*dist/drag.dist)));draw();return;}if(drag.kind==='graph-node'){const layer=project.layers.find(q=>q.id===drag.id);if(!layer)return;const pose=poseAt(layer,frame),gp=groupPose(groupOf(layer),frame);let q=point(e,layer);if(gp){const a=-gp.rotation*Math.PI/180,dx=q.x-gp.x,dy=q.y-gp.y;q={x:gp.anchorX+(dx*Math.cos(a)-dy*Math.sin(a))/gp.scale,y:gp.anchorY+(dx*Math.sin(a)+dy*Math.cos(a))/gp.scale};}const a=-pose.rotation*Math.PI/180,dx=q.x-pose.x,dy=q.y-pose.y;layer.structured.nodes[drag.node].x=Math.max(0,Math.min(1,.5+(dx*Math.cos(a)-dy*Math.sin(a))/(pose.w*pose.scale)));layer.structured.nodes[drag.node].y=Math.max(0,Math.min(1,.5+(dx*Math.sin(a)+dy*Math.cos(a))/(pose.h*pose.scale)));draw();return;}if(drag.kind==='scrub'){setFrame(frameFromEvent(e));return}const l=current();if(!l)return;const p=point(e,l);let dx=p.x-drag.start.x,dy=p.y-drag.start.y;const rawDx=dx,rawDy=dy;if(drag.parent){const g=drag.parent,r=-g.rotation*Math.PI/180;[dx,dy]=[(dx*Math.cos(r)-dy*Math.sin(r))/g.scale,(dx*Math.sin(r)+dy*Math.cos(r))/g.scale]}editProp(l,'x',Math.round(drag.x+dx));editProp(l,'y',Math.round(drag.y+dy));for(const o of drag.others||[]){const lo=project.layers.find(z=>z.id===o.id);if(!lo)continue;let ox=rawDx,oy=rawDy;if(o.parent){const g=o.parent,r=-g.rotation*Math.PI/180;[ox,oy]=[(ox*Math.cos(r)-oy*Math.sin(r))/g.scale,(ox*Math.sin(r)+oy*Math.cos(r))/g.scale]}editProp(lo,'x',Math.round(o.x+ox));editProp(lo,'y',Math.round(o.y+oy))}draw();renderInspector()});
+window.addEventListener('pointermove',e=>{if(fxDrag){updateFxDrag(e);return}if(clipDrag){updateClipDrag(e);return}if(keyDrag){const to=frameFromEvent(e),l=current();l.keys=JSON.parse(JSON.stringify(keyDrag.keys));if(to!==keyDrag.from){for(const prop of PROPS){if(l.motionPath&&['x','y'].includes(prop))continue;let ks=l.keys[prop]||[],moving=ks.find(k=>k.f===keyDrag.from);if(moving){ks=ks.filter(k=>k.f!==to||k===moving);moving.f=to;ks.sort((a,b)=>a.f-b.f);l.keys[prop]=ks}}}keyDrag.to=to;selectedKey={id:l.id,f:to};setFrame(to);renderTimeline();return}if(!drag)return;if(drag.kind==='puppet'){const layer=project.layers.find(z=>z.id===drag.id);if(layer?.puppetPin){const pos=canvasToPin(layer,point(e,layer),frame);setPinKey(layer,frame,pos.x,pos.y);draw();}return;}if(drag.kind==='layer-scale'){const layer=project.layers.find(z=>z.id===drag.id);if(!layer)return;let q=point(e,layer);const gp=drag.parent;if(gp){const a=-gp.rotation*Math.PI/180,dx=q.x-gp.x,dy=q.y-gp.y;q={x:gp.anchorX+(dx*Math.cos(a)-dy*Math.sin(a))/gp.scale,y:gp.anchorY+(dx*Math.sin(a)+dy*Math.cos(a))/gp.scale};}const pose=drag.anchor,a=-pose.rotation*Math.PI/180,dx=q.x-pose.x,dy=q.y-pose.y,dist=Math.hypot(dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a));editProp(layer,'scale',Math.max(.01,Math.min(20,drag.initial*dist/drag.dist)));draw();return;}if(drag.kind==='graph-node'){const layer=project.layers.find(q=>q.id===drag.id);if(!layer)return;const pose=poseAt(layer,frame),gp=groupPose(groupOf(layer),frame);let q=point(e,layer);if(gp){const a=-gp.rotation*Math.PI/180,dx=q.x-gp.x,dy=q.y-gp.y;q={x:gp.anchorX+(dx*Math.cos(a)-dy*Math.sin(a))/gp.scale,y:gp.anchorY+(dx*Math.sin(a)+dy*Math.cos(a))/gp.scale};}const a=-pose.rotation*Math.PI/180,dx=q.x-pose.x,dy=q.y-pose.y;layer.structured.nodes[drag.node].x=Math.max(0,Math.min(1,.5+(dx*Math.cos(a)-dy*Math.sin(a))/(pose.w*pose.scale)));layer.structured.nodes[drag.node].y=Math.max(0,Math.min(1,.5+(dx*Math.sin(a)+dy*Math.cos(a))/(pose.h*pose.scale)));draw();return;}if(drag.kind==='scrub'){setFrame(frameFromEvent(e));return}const l=current();if(!l)return;const p=point(e,l);let dx=p.x-drag.start.x,dy=p.y-drag.start.y;const rawDx=dx,rawDy=dy;if(drag.parent){const g=drag.parent,r=-g.rotation*Math.PI/180;[dx,dy]=[(dx*Math.cos(r)-dy*Math.sin(r))/g.scale,(dx*Math.sin(r)+dy*Math.cos(r))/g.scale]}editProp(l,'x',Math.round(drag.x+dx));editProp(l,'y',Math.round(drag.y+dy));for(const o of drag.others||[]){const lo=project.layers.find(z=>z.id===o.id);if(!lo)continue;let ox=rawDx,oy=rawDy;if(o.parent){const g=o.parent,r=-g.rotation*Math.PI/180;[ox,oy]=[(ox*Math.cos(r)-oy*Math.sin(r))/g.scale,(ox*Math.sin(r)+oy*Math.cos(r))/g.scale]}editProp(lo,'x',Math.round(o.x+ox));editProp(lo,'y',Math.round(o.y+oy))}draw();renderInspector()});
 
 window.addEventListener('pointercancel',()=>{if(drag?.kind==='layer-scale'){changed();drag=null;}});
 window.addEventListener('pointerup',()=>{if(drag?.kind==='move'||drag?.kind==='puppet'||drag?.kind==='graph-node'||drag?.kind==='layer-scale'||keyDrag||clipDrag||fxDrag)changed();drag=null;keyDrag=null;clipDrag=null;fxDrag=null});
 
-function add(type,extra={}){pause();checkpoint();if(type==='list'||type==='diagram'){extra={w:project.width*.68,h:project.height*.58,structured:structuredClone(type==='list'?DEFAULT_LIST:GRAPH_DEFAULT),...extra};}if(type==='chart'){extra={w:project.width*.70,h:project.height*.62,chart:structuredClone(DEFAULT_CHART),...extra};}if(type==='table'){extra={w:project.width*.76,h:project.height*.6,table:JSON.parse(JSON.stringify(DEFAULT_TABLE)),...extra};}const l=layer(type,{x:project.width/2,y:project.height/2,in:frame,out:project.frames-1,...extra});project.layers.push(l);selected=l.id;if(l.type==='image')loadImages();changed()}
+function add(type,extra={}){pause();checkpoint();if(type==='list'||type==='diagram'){extra={w:project.width*.68,h:project.height*.58,structured:structuredClone(type==='list'?DEFAULT_LIST:GRAPH_DEFAULT),...extra};}if(type==='chart'){extra={w:project.width*.70,h:project.height*.62,chart:structuredClone(DEFAULT_CHART),...extra};}if(type==='table'){extra={w:project.width*.76,h:project.height*.6,table:JSON.parse(JSON.stringify(DEFAULT_TABLE)),...extra};}const l=layer(type,{x:project.width/2,y:project.height/2,in:frame,out:project.frames-1,...extra});project.layers.push(l);selected=l.id;if(l.type==='video')project.frames=Math.max(project.frames,l.out+1);if(l.type==='image'||l.type==='video')loadImages();changed()}
 
 function tableInspector(l){const t=l.table;return `<div class="section-title" style="margin-top:18px">TABLE CONTENT</div><label>Title<input id="tableTitle" maxlength="160" value="${esc(t.title)}"></label><label>Information / subtitle<input id="tableInfo" maxlength="240" value="${esc(t.info)}"></label><label>Headers and rows<textarea id="tableData" rows="7" spellcheck="false">${esc(t.data.map(row=>row.join(' | ')).join('\n'))}</textarea></label><p class="mini-label">First line = column headers. One row per line; separate columns with | or paste tab-separated cells from a spreadsheet. Up to 30 data rows and 8 columns.</p><div class="section-title" style="margin-top:14px">TITLE STYLE</div><div class="two"><label>Size<input data-table-typo="titleFontSize" type="number" min="8" max="100" value="${t.titleFontSize??30}"></label><label>Weight<select data-table-typo="titleWeight">${[400,500,600,700,800].map(n=>`<option value="${n}" ${Number(t.titleWeight??700)===n?'selected':''}>${n}</option>`).join('')}</select></label></div>${fontPickerHtml('tableTitleFont','Title font',t.titleFontFamily||t.fontFamily)}<label>Color<input data-table-typo="titleColor" type="color" value="${t.titleColor||'#e8f1e4'}"></label><div class="section-title" style="margin-top:14px">INFORMATION STYLE</div><div class="two"><label>Size<input data-table-typo="infoFontSize" type="number" min="8" max="100" value="${t.infoFontSize??16}"></label><label>Weight<select data-table-typo="infoWeight">${[400,500,600,700,800].map(n=>`<option value="${n}" ${Number(t.infoWeight??400)===n?'selected':''}>${n}</option>`).join('')}</select></label></div>${fontPickerHtml('tableInfoFont','Information font',t.infoFontFamily||t.fontFamily)}<label>Color<input data-table-typo="infoColor" type="color" value="${t.infoColor||'#a8bba4'}"></label><div class="section-title" style="margin-top:14px">TABLE CELLS STYLE</div><div class="two"><label>Body size<input id="tableFontSizeInline" type="number" min="8" max="100" value="${t.fontSize}"></label><label>Header size<input data-table-typo="headerFontSize" type="number" min="8" max="100" value="${t.headerFontSize??t.fontSize}"></label></div><label>Header weight<select data-table-typo="headerWeight">${[400,500,600,700,800].map(n=>`<option value="${n}" ${Number(t.headerWeight??700)===n?'selected':''}>${n}</option>`).join('')}</select></label>${fontPickerHtml('tableFont','Body font',t.fontFamily)}<label>Table style<select id="tableTheme">${Object.entries(TABLE_THEMES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label>Reveal animation<select id="tableAnimation">${Object.entries(TABLE_ANIMATIONS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><div class="two"><label>Reveal frames<input id="tableDuration" type="number" min="1" value="${t.duration}"></label><label>Text size<input id="tableFontSize" type="number" min="8" max="100" value="${t.fontSize}"></label></div><p class="mini-label">Reveal starts at the layer's In frame. All rows are visible after ${t.duration} frames. Extend Out frame if needed. Transform keyframes animate the whole table.</p>`;}
 
@@ -703,9 +715,9 @@ window.addEventListener('keydown',event=>{
 
 installMotionExtrasUI();
 
-$$('[data-add]').forEach(el=>el.onclick=()=>add(el.dataset.add));$('#duplicate').onclick=()=>{if(audioUI?.duplicate())return;if(!current())return;if(current().type==='group'){notify('Duplicate child layers individually');return}checkpoint();const l=JSON.parse(JSON.stringify(current()));l.id=uid();if(l.fxClips)l.fxClips.forEach(fx=>fx.id=uid());l.name+=' copy';l.x+=30;l.y+=30;for(const prop of['x','y'])for(const k of l.keys[prop]||[])k.v+=30;project.layers.push(l);selected=l.id;changed()};$('#delete').onclick=()=>{if(cameraUI?.removeSelected())return;if(audioUI?.remove())return;if(!current())return;checkpoint();if(current().type==='group'){if(Object.values(current().keys).some(ks=>ks.length)){notify('Remove group keys or ungroup first');undoStack.pop();updateHistory();return}project.layers.forEach(l=>{if(l.parentId===selected)delete l.parentId})};project.layers=project.layers.filter(l=>l.id!==selected);selected=project.layers.at(-1)?.id;changed()};function reorder(delta){const i=project.layers.findIndex(l=>l.id===selected),j=i+delta;if(i<0||j<0||j>=project.layers.length)return;checkpoint();[project.layers[i],project.layers[j]]=[project.layers[j],project.layers[i]];changed()}$('#up').onclick=()=>reorder(1);$('#down').onclick=()=>reorder(-1);
+$$('[data-add]').forEach(el=>el.onclick=()=>add(el.dataset.add));$('#duplicate').onclick=()=>{if(audioUI?.duplicate())return;if(!current())return;if(current().type==='group'){notify('Duplicate child layers individually');return}checkpoint();const l=JSON.parse(JSON.stringify(current()));l.id=uid();if(l.fxClips)l.fxClips.forEach(fx=>fx.id=uid());l.name+=' copy';l.x+=30;l.y+=30;if(l.motionPath)for(const p of l.motionPath.points){p.x+=30;p.y+=30;}for(const prop of['x','y'])for(const k of l.keys[prop]||[])k.v+=30;project.layers.push(l);selected=l.id;changed()};$('#delete').onclick=()=>{if(cameraUI?.removeSelected())return;if(audioUI?.remove())return;if(!current())return;checkpoint();if(current().type==='group'){if(Object.values(current().keys).some(ks=>ks.length)){notify('Remove group keys or ungroup first');undoStack.pop();updateHistory();return}project.layers.forEach(l=>{if(l.parentId===selected)delete l.parentId})};project.layers=project.layers.filter(l=>l.id!==selected);selected=project.layers.at(-1)?.id;changed()};function reorder(delta){const i=project.layers.findIndex(l=>l.id===selected),j=i+delta;if(i<0||j<0||j>=project.layers.length)return;checkpoint();[project.layers[i],project.layers[j]]=[project.layers[j],project.layers[i]];changed()}$('#up').onclick=()=>reorder(1);$('#down').onclick=()=>reorder(-1);
 
-$('#keyAll').onclick=()=>{const l=current();if(!l)return;pause();checkpoint();for(const p of['x','y','scale','rotation','opacity'])putKey(l,p,frame,valueAt(l,p,frame));changed();notify(`Transform keyed at ${(frame/project.fps).toFixed(2)}s`)};
+$('#keyAll').onclick=()=>{const l=current();if(!l)return;pause();checkpoint();for(const p of['x','y','scale','rotation','opacity'])if(!l.motionPath||!['x','y'].includes(p))putKey(l,p,frame,valueAt(l,p,frame));changed();notify(`Transform keyed at ${(frame/project.fps).toFixed(2)}s`)};
 
 $('#play').onclick=play;$('#start').onclick=()=>{pause();setFrame(0)};$('#end').onclick=()=>{pause();setFrame(project.frames-1)};$('#prev').onclick=()=>{pause();setFrame(frame-1)};$('#next').onclick=()=>{pause();setFrame(frame+1)};$('#loop').onclick=()=>{loop=!loop;$('#loop').classList.toggle('active',loop)};$('#frame').onchange=e=>{pause();setFrame(+e.target.value*project.fps)};$('#grid').onclick=()=>{showGrid=!showGrid;$('#grid').classList.toggle('active',showGrid);draw()};$('#zoom').oninput=()=>{renderTimeline();setFrame(frame,false)};
 
@@ -713,8 +725,31 @@ $('#projectName').onchange=e=>{checkpoint();project.name=e.target.value.trim()||
 
 function download(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000)}function filename(){return(project.name||'composition').replace(/[^a-z0-9 _-]/gi,'').trim()||'composition'}
 
-$('#save').onclick=()=>{download(new Blob([JSON.stringify(project,null,2)],{type:'application/json'}),filename()+'.frameflow.json');notify('Project downloaded')};$('#open').onclick=()=>$('#projectFile').click();$('#projectFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>30e6)throw Error('Project is larger than 30 MB.');const p=validateProject(JSON.parse(await f.text()));pause();checkpoint();project=p;audioUI?.reset();selected=p.layers.at(-1)?.id;frame=0;loadImages();changed();notify('Project opened')}catch(err){notify(err.message)}e.target.value=''};
+$('#save').onclick=()=>{download(new Blob([JSON.stringify(project,null,2)],{type:'application/json'}),filename()+'.frameflow.json');notify('Project downloaded')};$('#open').onclick=()=>$('#projectFile').click();$('#projectFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>100e6)throw Error('Project is larger than 100 MB.');const p=validateProject(JSON.parse(await f.text()));pause();checkpoint();project=p;audioUI?.reset();selected=p.layers.at(-1)?.id;frame=0;loadImages();changed();notify('Project opened')}catch(err){notify(err.message)}e.target.value=''};
 
+// Imported videos remain embedded in downloaded projects, including their sound.
+{
+ const button=document.createElement('button');button.id='video';button.type='button';button.innerHTML='<b>V</b> Video';button.title='Import a video with sound';
+ document.querySelector('.workspace.motion-only .add-grid').append(button);
+ const input=document.createElement('input');input.id='videoFile';input.type='file';input.accept='video/*,.mp4,.webm,.mov,.m4v,.ogv';input.hidden=true;document.body.append(input);
+ button.onclick=()=>input.click();
+ input.onchange=async()=>{
+  const file=input.files[0];input.value='';if(!file)return;
+  if(file.size>50e6){notify('Choose a video smaller than 50 MB');return;}
+  pause();button.disabled=true;
+  try{
+   const fallback={mp4:'video/mp4',m4v:'video/mp4',webm:'video/webm',ogv:'video/ogg',mov:'video/quicktime'}[file.name.split('.').pop().toLowerCase()];
+   const mime=file.type.startsWith('video/')?file.type:fallback;if(!mime)throw Error('Choose a supported video file.');
+   const src=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the video.'));reader.readAsDataURL(file.slice(0,file.size,mime));});
+   const record=videos.ensure(src);await record.ready;const v=record.video;
+   if(!Number.isFinite(v.duration)||v.duration<=0)throw Error('The video has no usable duration.');
+   const scale=Math.min(project.width/v.videoWidth,project.height/v.videoHeight);
+   add('video',{name:file.name,videoFileName:file.name,src,w:v.videoWidth*scale,h:v.videoHeight*scale,videoDuration:v.duration,videoOffset:0,videoMuted:false,out:frame+Math.max(1,Math.ceil(v.duration*project.fps))-1});
+   notify('Video added. Its original sound is on; use Mute video sound in Properties to mute it.');
+  }catch(error){notify(error.message||'Could not import this video.');}
+  finally{button.disabled=false;}
+ };
+}
 $('#image').onclick=()=>$('#imageFile').click();$('#imageFile').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>10e6){notify('Choose an image smaller than 10 MB');return}const r=new FileReader;r.onload=()=>{const im=new Image;im.onload=()=>{const max=Math.min(project.width,project.height)*.65,s=Math.min(1,max/Math.max(im.width,im.height));const temp=document.createElement('canvas');temp.width=im.width*s;temp.height=im.height*s;temp.getContext('2d').drawImage(im,0,0,temp.width,temp.height);const src=temp.toDataURL('image/png'),converted=new Image;converted.onload=()=>{images.set(src,converted);add('image',{name:f.name,w:temp.width,h:temp.height,src})};converted.src=src};im.onerror=()=>notify('Could not read this image');im.src=r.result};r.readAsDataURL(f);e.target.value=''};
 
 
@@ -737,7 +772,7 @@ $('#image').onclick=()=>$('#imageFile').click();$('#imageFile').onchange=e=>{con
 
 }
 
-$('#snapshot').onclick=()=>{const c=document.createElement('canvas');drawScene(c.getContext('2d'),frame);c.toBlob(b=>download(b,filename()+`-frame-${frame}.png`),'image/png')};
+$('#snapshot').onclick=async()=>{pause();const at=frame,snapshot=JSON.parse(JSON.stringify(project)),name=filename(),media=createMotionVideoStore();try{await media.prepare(snapshot,at);const c=document.createElement('canvas');drawScene(c.getContext('2d'),at,false,snapshot,media);c.toBlob(b=>{if(b)download(b,name+`-frame-${at}.png`)},'image/png');}catch(e){notify(e.message)}finally{media.dispose()}};
 
 function modal(html){$('#modalBody').innerHTML=html;$('#closeModal').textContent='Close';$('#modal').showModal()}
 
@@ -755,7 +790,7 @@ $('#export').onclick=async()=>{
 
   $('#closeModal').textContent='Cancel export';exporting=true;
 
-  const c=document.createElement('canvas');c.width=snapshot.width;c.height=snapshot.height;const ec=c.getContext('2d');
+  const c=document.createElement('canvas');c.width=snapshot.width;c.height=snapshot.height;const ec=c.getContext('2d'),media=createMotionVideoStore();
 
   try{
 
@@ -763,7 +798,8 @@ $('#export').onclick=async()=>{
 
     await Promise.all(snapshot.layers.filter(l=>l.type==='image').map(async l=>{let im=images.get(l.src);if(!im){im=new Image();im.src=l.src;images.set(l.src,im);}await im.decode();}));
 
-    const video=await exportFrameVideo({audio:getAudioSnapshot('motion'),canvas:c,fps:snapshot.fps,frames:snapshot.frames,draw:f=>drawScene(ec,f,false,snapshot),cancelled:()=>!exporting,progress:n=>{$('#progress').value=n;$('#exportStatus').textContent=`Rendering frame ${n} of ${snapshot.frames}`;}});
+    await videos.preload(snapshot);await media.preload(snapshot,false);
+    const video=await exportFrameVideo({audio:getAudioSnapshot('motion'),canvas:c,fps:snapshot.fps,frames:snapshot.frames,draw:async f=>{await media.prepare(snapshot,f);drawScene(ec,f,false,snapshot,media);},cancelled:()=>!exporting,progress:n=>{$('#progress').value=n;$('#exportStatus').textContent=`Rendering frame ${n} of ${snapshot.frames}`;}});
 
     if(!exporting){$('#exportStatus').textContent='Export cancelled.';return;}
 
@@ -771,20 +807,22 @@ $('#export').onclick=async()=>{
 
   }catch(e){$('#exportStatus').textContent=e.name==='AbortError'?'Export cancelled.':'Export failed: '+e.message;}
 
-  finally{exporting=false;$('#closeModal').disabled=false;$('#closeModal').textContent='Close';}
+  finally{media.dispose();exporting=false;$('#closeModal').disabled=false;$('#closeModal').textContent='Close';}
 
 };
 
 window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||document.body.classList.contains('mode-scene')||document.body.classList.contains('mode-map')||document.body.classList.contains('mode-paper')||$('#modal').open||motionSettings.open||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(e.shiftKey?'redo':'undo');return}if(e.code==='Space'){e.preventDefault();play()}else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();pause();setFrame(frame+(e.key==='ArrowRight'?1:-1)*(e.shiftKey?10:1))}else if(e.key.toLowerCase()==='k')$('#keyAll').click();else if(e.key==='Delete'||e.key==='Backspace'){if(!cameraUI?.removeSelected())$('#delete').click();e.preventDefault()}});
 
 audioUI = registerAudioStudio('motion', {
- getSelected:()=>selected, getFrame:()=>frame, getFps:()=>project.fps, getFrames:()=>project.frames,
+ getSelected:()=>selected, getFrame:()=>frame, getFps:()=>project.fps, getFrames:()=>project.frames, getExtraAudioLayers:()=>project?videos.audioLayers(project):[],
  select, pause, seek:setFrame, notify, updateHistory, visualCount:()=>project.layers.length,
  addGrid:'.workspace.motion-only .add-grid', list:'#layers', counter:'#layerCount', inspector:'#inspector',
  trackLabels:'#trackLabels', trackRows:'#trackRows', tracks:'#tracks', actionButtons:['#duplicate','#delete']
 });
 cameraUI = attachMotionCamera({project:()=>project,frame:()=>frame,selectedLayer:()=>selected,checkpoint,changed,pause,selectLayer:id=>{selected=id;selectedKey=null},renderInspector,renderTimeline,draw,notify});
 alignBar=installAlignBar({mount:document.querySelector('.workspace.motion-only main'),ids:()=>multiIds(),box:id=>layerAABB(id),move:moveLayerScene,size:()=>({w:project.width,h:project.height}),playing:()=>playing,begin:()=>{pause();checkpoint()},done:()=>changed(),clear:()=>{multi.clear();renderLayers();draw()},notify});
+motionPathUI=installMotionPathEditor({canvas,ctx,project:()=>project,current,frame:()=>frame,pose:l=>({x:valueAt(l,'x',frame),y:valueAt(l,'y',frame)}),checkpoint,changed,draw,pause,renderInspector,notify,matrix:l=>{ctx.save();ctx.setTransform(1,0,0,1,0,0);const cam=cameraAt(project,frame),parent=groupOf(l);applyCamera(ctx,project,frame,cam);applyLayerDepth(ctx,project,l,cam,layerCenter(poseAt(l,frame),parent,frame));applyGroup(ctx,groupPose(parent,frame));const m=ctx.getTransform();ctx.restore();return m;}});
+lineDrawingUI=installLineDrawing({canvas,ctx,pause,draw,notify,finishPath:()=>motionPathUI?.finish(),toWorld:p=>screenToCameraPoint(project,frame,p.x,p.y),add:artwork=>add('vector',artwork)});
 try{const saved=localStorage.getItem('frameflow-project-v1');project=saved?validateProject(JSON.parse(saved)):demo()}catch{project=demo()}selected=project.layers.find(l=>l.name==='Main headline')?.id||project.layers.at(-1)?.id;frame=Math.min(frame,project.frames-1);loadImages();renderUI();
 
 window.addEventListener('frameflow:mode',()=>{if(playing)pause()});

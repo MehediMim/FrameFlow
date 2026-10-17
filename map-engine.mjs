@@ -1,6 +1,6 @@
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
-import { easings, fontStack, cleanFont } from './engine.mjs';
+import { easings, fontStack, cleanFont } from './engine.mjs?v=motion-media-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';

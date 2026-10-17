@@ -28,7 +28,7 @@ export function sanitizeSvg(input) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${esc(vb)}"${rootAttrs}>${children}</svg>`;
 }
 function prepared(layer) {
-  const key = [layer.svgMarkup,layer.vectorFill,layer.vectorStroke,layer.vectorStrokeWidth,layer.vectorOverride].join('|');
+  const key = [layer.svgMarkup,layer.vectorFill,layer.vectorStroke,layer.vectorStrokeWidth,layer.vectorOverride,layer.isDrawnLine].join('|');
   if (cache.has(key)) return cache.get(key);
   const dom = new DOMParser().parseFromString(layer.svgMarkup, 'image/svg+xml');
   const root = dom.documentElement;
@@ -36,7 +36,8 @@ function prepared(layer) {
   const fill = validColor(layer.vectorFill) ? layer.vectorFill : '#b6f36e';
   const stroke = validColor(layer.vectorStroke) ? layer.vectorStroke : '#ffffff';
   const width = Math.max(0,Math.min(80,+layer.vectorStrokeWidth||0));
-  if(layer.vectorOverride){root.setAttribute('fill',fill);root.setAttribute('stroke',stroke);root.setAttribute('stroke-width',String(width));for(const el of root.querySelectorAll('*')){el.removeAttribute('fill');el.removeAttribute('stroke');el.removeAttribute('stroke-width');el.removeAttribute('style');}}
+ if(layer.isDrawnLine){for(const el of root.querySelectorAll('path')){el.setAttribute('fill','none');el.setAttribute('stroke',stroke);el.setAttribute('stroke-width',String(width));}}
+ else if(layer.vectorOverride){root.setAttribute('fill',fill);root.setAttribute('stroke',stroke);root.setAttribute('stroke-width',String(width));for(const el of root.querySelectorAll('*')){el.removeAttribute('fill');el.removeAttribute('stroke');el.removeAttribute('stroke-width');el.removeAttribute('style');}}
   const paths=[...root.querySelectorAll('path')].filter(p=>p.getAttribute('d'));
   const pathInfo=paths.map(p=>{try {return {d:p.getAttribute('d'),length:p.getTotalLength(),el:p};}catch{return null}}).filter(Boolean);
   const svg = new XMLSerializer().serializeToString(root);
@@ -103,7 +104,7 @@ export function drawVector(ctx,layer,frame,w,h,showHandles=false){
  ctx.save();ctx.translate(-w/2,-h/2);ctx.scale(w/sw,h/sh);ctx.translate(-minX,-minY);
  const t=progress(layer,frame);
  if(layer.vectorDraw && pathInfo.length && t<1){
-  ctx.strokeStyle=layer.vectorOverride?(layer.vectorStroke||'#ffffff'):'#ffffff';ctx.lineWidth=Math.max(1,+layer.vectorStrokeWidth||1);
+  ctx.strokeStyle=(layer.vectorOverride||layer.isDrawnLine)?(layer.vectorStroke||'#ffffff'):'#ffffff';ctx.lineWidth=Math.max(1,+layer.vectorStrokeWidth||1);if(layer.isDrawnLine)ctx.lineCap=ctx.lineJoin='round';
   for(const {d,length} of pathInfo){if(length>0){ctx.setLineDash([length*t,length+1]);ctx.stroke(new Path2D(d));}}
   ctx.setLineDash([]);
  }else if(image.complete&&image.naturalWidth){
@@ -121,6 +122,7 @@ export function drawVector(ctx,layer,frame,w,h,showHandles=false){
  ctx.restore();
 }
 export function vectorInspector(layer){
+ if(layer.isDrawnLine)return `<div class="section-title">DRAWN LINE</div><label>Line color<input type="color" data-vector="vectorStroke" value="${validColor(layer.vectorStroke)?layer.vectorStroke:'#b6f36e'}"></label><label>Line width<input type="number" data-vector="vectorStrokeWidth" min="1" max="80" value="${layer.vectorStrokeWidth??5}"></label><label class="m-chk"><input type="checkbox" data-vector="vectorDraw" ${layer.vectorDraw?'checked':''}> Animate line drawing</label><div class="two"><label>Drawing start (seconds)<input type="number" data-vector="vectorStart" min="0" step=".033" value="${((layer.vectorStart??layer.in)/window.ffVectorFps).toFixed(2)}"></label><label>Drawing duration (seconds)<input type="number" data-vector="vectorDuration" min=".033" step=".033" value="${((layer.vectorDuration||40)/window.ffVectorFps).toFixed(2)}"></label></div>`;
  const color=(name,id,value)=>`<label>${name}<input type="color" data-vector="${id}" value="${validColor(value)?value:'#ffffff'}"></label>`;
  return `<div class="section-title" style="margin-top:14px">SVG / VECTOR</div>
  <p class="mini-label">Imported colors are preserved by default.</p>

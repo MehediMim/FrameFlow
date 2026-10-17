@@ -1,6 +1,6 @@
 // FrameFlow Paper Studio engine: animated newspaper scenes (sheet, parts, camera).
 // Pure data + canvas drawing. No DOM access except an optional canvas / image factory.
-import { easings, fontStack } from './engine.mjs';
+import { easings, fontStack } from './engine.mjs?v=motion-media-1';
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;

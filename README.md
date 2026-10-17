@@ -166,27 +166,38 @@ The map data files are loaded with `fetch`, so serve the folder over http (same 
 - **Save project** downloads a portable `.frameflow.json` file, including imported images.
 - **Open** restores a saved project. Projects do not automatically transfer between the original hosted app, localhost, and GitHub Pages; download and reopen the project to transfer it.
 - **PNG** exports the current frame without editor guides.
-- Video export uses the browser's MediaRecorder and canvas capture APIs. The app prefers WebM and falls back to MP4 only when the browser supports it.
-- Recording runs in real time; keep the tab visible. Smoothness depends on browser and device performance, so exported video is not guaranteed to contain every timeline frame.
+- Video export encodes timeline frames with WebCodecs and downloads WebM with retained audio.
+- Export waits for each frame to render, including any video source seeking, before encoding it.
+
+## Motion videos and movement paths
+
+- Press **Video** in Motion Studio to import a browser-supported MP4, WebM, or other video file up to 50 MB. The video becomes a layer that can be positioned, scaled, animated, and trimmed on the timeline.
+- Original sound is included in playback and video export. Select the video and enable **Mute video sound** to silence it. **Source start (s)** skips the beginning of the source. The Properties panel reports if the browser cannot decode an audio track.
+- Select any Motion layer, open **Movement path**, and press **Draw path**. Click to add points, drag points to adjust them, and Alt+click to remove one. Press Enter or **Finish path** when done. Choose a straight or smooth path and set its start and duration in seconds.
+- A movement path replaces the layer's X and Y keyframes. Use **Edit path** and its timing controls to adjust movement. Other transforms and effects remain available.
+- Downloaded Motion projects embed video data, sound, and movement paths. Large projects may exceed browser local storage; **Save project** keeps a portable copy. Motion project imports support files up to 100 MB.
+- PNG and video exports seek each source video to the requested timeline frame. Preview zoom does not change export resolution.
 
 ## Current scope and limitations
 
 - Desktop oriented editor; the layout needs a window at least 980 pixels wide.
-- No audio tracks, video clip import, account system, or cloud project synchronization.
+- No account system or cloud project synchronization. Imported audio layers remain session-only; video layers retain their original embedded sound in saved Motion projects.
 - Canvas dragging moves layers. Resize and rotate through the property controls.
 - Changing canvas dimensions does not automatically reposition layers.
-- Maximum composition length: 1800 frames; supported frame rates: 24, 30, and 60 FPS.
-- Image import is limited to 10 MB and project import to 30 MB. Large projects can exceed localStorage capacity; use Save project to keep a copy.
+- Composition duration is set in canvas settings; supported frame rates are 24, 30, and 60 FPS.
+- Image import is limited to 10 MB. Large projects can exceed localStorage capacity; use Save project to keep a copy.
 - UI fonts are optionally fetched from Google Fonts; fallback fonts are provided. Canvas text uses Arial/sans-serif.
 
 ## Validation
 
-JavaScript syntax and keyframe engine behavior were checked during creation: linear interpolation, boundary frames, key replacement, hold easing, and project validation. Browser interaction and video export have not been verified end to end.
+Focused tests cover Motion video timing, movement paths, validation, and project round trips. The browser test imports a generated video with sound, checks mute and frame seeking, draws a path, and verifies video export with audio.
 
 Optional syntax check with Node.js installed:
 
 ```bash
 npm run check
+npm run test:motion-media
+npm run test:motion-media:browser
 ```
 
-No package installation is required.
+No package installation is required. The browser test uses an installed Chrome or Edge; set `CHROME_PATH` if its executable is elsewhere.

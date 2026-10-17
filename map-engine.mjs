@@ -3,7 +3,9 @@
 import { easings, fontStack, cleanFont } from './engine.mjs';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
+import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
+export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 
 const RAD = Math.PI / 180, MAX_LAT = 85.0511287798, BASE_PX = 512, FOV = 45 * RAD;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -560,12 +562,12 @@ function shotState(s, from, tr, frame, c) {
       return { ...from, cx: lerp(from.cx, r.X, t), cy: lerp(from.cy, r.Y, t) };
     }
     case 'framePlane': {
-      const a = pr.actions.find(x => x.id === s.planeId && x.type === 'plane'), r = a && planeRoute(geo, a); if (!r) return from;
+      const a = pr.actions.find(x => x.id === s.planeId && (x.type === 'plane' || x.type === 'object')), r = a && planeRoute(geo, a); if (!r) return from;
       const b = routeBox(r), off = Math.round(from.cx - (b[0] + b[2]) / 2); b[0] += off; b[2] += off;
       return fly(from, { cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, zoom: fitZoom(b, W, H, .38), pitch: s.pitch, bearing: s.bearing }, t, W, H);
     }
     case 'followPlane': {
-      const a = pr.actions.find(x => x.id === s.planeId && x.type === 'plane'), r = a && planeRoute(geo, a); if (!r) return from;
+      const a = pr.actions.find(x => x.id === s.planeId && (x.type === 'plane' || x.type === 'object')), r = a && planeRoute(geo, a); if (!r) return from;
       const q = ease(a.easing, actionProgress(a, frame)), p = routeAt(r, q);
       const X = p.X + Math.round(from.cx - p.X), blend = ease('easeOut', tr * 3.2), settle = ease('easeInOut', tr * 2);
       return {
@@ -1284,6 +1286,9 @@ function queueTextLabel(v, geo, a, frame, labels) {
   labels.push({ x, y: y + (1 - p) * 12 * v.unit, ...(r ? { ground: { X: r.X, Y: r.Y }, groundOffset: { x: (a.offsetX ?? 0) * v.unit, y: ((a.offsetY ?? -24) + (1 - p) * 12) * v.unit } } : {}), text: a.text, alpha: p, scale: .94 + .06 * p });
 }
 
+// Helpers handed to map-objects.mjs (objects, effects, arrows and zones).
+const OBJ_H = { resolveLoc, project, groundCircle, actionProgress, actAlpha, planeRoute, routeAt, ease, clamp01, bounce };
+
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo) {
@@ -1305,8 +1310,11 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   // Composite texture over country highlights, underneath borders and labels.
   drawTexture(ctx, W, H, proj.texture);
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
+  for (const a of proj.actions) if (a.type === 'shape') tag(a, () => drawShape(OBJ_H, ctx, v, geo, a, frame, labels));
   for (const a of proj.actions) if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
   for (const a of proj.actions) if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
+  for (const a of proj.actions) if (a.type === 'object') tag(a, () => drawObject(OBJ_H, ctx, v, geo, a, frame, labels));
+  for (const a of proj.actions) if (a.type === 'effect') tag(a, () => drawEffect(OBJ_H, ctx, v, geo, a, frame, labels));
   for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
@@ -1321,6 +1329,9 @@ export const ACTION_TYPES = {
   plane: { label: 'Travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
   highlight: { label: 'Highlight', icon: '◎', dur: 45, hint: 'Light up a country or a place' },
   pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin icon, text, or both' },
+  object: { label: 'Object', icon: '◆', dur: 90, hint: 'Place a tank, ship, jet, soldier, base, city… and move or animate it' },
+  effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Explosion, fire, smoke, shockwave, earthquake, missile strike' },
+  shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Attack or retreat arrow, front line, occupied or no-fly zone' },
   label: { label: 'Label', icon: 'Aa', dur: 90, hidden: true },
 };
 const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });
@@ -1345,6 +1356,9 @@ export function makeAction(type, start, extra = {}) {
     plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
     highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400 },
     pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1 },
+    object: { place: city('Paris', 48.8566, 2.3522), glyph: 'tank', color: OBJECT_ICONS.tank.color, size: 1.2, enter: 'drop', idle: 'none', exit: 'none', mode: 'stay', path: [], curve: 'smooth', trail: true, showLabel: false, label: '' },
+    effect: { place: city('Paris', 48.8566, 2.3522), fx: 'explosion', color: EFFECTS.explosion.color, size: 1.5, repeat: 1, from: { kind: 'point', name: 'Launch site', lat: 45.5, lon: -1.5 }, showLabel: false, label: '' },
+    shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, fillAlpha: .28, showLabel: false, label: '' },
     label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
   }[type];
   const a = { ...base, ...own, ...extra };
@@ -1449,6 +1463,14 @@ export function validateMapProject(p) {
       for (const [k, lo, hi] of [['x', 0, 100], ['y', 0, 100], ['offsetX', -1000, 1000], ['offsetY', -1000, 1000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid label ' + k + '.');
     }
     if (a.type === 'plane' && ((a.showRouteLabels !== undefined && typeof a.showRouteLabels !== 'boolean') || (a.routeLabelMode !== undefined && !['auto', 'country', 'region'].includes(a.routeLabelMode)) || (a.routeLabelTiming !== undefined && !['all', 'visited'].includes(a.routeLabelTiming)))) throw Error('Invalid route label settings.');
+    const inList = (list, x) => list.some(([k]) => k === x);
+    if (a.type === 'object') {
+      if (!Object.hasOwn(OBJECT_ICONS, a.glyph) || (a.enter !== undefined && !inList(OBJECT_ENTER, a.enter)) || (a.idle !== undefined && !inList(OBJECT_IDLE, a.idle)) || (a.exit !== undefined && !inList(OBJECT_EXIT, a.exit)) || (a.mode !== undefined && !['stay', 'path'].includes(a.mode))) throw Error('Invalid object.');
+      if (a.mode === 'path') checkPath(a); else if (!isLoc(a.place)) throw Error('Invalid object location.');
+    }
+    if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
+    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); }
+    if (['object', 'effect', 'shape'].includes(a.type) && a.label !== undefined && (typeof a.label !== 'string' || a.label.length > 100)) throw Error('Invalid label.');
     if (((a.type !== 'label' || a.color !== undefined) && !col(a.color)) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
     for (const [k, lo, hi] of [['width', .5, 20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
   }

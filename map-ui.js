@@ -1,5 +1,6 @@
 import { installCountryDetail, detailRegions, regionAt, planeRoute, xToLon, yToLat, citiesOf } from './map-engine.mjs';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
+import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
 let audioUI = null;
@@ -27,7 +28,7 @@ const current = () => items().find(i => i.id === sel);
 const isShot = it => it.kind === 'shot';
 const iconOf = it => (isShot(it) ? PRESETS[it.preset].icon : ACTION_TYPES[it.type].icon);
 const clsOf = it => (isShot(it) ? 'shot' : it.type);
-const planes = () => proj.actions.filter(a => a.type === 'plane');
+const planes = () => proj.actions.filter(a => a.type === 'plane' || (a.type === 'object' && a.mode === 'path'));
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function notify(s) {
@@ -215,7 +216,7 @@ function buildStaticUI() {
 function suggestTarget() {
   const c = current(), src = c && c.type ? c : [...proj.actions].reverse()[0];
   if (!src) return null;
-  const t = src.type === 'border' || src.type === 'highlight' ? src.target : src.type === 'pin' ? src.place : src.type === 'plane' ? src.to : null;
+  const t = src.type === 'border' || src.type === 'highlight' ? src.target : ['pin', 'object', 'effect'].includes(src.type) ? src.place : src.type === 'plane' ? src.to : null;
   return t && t.kind !== 'all' ? clone(t) : null;
 }
 function addAction(type) {
@@ -223,8 +224,9 @@ function addAction(type) {
   if (dc && !geo?.details?.has(dc)) { notify(detailErrors.has(dc) ? `${dc} detail could not load. Check map settings for Retry.` : `Loading ${dc} detail. Try again in a moment.`); return; }
   pause(); checkpoint();
   const a = makeAction(type, frame); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
-  if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (type === 'pin' && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
+  if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
+  if (type === 'shape') startPathDraw(a.id);
 }
 function addShot(preset) {
   const needsPlane = PRESETS[preset].fields.includes('planeId');
@@ -284,6 +286,9 @@ function actionFields(a) {
       const country = ['country','region'].includes(a.target.kind);
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? (isDetail() ? 'Region' : 'Country') : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
+    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.sel('__move', 'Position', a.mode === 'path' ? 'path' : 'stay', [['stay', 'Stay in one place'], ['path', 'Move along my path']]) + (a.mode === 'path' ? pathFields(a) + F.chk('trail', 'Draw a trail behind it', a.trail !== false) : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
     case 'pin': return F.loc('place', 'Location', a.place, 'place') + F.sel('__pinDisplay', 'Display', a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon', [['both', 'Icon + text'], ['icon', 'Icon only'], ['text', 'Text only']]) + (a.showIcon !== false ? F.color('color', 'Pin color', a.color) + F.range('size', 'Pin size', a.size, .5, 3, .1, x => x + '×') : '') + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the place name') : '');
   }
   return '';
@@ -311,7 +316,7 @@ function pathFields(a) {
     `<button type="button" data-mpath="reverse" ${pts.length > 1 ? '' : 'disabled'} title="Travel the path the other way">⇄ Reverse</button>` +
     `<button type="button" data-mpath="clear" ${pts.length ? '' : 'disabled'} title="Remove every point">Clear</button></div>` +
     (pts.length ? `<ol class="m-wps">${pts.map((p, i) => `<li><b>${i + 1}</b><span title="${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}">${esc(placeAt(p).name)}</span><button type="button" data-mwdel="${i}" title="Remove this point" aria-label="Remove point ${i + 1}">✕</button></li>`).join('')}</ol>` : '') +
-    `<p class="mini-label">${drawing ? 'Click the map to add points · drag a point to move it · Alt+click removes it · Enter when done.' : pts.length < 2 ? 'Press “Draw path on map”, then click at least two points. The icon travels through them in order.' : `${pts.length} points. The icon travels through them in order.`}</p>`;
+    `<p class="mini-label">${drawing ? 'Click the map to add points · drag a point to move it · Alt+click removes it · Enter when done.' : pts.length < 2 ? 'Press “Draw path on map”, then click at least two points. They are used in order.' : `${pts.length} points. They are used in order.`}</p>`;
 }
 function startPathDraw(id) {
   cancelPick(); pause(); pathDraw = { id }; canvas.style.cursor = 'crosshair';
@@ -379,6 +384,12 @@ function bindInspector(it) {
         changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return;
       }
       if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
+      if (key === '__move') { it.mode = v === 'path' ? 'path' : 'stay'; if (it.mode === 'path') it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return; }
+      for (const [k, cat, base] of [['glyph', OBJECT_ICONS, 'Object'], ['fx', EFFECTS, 'Effect'], ['shape', SHAPES, 'Arrow / zone']]) if (key === k) { // new look: follow its default color and name unless the user changed them
+        const old = cat[it[k]], nu = cat[v]; if (!nu) return;
+        if (it.color === old?.color) it.color = nu.color; if (!it.name || it.name === base || it.name === old?.label) it.name = nu.label;
+        it[k] = v; changed(); renderInspector(); return;
+      }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__pinDisplay') { it.showIcon = v !== 'text'; it.showLabel = v !== 'icon'; changed(); renderInspector(); return; }
       if (key === '__hmode') { it.target = v === 'country' ? (isDetail() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
@@ -394,7 +405,7 @@ function bindInspector(it) {
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
-      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showRouteLabels') renderInspector();
+      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });

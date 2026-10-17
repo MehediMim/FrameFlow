@@ -73,3 +73,8 @@ body.mode-map #mapStudio{display:flex}
 .m-wps li button{padding:2px 7px;font-size:11px;line-height:1.2}
 
 #mImageryBox[hidden]{display:none}
+/* Objects, effects, arrows and zones */
+.c-object{color:#9fd3ee}.c-effect{color:#ff9f43}.c-shape{color:#e76f51}
+.m-clip.t-object{background:#9fd3ee55;border-color:#9fd3ee}
+.m-clip.t-effect{background:#ff9f4355;border-color:#ff9f43}
+.m-clip.t-shape{background:#e76f5155;border-color:#e76f51}

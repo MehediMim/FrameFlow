@@ -56,6 +56,7 @@ On Windows, you can use `py -m http.server 8000` if `python` is unavailable. Ope
 | `map-ui.js` | Map Studio editor: animations, camera presets, timeline, export |
 | `map-engine.mjs` | Map Studio engine: vector map, camera, plane/border/highlight/pin drawing |
 | `map-places.mjs` | Built-in city list and start-view regions |
+| `map-objects.mjs` | Objects, effects, arrows and zones (all drawn as vector shapes) |
 | `map-country-details.mjs` | Finds and describes country detail packs (`map-data/<country>-detail.json`) |
 | `map-data/` | Natural Earth country outlines (via world-atlas, public domain) and country detail packs (`*-detail.json`) |
 | `tools/` | `build-myanmar-detail.py`: how the Myanmar pack was produced; a template for other countries |
@@ -87,6 +88,14 @@ Switch to **Map Studio** with the toggle in the header. It animates a vector wor
 - **Plane**: flies a plane along a great-circle route from one place to another, with a trail and optional place names.
 - **Highlight**: lights up a country (optionally dimming the rest) or a place with a radius and pulse.
 - **Pin**: marks a location. Choose **Display → Icon + text**, **Icon only**, or **Text only** in Properties; icon pins drop in with ripples.
+
+**Objects, effects and shapes** (for war maps, disasters, logistics and more):
+
+- **Object**: soldier, tank, warship, fighter jet, helicopter, drone, submarine, missile, base, flag, city, camp, checkpoint, factory, airport, storm, volcano. Choose how it **appears** (drop in, fade, grow), what it does **while visible** (pulse, shake, bob, spin) and how it **disappears** (fade, shrink, explode). Set **Position → Move along my path**, draw the path on the map, and it travels along it, turning to face its direction.
+- **Effect**: explosion, fire, smoke, shockwave, earthquake rings, blast / danger radius, and **Missile strike** (a missile flies from a launch point to a target, then explodes). Use **Repeat** to loop it inside the bar.
+- **Arrow / zone**: attack arrow, retreat arrow, front line (reverse the path to flip the side the teeth face), occupied zone, and hatched no-fly zone. Click points on the map; arrows grow along the path and zones fade in.
+
+The Follow traveler camera works with moving objects too.
 
 **Camera presets** move the camera for you: Fly to, Cinematic swoop, Back to world, Push in, Pull back, Orbit, Tilt, Pan to, Frame flight, Follow plane. Tilt and rotation give a 3D viewing angle.
 

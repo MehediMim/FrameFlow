@@ -5,6 +5,16 @@ import { easings, fontStack } from './engine.mjs';
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const num = (v, d) => (Number.isFinite(+v) && v !== '' && v !== null ? +v : d);
+const timingFrame = (v, fallback, min) => {
+  if (v === undefined || v === null || v === '') return fallback;
+  const n = Math.round(Number(v));
+  if (!Number.isSafeInteger(n)) throw Error('Invalid item timing.');
+  return Math.max(min, n);
+};
+const validateTiming = it => {
+  if (!Number.isSafeInteger(it.start + it.dur)) throw Error('Invalid item timing.');
+  return it;
+};
 export const uid = () => globalThis.crypto?.randomUUID?.() || 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 function hash(a, b = 0, c = 0) {
   let x = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647)) | 0;
@@ -145,7 +155,7 @@ const str = (v, d, max = 4000) => (typeof v === 'string' ? v.slice(0, max) : d);
 export function validatePaperProject(p) {
   if (!p || p.version !== 1 || p.kind !== 'paper' || !Array.isArray(p.parts) || !Array.isArray(p.shots)) throw Error('This is not a FrameFlow paper project.');
   if (p.parts.length > 150 || p.shots.length > 80) throw Error('This project has too many items.');
-  if (![24, 30, 60].includes(p.fps) || !Number.isInteger(p.frames) || p.frames < 2 || p.frames > 1800) throw Error('Invalid frame settings.');
+  if (![24, 30, 60].includes(p.fps) || !Number.isSafeInteger(p.frames) || p.frames < 2) throw Error('Invalid frame settings.');
   if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || p.width < 100 || p.height < 100 || p.width > 3840 || p.height > 3840) throw Error('Invalid canvas size.');
   const base = newPaperProject();
   const out = { ...base, version: 1, kind: 'paper', name: str(p.name, 'Untitled newspaper', 100) || 'Untitled newspaper', width: p.width, height: p.height, fps: p.fps, frames: p.frames, template: str(p.template, 'blank', 40) };
@@ -153,7 +163,8 @@ export function validatePaperProject(p) {
   const pa = p.paper || {};
   out.paper = { ...base.paper, w: clamp(num(pa.w, 1200), 200, 4000), h: clamp(num(pa.h, 800), 200, 5000), stock: Object.hasOwn(STOCKS, pa.stock) ? pa.stock : 'newsprint', color: isHex(pa.color) ? pa.color : '',
     edge: Object.hasOwn(EDGES, pa.edge) ? pa.edge : 'clean', fold: Object.hasOwn(FOLDS, pa.fold) ? pa.fold : 'none', wear: clamp(num(pa.wear, .25), 0, 1), grain: clamp(num(pa.grain, .5), 0, 1), shadow: pa.shadow !== false,
-    tilt: clamp(num(pa.tilt, 0), -45, 45), enter: Object.hasOwn(SHEET_ENTRANCES, pa.enter) ? pa.enter : 'none', start: clamp(Math.round(num(pa.start, 0)), 0, 1800), dur: clamp(Math.round(num(pa.dur, 24)), 1, 1800), easing: Object.hasOwn(easings, pa.easing) ? pa.easing : 'easeOut' };
+    tilt: clamp(num(pa.tilt, 0), -45, 45), enter: Object.hasOwn(SHEET_ENTRANCES, pa.enter) ? pa.enter : 'none', start: timingFrame(pa.start, 0, 0), dur: timingFrame(pa.dur, 24, 1), easing: Object.hasOwn(easings, pa.easing) ? pa.easing : 'easeOut' };
+  validateTiming(out.paper);
   const cam = p.camera || {}; out.camera = { x: num(cam.x, out.paper.w / 2), y: num(cam.y, out.paper.h / 2), zoom: clamp(num(cam.zoom, 1), .05, 12), rot: clamp(num(cam.rot, 0), -720, 720) };
   const assets = {}; let total = 0;
   for (const [id, src] of Object.entries(p.assets || {})) {
@@ -173,7 +184,8 @@ export function validatePaperProject(p) {
       else if (typeof dv === 'boolean') part[key] = !!v;
       else if (typeof dv === 'string') part[key] = str(v, dv, key === 'text' ? 20000 : 400);
     }
-    part.name = str(raw.name, k.label, 100) || k.label; part.start = clamp(Math.round(num(raw.start, 0)), 0, 1800); part.dur = clamp(Math.round(num(raw.dur, k.def.dur)), 1, 1800);
+    part.name = str(raw.name, k.label, 100) || k.label; part.start = timingFrame(raw.start, 0, 0); part.dur = timingFrame(raw.dur, k.def.dur, 1);
+    validateTiming(part);
     part.keep = raw.keep !== false; part.opacity = clamp(num(raw.opacity, 1), 0, 1); part.w = Math.max(4, part.w); part.h = Math.max(2, part.h);
     if (!Object.hasOwn(easings, part.easing)) part.easing = k.def.easing;
     if (!k.anims.includes(part.anim)) part.anim = k.def.anim;
@@ -193,9 +205,10 @@ export function validatePaperProject(p) {
   });
   out.shots = p.shots.map(raw => {
     if (!SHOT_TYPES[raw?.type]) throw Error('Unknown camera move in project.');
-    const s = makeShot(raw.type, 0), keys = ['dur', 'fill', 'amount', 'dx', 'dy', 'degrees', 'amp'];
+    const s = makeShot(raw.type, 0), keys = ['fill', 'amount', 'dx', 'dy', 'degrees', 'amp'];
     for (const k of keys) if (k in s) s[k] = clamp(num(raw[k], s[k]), -20000, 20000);
-    s.id = fresh(raw.id); s.name = str(raw.name, s.name, 100) || s.name; s.start = clamp(Math.round(num(raw.start, 0)), 0, 1800); s.dur = clamp(Math.round(s.dur), 1, 1800);
+    s.id = fresh(raw.id); s.name = str(raw.name, s.name, 100) || s.name; s.start = timingFrame(raw.start, 0, 0); s.dur = timingFrame(raw.dur, s.dur, 1);
+    validateTiming(s);
     s.level = raw.level !== false; s.target = typeof raw.target === 'string' ? raw.target.slice(0, 80) : '';
     s.easing = Object.hasOwn(easings, raw.easing) ? raw.easing : s.easing; return s;
   });

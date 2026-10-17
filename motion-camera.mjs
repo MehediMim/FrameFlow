@@ -214,7 +214,7 @@ export function attachMotionCamera(host){
   <label>Rack focus start depth<input data-cam="focusFromDepth" type="number" min="-500" max="500" step="5" value="${finite(s.focusFromDepth,300)}"></label>
   <div class="section-title">END BEHAVIOR</div>
   <label>When the camera clip finishes<select data-cam="endBehavior"><option value="return" ${s.endBehavior!=='hold'?'selected':''}>Return to previous view (default)</option><option value="hold" ${s.endBehavior==='hold'?'selected':''}>Hold final camera view</option></select></label>
-  <label>Return time (seconds)<input data-cam="returnTime" type="number" min="0.03" max="30" step="0.05" value="${finite(s.returnTime,Math.min(.7,Math.max(.16,s.dur/p.fps*.28))).toFixed(2)}" ${s.endBehavior==='hold'?'disabled':''}></label>
+  <label>Return time (seconds)<input data-cam="returnTime" type="number" min="0.03" step="0.05" value="${finite(s.returnTime,Math.min(.7,Math.max(.16,s.dur/p.fps*.28))).toFixed(2)}" ${s.endBehavior==='hold'?'disabled':''}></label>
   <p class="mini-label">Return smoothly restores pan, zoom, 3D rotation, parallax and focus blur. Hold final keeps the ending camera until another clip overrides it.</p>
   <div class="section-title">TIMING</div><label>Easing<select data-cam="easing">${['easeInOut','linear','easeIn','easeOut'].map(k=>`<option value="${k}" ${s.easing===k?'selected':''}>${k}</option>`).join('')}</select></label>
   <label>Shake strength<input data-cam="strength" type="number" min="0" max="100" value="${finite(s.strength,12)}"></label>
@@ -225,7 +225,7 @@ export function attachMotionCamera(host){
    if(k==='preset'){host.checkpoint();const withoutSelf={...p,cameraShots:cameraShots(p).filter(q=>q.id!==s.id)};
     const replacement=makeCameraShot(withoutSelf,v,s.start,s.focusLayerId);
     Object.assign(s,replacement,{id:s.id,start:s.start,dur:s.dur,endBehavior:s.endBehavior||'return',returnTime:s.returnTime??replacement.returnTime});}
-   else{if(el.type==='number'&&!Number.isFinite(Number(v)))return;host.checkpoint();if(k==='start')rebaseCameraShot(p,s,clamp(Math.round(Number(v)*p.fps),0,Math.max(0,p.frames-s.dur)));
+   else{if(el.type==='number'&&!Number.isFinite(Number(v)))return;if(['start','dur','returnTime'].includes(k)&&(!Number.isSafeInteger(Math.round(Number(v)*p.fps))||(k==='returnTime'&&Number(v)<.03))){el.value=k==='returnTime'?s[k]:s[k]/p.fps;return;}host.checkpoint();if(k==='start')rebaseCameraShot(p,s,clamp(Math.round(Number(v)*p.fps),0,Math.max(0,p.frames-s.dur)));
     else if(k==='dur')s.dur=clamp(Math.round(Number(v)*p.fps),1,p.frames-s.start);
     else if(['name','easing','focusLayerId','endBehavior'].includes(k))s[k]=v;
     else if(el.type==='checkbox')s[k]=v;

@@ -9,6 +9,7 @@ import { TEMPLATE_LIST, buildTemplate } from './paper-templates.mjs';
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const validTiming = (start, dur) => Number.isSafeInteger(start) && start >= 0 && Number.isSafeInteger(dur) && dur >= 1 && Number.isSafeInteger(start + dur);
 const canvas = $('#pCanvas'), ctx = canvas.getContext('2d');
 const STORE = 'frameflow-paper-v1';
 const SAMPLE = 'Write your story here. Each paragraph starts on a new line and flows from column to column.\nSelect this part and paste your own text in the panel on the right. The columns, font and size can all be changed.\nPress Space to play and watch the lines appear.';
@@ -54,7 +55,11 @@ function history(dir) {
   if (sel && !current()) sel = null;
   frame = Math.min(frame, proj.frames - 1); saveLocal(); renderAll(); updateHistory();
 }
-function ensureLength(end) { if (end > proj.frames) { proj.frames = Math.min(1800, Math.ceil(end + 15)); syncDuration(); } }
+function ensureLength(end) {
+  if (!Number.isSafeInteger(end) || end < 1) return false;
+  if (end > proj.frames) { proj.frames = Number.isSafeInteger(end + 15) ? end + 15 : end; syncDuration(); }
+  return true;
+}
 function syncFonts() {
   for (const n of PE.paperFontsUsed(proj)) { if (seenFonts.has(n)) continue; seenFonts.add(n); loadFont(n).then(() => { PE.bumpFonts(); draw(); }); }
 }
@@ -120,13 +125,15 @@ function addPart(kind) {
   p.y = Math.round(clamp(c.y - p.h / 2, 0, Math.max(0, pa.h - p.h)));
   if (kind === 'photo') { p.w = Math.min(p.w, pa.w - 80); }
   const ink = PE.inkOf(proj); for (const k of ['color', 'borderColor']) if (p[k] === '#1d1b18') p[k] = ink;
-  ensureLength(p.start + p.dur); proj.parts.push(p); sel = p.id; saveLocal(); renderAll(); notify(`${PE.KINDS[kind].label} added at frame ${frame}`);
+  if (!ensureLength(p.start + p.dur)) { notify('Enter a valid frame count.'); return; }
+  proj.parts.push(p); sel = p.id; saveLocal(); renderAll(); notify(`${PE.KINDS[kind].label} added at frame ${frame}`);
 }
 function addShot(type) {
   pause(); checkpoint();
   const cur = current(), s = PE.makeShot(type, frame);
   if (SHOT_NEEDS_TARGET.has(type)) s.target = cur && !isShot(cur) && !isSheet(cur) ? cur.id : proj.parts.find(p => p.kind === 'headline')?.id || '';
-  ensureLength(s.start + s.dur); proj.shots.push(s); sel = s.id; saveLocal(); renderAll(); notify(`${PE.SHOT_TYPES[type].label} added at frame ${frame}`);
+  if (!ensureLength(s.start + s.dur)) { notify('Enter a valid frame count.'); return; }
+  proj.shots.push(s); sel = s.id; saveLocal(); renderAll(); notify(`${PE.SHOT_TYPES[type].label} added at frame ${frame}`);
 }
 const SHOT_NEEDS_TARGET = new Set(['focus', 'push']);
 function renderItems() {
@@ -149,7 +156,7 @@ const set = (root, path, v) => { const ks = path.split('.'), last = ks.pop(); ks
 const F = {
   text: (k, label, v, max = 120) => `<label>${label}<input data-pf="${k}" data-t="text" maxlength="${max}" value="${esc(v)}"></label>`,
   area: (k, label, v, rows = 4) => `<label>${label}<textarea data-pf="${k}" data-t="area" rows="${rows}" maxlength="20000" spellcheck="false">${esc(v)}</textarea></label>`,
-  num: (k, label, v, min, max, step = 1) => `<label>${label}<input data-pf="${k}" data-t="num" type="number" min="${min}" max="${max}" step="${step}" value="${Number((+v).toFixed(3))}"></label>`,
+  num: (k, label, v, min, max, step = 1) => `<label>${label}<input data-pf="${k}" data-t="num" type="number" min="${min}"${max === undefined ? '' : ` max="${max}"`} step="${step}" value="${Number((+v).toFixed(3))}"></label>`,
   range: (k, label, v, min, max, step, unit = '', scale = 1, d = 0) => `<label>${label} <span class="m-val">${(v * scale).toFixed(d)}${unit}</span><input data-pf="${k}" data-t="range" data-u="${unit}" data-s="${scale}" data-d="${d}" type="range" min="${min}" max="${max}" step="${step}" value="${v}"></label>`,
   chk: (k, label, v) => `<label class="m-chk"><input type="checkbox" data-pf="${k}" data-t="chk" ${v ? 'checked' : ''}> ${label}</label>`,
   color: (k, label, v) => `<label class="color-row">${label}<input type="color" data-pf="${k}" data-t="color" value="${esc(/^#[0-9a-f]{6}$/i.test(v) ? v : '#000000')}"></label>`,
@@ -160,7 +167,7 @@ function fontField(id, label, key, it) { return fontPickerHtml(id, label, it[key
 function layoutFields(it) { return F.sep('POSITION & SIZE') + `<div class="two">${F.num('x', 'X', it.x, -3000, 8000)}${F.num('y', 'Y', it.y, -3000, 8000)}</div><div class="two">${F.num('w', 'Width', it.w, 4, 8000)}${F.num('h', 'Height', it.h, 2, 8000)}</div>`; }
 function timingFields(it) {
   const anims = PE.KINDS[it.kind].anims;
-  return `<div class="two">${F.num('start', 'Appears at frame', it.start, 0, 1799)}${F.num('dur', 'Animation length', it.dur, 1, 1800)}</div>` + F.sel('anim', 'Entrance', it.anim, anims.map(a => [a, PE.ANIMS[a]])) + F.sel('easing', 'Motion', it.easing, PE.EASE_OPTS) +
+  return `<div class="two">${F.num('start', 'Appears at frame', it.start, 0)}${F.num('dur', 'Animation length', it.dur, 1)}</div>` + F.sel('anim', 'Entrance', it.anim, anims.map(a => [a, PE.ANIMS[a]])) + F.sel('easing', 'Motion', it.easing, PE.EASE_OPTS) +
     F.range('opacity', 'Opacity', it.opacity ?? 1, 0, 1, .02, '%', 100) + F.chk('keep', 'Stay on the page after it appears', it.keep !== false);
 }
 function boxFields(it) {
@@ -217,7 +224,7 @@ function sheetFields() {
   return F.sep('PAPER') + F.sel('paper.stock', 'Paper type', pa.stock, o(PE.STOCKS).map(([k, v]) => [k, v.label])) + F.chk('__pcolor', 'Custom paper color', !!pa.color) + (pa.color ? F.color('paper.color', 'Paper color', pa.color) : '') +
     `<div class="two">${F.sel('paper.edge', 'Edges', pa.edge, o(PE.EDGES))}${F.sel('paper.fold', 'Folds', pa.fold, o(PE.FOLDS))}</div>` + F.range('paper.wear', 'Aging & stains', pa.wear, 0, 1, .05, '%', 100) + F.range('paper.grain', 'Paper grain', pa.grain, 0, 1, .05, '%', 100) + F.range('paper.tilt', 'Tilt', pa.tilt, -20, 20, .5, '°', 1, 1) + F.chk('paper.shadow', 'Shadow under the paper', pa.shadow) +
     `<div class="two">${F.num('paper.w', 'Sheet width', pa.w, 200, 4000)}${F.num('paper.h', 'Sheet height', pa.h, 200, 5000)}</div>` +
-    F.sep('ENTRANCE') + F.sel('paper.enter', 'How the sheet arrives', pa.enter, o(PE.SHEET_ENTRANCES)) + (pa.enter === 'none' ? '' : `<div class="two">${F.num('paper.start', 'Starts at frame', pa.start, 0, 1799)}${F.num('paper.dur', 'Length (frames)', pa.dur, 1, 1800)}</div>` + F.sel('paper.easing', 'Motion', pa.easing, PE.EASE_OPTS)) +
+    F.sep('ENTRANCE') + F.sel('paper.enter', 'How the sheet arrives', pa.enter, o(PE.SHEET_ENTRANCES)) + (pa.enter === 'none' ? '' : `<div class="two">${F.num('paper.start', 'Starts at frame', pa.start, 0)}${F.num('paper.dur', 'Length (frames)', pa.dur, 1)}</div>` + F.sel('paper.easing', 'Motion', pa.easing, PE.EASE_OPTS)) +
     F.sep('BACKGROUND') + F.sel('scene.type', 'Scene', sc.type, o(PE.SCENES)) + (sc.type === 'color' ? F.color('scene.color', 'Color', sc.color) : '') +
     F.sep('START VIEW') + `<div class="two">${F.num('camera.x', 'Look at X', proj.camera.x, -5000, 9000)}${F.num('camera.y', 'Look at Y', proj.camera.y, -5000, 9000)}</div><div class="two">${F.num('camera.zoom', 'Zoom', proj.camera.zoom, .05, 12, .05)}${F.num('camera.rot', 'Rotation', proj.camera.rot, -720, 720, 1)}</div><button type="button" data-pcam>Use what I see now as the start view</button>`;
 }
@@ -230,7 +237,7 @@ function renderInspector() {
   if (isSheet(it)) { title.textContent = 'Newspaper sheet'; h = `<div class="inspector-title"><span>▤</span> <em>Newspaper sheet</em></div>` + sheetFields(); }
   else if (isShot(it)) {
     title.textContent = 'Camera move';
-    h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + name + F.sel('type', 'Camera move', it.type, o(PE.SHOT_TYPES).map(([k, v]) => [k, v.label])) + `<div class="two">${F.num('start', 'Start frame', it.start, 0, 1799)}${F.num('dur', 'Length (frames)', it.dur, 1, 1800)}</div>` + F.sel('easing', 'Motion', it.easing, PE.EASE_OPTS) + F.sep('CAMERA') + shotFields(it);
+    h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + name + F.sel('type', 'Camera move', it.type, o(PE.SHOT_TYPES).map(([k, v]) => [k, v.label])) + `<div class="two">${F.num('start', 'Start frame', it.start, 0)}${F.num('dur', 'Length (frames)', it.dur, 1)}</div>` + F.sel('easing', 'Motion', it.easing, PE.EASE_OPTS) + F.sep('CAMERA') + shotFields(it);
   } else {
     title.textContent = PE.KINDS[it.kind].label;
     h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + name + timingFields(it) + kindFields(it) + (it.kind === 'marker' && it.target ? '' : layoutFields(it));
@@ -261,8 +268,14 @@ function bindInspector(it) {
       if (key === '__pcolor') { proj.paper.color = v ? PE.paperColorOf(proj) : ''; changed(); renderInspector(); return; }
       if (key === 'type') { const nu = PE.makeShot(v, it.start), old = PE.SHOT_TYPES[it.type].label; for (const k of ['fill', 'amount', 'dx', 'dy', 'degrees', 'amp', 'level']) delete it[k]; Object.assign(it, nu, { id: it.id, start: it.start, target: it.target, name: it.name === old ? nu.name : it.name }); changed(); renderInspector(); return; }
       if (t === 'num') {
-        const lo = Number(el.min), hi = Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi); el.value = v;
-        if (/(^|\.)(start|dur)$/.test(key)) { v = Math.round(v); el.value = v; set(root, key, v); ensureLength((isSheet(it) ? proj.paper.start + proj.paper.dur : it.start + it.dur)); changed(); return; }
+        const timing = /(^|\.)(start|dur)$/.test(key);
+        if (timing && (!el.value.trim() || !Number.isFinite(v))) { el.value = get(root, key); notify('Enter a valid frame count.'); return; }
+        const lo = el.min === '' ? -Infinity : Number(el.min), hi = el.max === '' ? Infinity : Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi); el.value = v;
+        if (timing) {
+          v = Math.round(v); const timed = isSheet(it) ? proj.paper : it, start = key.endsWith('start') ? v : timed.start, dur = key.endsWith('dur') ? v : timed.dur;
+          if (!validTiming(start, dur)) { el.value = get(root, key); notify('Enter a valid frame count.'); return; }
+          el.value = v; set(root, key, v); ensureLength(start + dur); changed(); return;
+        }
       }
       set(root, key, v); if (key === 'paper.w' || key === 'paper.h') lastView = null;
       changed(); if (RERENDER.has(key)) renderInspector();
@@ -287,7 +300,7 @@ async function loadPicture(file) {
 }
 
 // ------------------------------------------------------------------ video settings
-function syncDuration() { const i = $('#pDuration'); i.min = +(2 / proj.fps).toFixed(3); i.max = +(1800 / proj.fps).toFixed(3); i.step = '0.001'; i.value = +(proj.frames / proj.fps).toFixed(3); }
+function syncDuration() { const i = $('#pDuration'); i.min = +(2 / proj.fps).toFixed(3); i.removeAttribute('max'); i.step = '0.001'; i.value = +(proj.frames / proj.fps).toFixed(3); }
 function renderSettings() {
   $('#pProjectName').value = proj.name; $('#pFps').value = proj.fps; $('#pFpsLabel').textContent = proj.fps + ' FPS';
   syncDuration(); $('#pSize').value = proj.width + ',' + proj.height; $('#pCompLabel').textContent = `${proj.width} × ${proj.height}`;
@@ -295,8 +308,18 @@ function renderSettings() {
 function bindSettings() {
   const edit = fn => e => { pause(); checkpoint(); fn(e.target); saveLocal(); renderAll(); };
   $('#pProjectName').onchange = edit(el => proj.name = el.value.trim().slice(0, 100) || 'Untitled newspaper');
-  $('#pFps').onchange = edit(el => { const old = proj.fps; proj.fps = +el.value; const k = proj.fps / old; proj.frames = clamp(Math.round(proj.frames * k), 2, 1800); const sc = o => { o.start = Math.round(o.start * k); o.dur = Math.max(1, Math.round(o.dur * k)); }; proj.parts.forEach(sc); proj.shots.forEach(sc); sc(proj.paper); frame = Math.min(Math.round(frame * k), proj.frames - 1); });
-  $('#pDuration').onchange = edit(el => { const s = Number(el.value); if (el.value.trim() && Number.isFinite(s)) proj.frames = clamp(Math.round(s * proj.fps), 2, 1800); frame = Math.min(frame, proj.frames - 1); });
+  $('#pFps').onchange = edit(el => {
+    const fps = +el.value; if (![24, 30, 60].includes(fps)) return;
+    const k = fps / proj.fps, frames = Math.max(2, Math.round(proj.frames * k)), timed = [...proj.parts, ...proj.shots, proj.paper];
+    const scaled = timed.map(it => ({ start: Math.round(it.start * k), dur: Math.max(1, Math.round(it.dur * k)) }));
+    if (!Number.isSafeInteger(frames) || scaled.some(it => !validTiming(it.start, it.dur))) { notify('Enter a valid frame count.'); return; }
+    proj.fps = fps; proj.frames = frames; timed.forEach((it, i) => Object.assign(it, scaled[i])); frame = Math.min(Math.round(frame * k), proj.frames - 1);
+  });
+  $('#pDuration').onchange = edit(el => {
+    const s = Number(el.value), frames = Math.max(2, Math.round(s * proj.fps));
+    if (el.value.trim() && Number.isFinite(s) && Number.isSafeInteger(frames)) proj.frames = frames; else notify('Enter a valid duration.');
+    frame = Math.min(frame, proj.frames - 1);
+  });
   $('#pSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   const panel = $('#pSettingsPanel'), open = $('#pSettingsButton'), close = $('#pSettingsClose');
   const setOpen = on => { if (on && !panel.open) panel.showModal(); else if (!on && panel.open) panel.close(); open.setAttribute('aria-expanded', String(panel.open)); };
@@ -367,7 +390,8 @@ window.addEventListener('pointermove', e => {
   const it = items().find(i => i.id === drag.id); if (!it) return;
   const d = frameFromEvent(e) - drag.x0; if (d !== 0) { if (!drag.checkpointed) { checkpoint(); drag.checkpointed = true; } drag.moved = true; } else return;
   let s = drag.start, l = drag.dur;
-  if (drag.mode === 'move') s = clamp(drag.start + d, 0, proj.frames - 1); else if (drag.mode === 'r') l = clamp(drag.dur + d, 1, 1800); else { const ns = clamp(drag.start + d, 0, drag.start + drag.dur - 1); l = drag.start + drag.dur - ns; s = ns; }
+  if (drag.mode === 'move') s = clamp(drag.start + d, 0, proj.frames - 1); else if (drag.mode === 'r') l = Math.max(1, drag.dur + d); else { const ns = clamp(drag.start + d, 0, drag.start + drag.dur - 1); l = drag.start + drag.dur - ns; s = ns; }
+  if (!validTiming(s, l)) return;
   setTiming(it, s, l); ensureLength(s + l); renderTimeline(); draw();
   const a = $('#pInspector [data-pf="start"], #pInspector [data-pf="paper.start"]'), b = $('#pInspector [data-pf="dur"], #pInspector [data-pf="paper.dur"]'); if (a) a.value = s; if (b) b.value = l;
 });
@@ -433,7 +457,7 @@ function bindToolbar() {
     if (audioUI?.duplicate()) return;
     const it = current(); if (!it || isSheet(it)) return; checkpoint();
     const c = JSON.parse(JSON.stringify(it)); c.id = crypto.randomUUID(); c.name += ' copy'; c.start = Math.min(proj.frames - 1, it.start + 10);
-    if (!isShot(c)) { c.x += 24; c.y += 24; } ensureLength(c.start + c.dur); (isShot(it) ? proj.shots : proj.parts).push(c); sel = c.id; saveLocal(); renderAll();
+    if (!isShot(c)) { c.x += 24; c.y += 24; } if (!ensureLength(c.start + c.dur)) { notify('Enter a valid frame count.'); return; } (isShot(it) ? proj.shots : proj.parts).push(c); sel = c.id; saveLocal(); renderAll();
   };
   $('#pDelete').onclick = () => {
     if (audioUI?.remove()) return;

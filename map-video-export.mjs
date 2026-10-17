@@ -34,7 +34,7 @@ export function muxWebM(chunks, { width, height, fps, frames, audio = null }) {
     element(0xe1, bytes(element(0xb5, float(48000)), number(0x9f, audio.channels))))) : null;
   const tracks = element(0x1654ae6b, bytes(videoTrack, ...(audioTrack ? [audioTrack] : [])));
   const packets = chunks.map(c => ({ ...c, track: 1 }));
-  if (audio) packets.push(...audio.chunks.map(c => ({ ...c, track: 2 })));
+  if (audio) for (const c of audio.chunks) packets.push({ ...c, track: 2 });
   packets.sort((a,b) => a.timestamp - b.timestamp || a.track - b.track);
   // One cluster per packet avoids signed 16-bit relative-time overflow at microsecond scale.
   const clusters = packets.map(c => {
@@ -45,7 +45,7 @@ export function muxWebM(chunks, { width, height, fps, frames, audio = null }) {
       element(0x75a2, bytes(new Uint8Array([0]), uint(c.discardPadding))))) : element(0xa3, block);
     return element(0x1f43b675, bytes(number(0xe7, c.timestamp), body));
   });
-  return new Blob([header, element(0x18538067, bytes(info, tracks, ...clusters))], { type: 'video/webm' });
+  return new Blob([header, element(0x18538067, new Blob([info, tracks, ...clusters]))], { type: 'video/webm' });
 }
 
 export async function exportMapVideo({ canvas, fps, frames, draw, cancelled = () => false, progress = () => {}, audio = null }) {

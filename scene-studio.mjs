@@ -1,7 +1,7 @@
 import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES } from './studio-ui.mjs';
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
 // clip timeline below. Gestures and camera shots are clips you place on the timeline.
-import { defaultScene, makeObject, makeClip, makeCameraClip, renderScene, cityScene, ITEM_TYPES, isMobile, itemSize, routePoints, actorYaw, trafficState, actorPosition, cameraAt, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, FINISHES, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs?v=6';
+import { defaultScene, sceneFrameCount, makeObject, makeClip, makeCameraClip, renderScene, cityScene, ITEM_TYPES, isMobile, itemSize, routePoints, actorYaw, trafficState, actorPosition, cameraAt, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, FINISHES, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs?v=6';
 import { exportMapVideo } from './map-video-export.mjs';
 const $ = s => document.querySelector(s), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const STORE = 'frameflow-scene-v2', OLD_STORE = 'frameflow-scene-v1';
@@ -27,7 +27,7 @@ root.innerHTML = `<div class="sc-toolbar" id="scToolbar"><input id="scName" aria
 <input hidden id="scFile" type="file" accept=".json,application/json">`;
 document.body.append(root);
 const toolbar = $('#scToolbar'); document.querySelector('body > header').append(toolbar);
-const canvas = $('#scCanvas'), snap = v => Math.round(v * p.fps) / p.fps, uid = () => crypto.randomUUID();
+const canvas = $('#scCanvas'), snap = v => Math.round(v * p.fps) / p.fps, lastTime = () => (sceneFrameCount(p) - 1) / p.fps, uid = () => crypto.randomUUID();
 
 // ------------------------------------------------------------------ small builders
 const field = (key, label, value, type = 'number', extra = '') => `<label>${label}<input data-field="${key}" type="${type}" value="${esc(value)}" ${extra} ${type === 'number' ? 'step="any"' : ''}></label>`;
@@ -55,10 +55,10 @@ function saveLocal() { try { localStorage.setItem(STORE, JSON.stringify(p)); $('
 function draw() {
   const dims=CANVAS_SIZES.some(([v])=>v===`${p.width},${p.height}`)?[p.width,p.height]:[1280,720];const [w,h]=dims;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=`${w}/${h}`;} if(viewMode === '2d') drawPlan(); else { renderScene(canvas, p, time); root.querySelector('.sc-hint').textContent = '3D preview · Drag to orbit · Scroll to zoom · Switch to 2D layout to place items and fixed cameras'; } $('#scTime').textContent = `${String(Math.floor(time/60)).padStart(2,'0')}:${(time%60).toFixed(2).padStart(5,'0')}`; $('#scSeek').value = time.toFixed(3); $('#scScrub').value = time; root.style.setProperty('--sc-progress', time / p.duration * 100 + '%'); }
 function pause() { playing = false; cancelAnimationFrame(raf); root.querySelector('[data-action="play"]').textContent = '▶'; }
-function seek(t) { pause(); time = clamp(Math.round(t * p.fps) / p.fps, 0, p.duration - 1 / p.fps); draw(); }
+function seek(t) { if (!Number.isFinite(t)) return; pause(); time = clamp(snap(t), 0, lastTime()); draw(); }
 function play() {
   if (busy) return; if (playing) return pause();
-  if (time >= p.duration - 1 / p.fps) time = 0; playing = true; const origin = performance.now(), from = time; root.querySelector('[data-action="play"]').textContent = 'Ⅱ';
+  if (time >= lastTime()) time = 0; playing = true; const origin = performance.now(), from = time; root.querySelector('[data-action="play"]').textContent = 'Ⅱ';
   const step = now => { if (!playing) return; let t = from + (now - origin) / 1000;
     if (t >= p.duration) { if (!loop) { seek(p.duration); return; } t %= p.duration; } time = Math.floor(t * p.fps) / p.fps; draw(); raf = requestAnimationFrame(step); };
   raf = requestAnimationFrame(step);
@@ -121,7 +121,7 @@ function renderInspector() {
 // ------------------------------------------------------------------ scene settings dialog
 function renderSettings() {
   const c = p.camera;
-  $('#scSettings').innerHTML = select('canvasSize', 'Canvas', `${p.width||1280},${p.height||720}`, CANVAS_SIZES) + '<div class="two">' + select('fps', 'Frame rate', p.fps, [['24','24'],['30','30'],['60','60']]) + field('duration', 'Duration (seconds)', p.duration) + '</div>'
+  $('#scSettings').innerHTML = select('canvasSize', 'Canvas', `${p.width||1280},${p.height||720}`, CANVAS_SIZES) + '<div class="two">' + select('fps', 'Frame rate', p.fps, [['24','24'],['30','30'],['60','60']]) + field('duration', 'Duration (seconds)', p.duration, 'number', 'min="1"') + '</div>'
     + group('ENVIRONMENT', select('baseRoad','Generated main road',p.baseRoad!==false,[['true','Show'],['false','Hide — use placed roads']]) + select('left', 'Left roadside', p.left, ['city', 'park', 'trees', 'playground', 'none']) + select('right', 'Right roadside', p.right, ['city', 'park', 'trees', 'playground', 'none']) + field('roadWidth', 'Road width (m)', p.roadWidth)
       + select('material', 'Scene surface', p.material, [['white', 'White model'], ['texture', 'Textured / colored']]) + field('sky', 'Sky', p.sky, 'color')
       + select('finish', 'Scene finish', p.finish || 'none', Object.entries(FINISHES)) + field('finishStrength', 'Finish strength (0 – 1)', p.finishStrength ?? .6, 'number', 'min="0" max="1"') + field('finishScale', 'Texture scale (×)', p.finishScale ?? 1, 'number', 'min="0.1" max="8"')
@@ -135,7 +135,7 @@ function renderTimeline() {
   $('#scFpsLabel').textContent=p.fps+' FPS';
   const scroll = $('#scTimelineScroll'), laneWidth = Math.max(300, (scroll.clientWidth - 215) * timelineZoom), pct = v => v / p.duration * 100;
   $('#scTracks').style.width = (215 + laneWidth) + 'px';
-  const clipEl = (c, cls, label, attr, tip, isSel = selClip === c.id) => `<div class="sc-clip ${cls} ${isSel ? 'selected' : ''}" ${attr}="${esc(c.id)}" style="left:${pct(c.start)}%;width:${Math.max(.4, pct(Math.min(c.dur ?? c.duration, p.duration - c.start)))}%" title="${esc(tip)}"><i class="sc-h l" data-h="l"></i><span>${esc(label)}</span><i class="sc-h r" data-h="r"></i></div>`;
+  const clipEl = (c, cls, label, attr, tip, isSel = selClip === c.id) => c.start >= p.duration ? '' : `<div class="sc-clip ${cls} ${isSel ? 'selected' : ''}" ${attr}="${esc(c.id)}" style="left:${pct(c.start)}%;width:${Math.max(.4, pct(Math.min(c.dur ?? c.duration, p.duration - c.start)))}%" title="${esc(tip)}"><i class="sc-h l" data-h="l"></i><span>${esc(label)}</span><i class="sc-h r" data-h="r"></i></div>`;
   const ticks = Array.from({ length: Math.ceil(10 * timelineZoom) + 1 }, (_, i) => `<span style="left:${i / (10 * timelineZoom) * 100}%">${(i * p.duration / (10 * timelineZoom)).toFixed(1)}</span>`).join('');
   const camSel = findClip(selClip)?.kind === 'camera';
   const camRow = `<div class="sc-track ${camSel ? 'selected' : ''}"><span class="sc-track-name"><i>◉</i>Camera</span><div class="sc-lane" data-lane="camera">${p.cameraClips.map(c => clipEl(c, 'cam', `${CAMERA_MODES[c.mode]} · ${CAMERA_MOVES[c.move].split(' ')[0]}`, 'data-clip', `${CAMERA_MODES[c.mode]} · ${c.start.toFixed(2)}–${(c.start + c.dur).toFixed(2)}s`)).join('')}<b></b></div></div>`;
@@ -148,7 +148,7 @@ function renderTimeline() {
   $('#scTracks').innerHTML = `<div class="sc-ruler-row"><div class="sc-ruler-label">ITEM <span>SECONDS →</span></div><div class="sc-ruler">${ticks}<b class="sc-ruler-head"></b></div></div>` + camRow + rows;
 }
 function sync() {
-  ensureSelection(); $('#scName').value = p.name; $('#scSeek').max = p.duration - 1 / p.fps; $('#scScrub').max = p.duration - 1 / p.fps;
+  ensureSelection(); $('#scName').value = p.name; $('#scSeek').max = $('#scScrub').max = lastTime(); $('#scSeek').step = $('#scScrub').step = 1 / p.fps;
   renderLeft(); renderInspector(); renderSettings(); renderTimeline(); saveLocal(); draw();
 }
 const refreshSide = () => { renderLeft(); renderInspector(); renderTimeline(); draw(); };
@@ -173,8 +173,7 @@ root.addEventListener('change', e => {
   if (key === 'look.outfit') obj.bottomColor = OUTFITS[obj.outfit].bottom;
   if (key === 'look.body') { obj.hair = defaultLook(obj.body).hair; if (obj.body !== 'man') obj.facial = 'none'; }
   if (key === 'object.x' || key === 'object.z') { if (!isMobile(obj)) { obj.endX = obj.x; obj.endZ = obj.z; } }
-  if (key === 'duration') { const cap = Math.max(0, p.duration - .1); p.objects.forEach(o => { o.start = Math.min(o.start, cap); (o.clips || []).forEach(c => { c.start = Math.min(c.start, cap); }); }); p.cameraClips.forEach(c => { c.start = Math.min(c.start, cap); }); }
-  try { validateScene(p); undo.push(previous); redo = []; time = clamp(time, 0, p.duration - 1 / p.fps); } catch (err) { p = JSON.parse(previous); alertStudio(err.message); }
+  try { validateScene(p); undo.push(previous); redo = []; time = clamp(snap(time), 0, lastTime()); } catch (err) { p = JSON.parse(previous); alertStudio(err.message); }
   sync();
 });
 
@@ -211,8 +210,8 @@ const actions = {
   'camera-aim': () => {setView('2d');placement=null;planTool='aim';draw();},
   play, start: () => seek(0), end: () => seek(p.duration), prev: () => seek(time - 1 / p.fps), next: () => seek(time + 1 / p.fps),
   loop: () => { loop = !loop; root.querySelector('[data-action="loop"]').classList.toggle('active', loop); },
-  undo: () => { if (!undo.length) return; pause(); redo.push(JSON.stringify(p)); p = JSON.parse(undo.pop()); time = Math.min(time, p.duration - 1 / p.fps); sync(); },
-  redo: () => { if (!redo.length) return; pause(); undo.push(JSON.stringify(p)); p = JSON.parse(redo.pop()); sync(); },
+  undo: () => { if (!undo.length) return; pause(); redo.push(JSON.stringify(p)); p = JSON.parse(undo.pop()); time = Math.min(time, lastTime()); sync(); },
+  redo: () => { if (!redo.length) return; pause(); undo.push(JSON.stringify(p)); p = JSON.parse(redo.pop()); time = Math.min(time, lastTime()); sync(); },
   new: async () => { if (!await confirmStudio('Start an empty scene? Your current scene can be restored with Undo.')) return; checkpoint(); pause(); p = defaultScene(); p.objects = []; p.cameraClips = []; p.left=p.right='none'; p.baseRoad=false; viewMode='2d'; placement=null; time = 0; selected = null; selClip = null; sync(); },
   demo: () => { checkpoint(); pause(); p = cityScene(); time = 0; selected = p.objects.find(isMobile)?.id; selClip = null; fitPlan(); sync(); },
   save: () => download(new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' }), 'scene.frameflow.json'),
@@ -237,7 +236,7 @@ const actions = {
     if (busy) return; pause(); busy = true; const prior = time;
     const snapshot=JSON.parse(JSON.stringify(p));
     const c=document.createElement('canvas');c.width=canvas.width;c.height=canvas.height;
-    const frames=Math.round(snapshot.duration*snapshot.fps);
+    const frames=sceneFrameCount(snapshot);
     const ui=sceneExportDialog({width:c.width,height:c.height,fps:snapshot.fps,frames});
     root.classList.add('sc-busy'); toolbar.classList.add('sc-busy');
     try {
@@ -292,7 +291,7 @@ function scrubTo(e) { const r = drag.el.getBoundingClientRect(); seek((e.clientX
 window.addEventListener('pointermove', e => {
   if (!drag) return; if (drag.kind === 'scrub') { scrubTo(e); return; }
   if (drag.kind !== 'clip') return; const { ref, dk } = drag, dt = (e.clientX - drag.x0) / drag.w * p.duration; drag.moved = true;
-  if (drag.mode === 'move') ref.start = clamp(snap(drag.s0 + dt), 0, p.duration - ref[dk]);
+  if (drag.mode === 'move') ref.start = clamp(snap(drag.s0 + dt), 0, Math.max(0, p.duration - Math.min(ref[dk], .1)));
   else if (drag.mode === 'l') { const s = clamp(snap(drag.s0 + dt), 0, drag.s0 + drag.d0 - .1); ref.start = s; ref[dk] = drag.d0 + drag.s0 - s; }
   else ref[dk] = clamp(snap(drag.d0 + dt), .1, p.duration - drag.s0);
   renderTimeline(); draw();

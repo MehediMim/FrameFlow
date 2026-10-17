@@ -136,7 +136,12 @@ export function bindVectorInspector(layer,commit,fps){
  window.ffVectorFps=fps;
  document.querySelectorAll('[data-vector]').forEach(el=>el.onchange=()=>{
   const name=el.dataset.vector;let value=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;
-  if(['vectorStart','vectorDuration'].includes(name))value=Math.round(value*fps);
+  if(['vectorStart','vectorDuration'].includes(name)){
+   value=Math.round(value*fps);const old=(layer[name]??(name==='vectorStart'?layer.in:40))/fps;
+   if(!Number.isSafeInteger(value)){el.value=old;return;}value=Math.max(name==='vectorStart'?0:1,value);
+   const start=name==='vectorStart'?value:(layer.vectorStart??layer.in),dur=name==='vectorDuration'?value:(layer.vectorDuration??40);
+   if(!Number.isSafeInteger(start+dur)){el.value=old;return;}
+  }
   if(typeof value==='number'&&!Number.isFinite(value))return;commit(layer,name,value);
  });
  document.getElementById('vectorAddPin')?.addEventListener('click',()=>commit(layer,'puppetPin',{x:.5,y:.5,radius:.32,keys:[{f:layer.in,x:.5,y:.5}]}));
@@ -146,10 +151,13 @@ export function bindVectorInspector(layer,commit,fps){
 export function validateVector(layer){
  if(typeof layer.svgMarkup!=='string'||layer.svgMarkup.length>180000||!/^<svg\b/.test(layer.svgMarkup))throw Error('Invalid vector SVG');
  for(const key of ['vectorFill','vectorStroke','vectorPinColor'])if(layer[key]!==undefined&&!validColor(layer[key]))throw Error('Invalid SVG color');
- for(const key of ['vectorStrokeWidth','vectorStart','vectorDuration','vectorPinSize'])if(layer[key]!==undefined&&(!Number.isFinite(layer[key])||layer[key]<0||layer[key]>1800))throw Error('Invalid SVG setting');
+ for(const key of ['vectorStrokeWidth','vectorPinSize'])if(layer[key]!==undefined&&(!Number.isFinite(layer[key])||layer[key]<0||layer[key]>1800))throw Error('Invalid SVG setting');
+ for(const key of ['vectorStart','vectorDuration'])if(layer[key]!==undefined&&(!Number.isSafeInteger(layer[key])||layer[key]<(key==='vectorStart'?0:1)))throw Error('Invalid SVG timing');
+ const start=layer.vectorStart??layer.in,dur=layer.vectorDuration??40;
+ if(!Number.isSafeInteger(start+dur))throw Error('Invalid SVG timing');
  const p=layer.puppetPin;
  if(p!=null){const xy=(x)=>Number.isFinite(x)&&x>=-2&&x<=3;
-  if(!xy(p.x)||!xy(p.y)||!Number.isFinite(p.radius)||p.radius<.08||p.radius>.9||!Array.isArray(p.keys)||p.keys.length>300||p.keys.some(k=>!Number.isInteger(k.f)||k.f<0||!xy(k.x)||!xy(k.y)))throw Error('Invalid puppet pin');
+  if(!xy(p.x)||!xy(p.y)||!Number.isFinite(p.radius)||p.radius<.08||p.radius>.9||!Array.isArray(p.keys)||p.keys.length>300||p.keys.some(k=>!Number.isSafeInteger(k.f)||k.f<0||!xy(k.x)||!xy(k.y)))throw Error('Invalid puppet pin');
  }
 }
 

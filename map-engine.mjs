@@ -1,6 +1,7 @@
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
 import { easings, fontStack, cleanFont } from './engine.mjs';
+import { routePlaceLabels } from './map-route-labels.mjs';
 
 const RAD = Math.PI / 180, MAX_LAT = 85.0511287798, BASE_PX = 512, FOV = 45 * RAD;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -551,7 +552,7 @@ function shotState(s, from, tr, frame, c) {
     }
     case 'followPlane': {
       const a = pr.actions.find(x => x.id === s.planeId && x.type === 'plane'), r = a && planeRoute(geo, a); if (!r) return from;
-      const q = ease('easeInOut', (frame - a.start) / Math.max(1, a.dur)), p = routeAt(r, q);
+      const q = ease(a.easing, actionProgress(a, frame)), p = routeAt(r, q);
       const X = p.X + Math.round(from.cx - p.X), blend = ease('easeOut', tr * 3.2), settle = ease('easeInOut', tr * 2);
       return {
         cx: lerp(from.cx, X, blend), cy: lerp(from.cy, p.Y, blend), zoom: lerp(from.zoom, s.zoom, settle), pitch: lerp(from.pitch, s.pitch, settle),
@@ -587,18 +588,23 @@ function rrect(ctx, x, y, w, h, r) {
 // ---------------------------------------------------------------- Label style (project-wide, with optional per-item override)
 export const LABEL_SHAPES = { pill: 'Pill', rounded: 'Rounded box', square: 'Square box', tag: 'Tag with pointer', none: 'Text only' };
 export const LABEL_WEIGHTS = [[400, 'Regular'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold']];
-export const DEFAULT_LABEL_STYLE = { font: 'Arial', weight: 600, italic: false, size: 14, caps: false, spacing: 0, shape: 'pill', useTheme: true, text: '#ffffff', bg: '#0c1c28', bgAlpha: .9, border: '#ffffff', borderW: 0, halo: false, shadow: false };
+export const DEFAULT_LABEL_STYLE = { font: 'Arial', weight: 600, italic: false, size: 14, caps: false, spacing: 0, shape: 'pill', placement: 'screen', useTheme: true, text: '#ffffff', bg: '#0c1c28', bgAlpha: .9, border: '#ffffff', borderW: 0, halo: false, shadow: false };
 export const LABEL_PRESETS = {
-  default: { label: 'Default pill', style: {} },
-  clean: { label: 'Clean text', style: { shape: 'none', halo: true, weight: 700, size: 17 } },
-  atlas: { label: 'Atlas capitals', style: { font: 'Cinzel', weight: 700, caps: true, spacing: 14, size: 15, shape: 'none', halo: true } },
-  news: { label: 'News banner', style: { font: 'Oswald', weight: 700, caps: true, spacing: 6, size: 16, shape: 'square', useTheme: false, bg: '#e63946', text: '#ffffff', bgAlpha: 1, shadow: true } },
-  tag: { label: 'Yellow tag', style: { font: 'Poppins', weight: 700, size: 15, shape: 'tag', useTheme: false, bg: '#ffd166', text: '#1b1b1b', bgAlpha: 1, shadow: true } },
-  hand: { label: 'Handwritten', style: { font: 'Caveat', weight: 700, size: 24, shape: 'none', halo: true } },
-  bangla: { label: 'Bangla (বাংলা)', style: { font: 'Hind Siliguri', weight: 600, size: 17 } },
+  default: { label: 'Default pill', style: { placement: 'screen' } },
+  clean: { label: 'Clean text', style: { placement: 'screen', shape: 'none', halo: true, weight: 700, size: 17 } },
+  map2d: { label: '2D · Attached to map', style: { placement: 'map', shape: 'none', halo: true, weight: 700, size: 17 } },
+  atlas: { label: 'Atlas capitals', style: { placement: 'screen', font: 'Cinzel', weight: 700, caps: true, spacing: 14, size: 15, shape: 'none', halo: true } },
+  news: { label: 'News banner', style: { placement: 'screen', font: 'Oswald', weight: 700, caps: true, spacing: 6, size: 16, shape: 'square', useTheme: false, bg: '#e63946', text: '#ffffff', bgAlpha: 1, shadow: true } },
+  tag: { label: 'Yellow tag', style: { placement: 'screen', font: 'Poppins', weight: 700, size: 15, shape: 'tag', useTheme: false, bg: '#ffd166', text: '#1b1b1b', bgAlpha: 1, shadow: true } },
+  hand: { label: 'Handwritten', style: { placement: 'screen', font: 'Caveat', weight: 700, size: 24, shape: 'none', halo: true } },
+  bangla: { label: 'Bangla (বাংলা)', style: { placement: 'screen', font: 'Hind Siliguri', weight: 600, size: 17 } },
 };
 /** Project style, then the item's own override (if any), on top of the defaults. */
 export function labelStyleOf(proj, item) { return { ...DEFAULT_LABEL_STYLE, ...(proj.labelStyle || {}), ...(item?.labelStyle || {}) }; }
+// Local-area labels omit their parent suffix on the basemap.
+const routeLabelKey = text => String(text).split(' · ')[0].trim().toLowerCase();
+// Polygon intersections and eased progress can differ by rounding at a border.
+const passedRouteEntry = (progress, entry) => progress + 1e-10 >= entry;
 /** Every font family the project needs, so the editor and exporter can load them first. */
 export function mapFontsUsed(proj) {
   const out = new Set([cleanFont(labelStyleOf(proj).font)]);
@@ -612,11 +618,28 @@ function drawLabel(ctx, v, th, l, st) {
   const ls = fs * st.spacing / 100; if ('letterSpacing' in ctx) ctx.letterSpacing = ls.toFixed(2) + 'px';
   const boxed = st.shape !== 'none', w = ctx.measureText(text).width + (boxed ? fs * 1.5 : 0), h = fs * 1.9;
   const bg = st.useTheme ? th.pill : st.bg, fg = st.useTheme ? th.pillText : st.text, bgA = st.useTheme ? 1 : st.bgAlpha, a0 = clamp01(l.alpha);
-  const x0 = l.x - w / 2, y0 = l.y - h / 2;
+  let x = l.x, y = l.y;
+  if (st.placement === 'map' && l.ground) {
+    const q = project(v, l.ground.X, l.ground.Y);
+    if (q.z <= v.near) { ctx.restore(); return; }
+    x = l.groundOffset?.x ?? 0; y = l.groundOffset?.y ?? 0;
+    // Keep the entire label in front of the near plane, including its tag/halo.
+    const pad = fs * .35, bottom = h / 2 + (st.shape === 'tag' ? fs * .55 : 0) + pad;
+    for (const dx of [x - w / 2 - pad, x + w / 2 + pad]) for (const dy of [y - h / 2 - pad, y + bottom]) {
+      if (q.z - (-v.sb * dx + v.cb * dy) * v.sp <= v.near) { ctx.restore(); return; }
+    }
+    const u = (l.ground.X - v.cx) * v.S, z = (l.ground.Y - v.cy) * v.S;
+    const x1 = u * v.cb + z * v.sb, t = x1 * q.k * v.sp / q.z;
+    // Local map axes projected at the anchor: text rotates and foreshortens
+    // with the ground, including its local perspective scale.
+    ctx.transform(q.k * v.cb - t * v.sb, -v.cp * q.k * q.k * v.sb,
+      q.k * v.sb + t * v.cb, v.cp * q.k * q.k * v.cb, q.x, q.y);
+  }
+  const x0 = x - w / 2, y0 = y - h / 2;
   if (boxed) {
     const path = () => {
       rrect(ctx, x0, y0, w, h, st.shape === 'pill' ? h / 2 : st.shape === 'rounded' ? h * .28 : fs * .08);
-      if (st.shape === 'tag') { ctx.moveTo(l.x - fs * .45, y0 + h - .5); ctx.lineTo(l.x, y0 + h + fs * .55); ctx.lineTo(l.x + fs * .45, y0 + h - .5); ctx.closePath(); }
+      if (st.shape === 'tag') { ctx.moveTo(x - fs * .45, y0 + h - .5); ctx.lineTo(x, y0 + h + fs * .55); ctx.lineTo(x + fs * .45, y0 + h - .5); ctx.closePath(); }
     };
     if (bgA > 0) {
       ctx.globalAlpha = a0 * bgA; ctx.fillStyle = bg;
@@ -626,14 +649,17 @@ function drawLabel(ctx, v, th, l, st) {
     if (st.borderW > 0) { ctx.globalAlpha = a0; ctx.strokeStyle = st.border; ctx.lineWidth = st.borderW * v.unit; ctx.lineJoin = 'round'; path(); ctx.stroke(); }
   }
   ctx.globalAlpha = a0; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const tx = l.x + ls / 2, ty = l.y + fs * .05;
+  const tx = x + ls / 2, ty = y + fs * .05;
   if (st.halo) { ctx.lineJoin = 'round'; ctx.lineWidth = fs * .26; ctx.strokeStyle = bg; ctx.strokeText(text, tx, ty); }
   if (!boxed && st.shadow) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = fs * .35; ctx.shadowOffsetY = fs * .08; }
   ctx.fillStyle = fg; ctx.fillText(text, tx, ty);
   ctx.restore();
 }
 const bounce = t => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * t; if (t < 2 / d) return n * (t -= 1.5 / d) * t + .75; if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + .9375; return n * (t -= 2.625 / d) * t + .984375; };
-const actAlpha = (a, frame) => (frame < a.start ? 0 : a.keep !== false || frame <= a.start + a.dur ? 1 : clamp01(1 - (frame - a.start - a.dur) / 10));
+// Timeline length controls visibility; animation duration controls the reveal/movement.
+const animationDuration = a => a.animDur ?? a.dur;
+export const actionProgress = (a, frame) => clamp01((frame - a.start) / Math.max(1, animationDuration(a)));
+const actAlpha = (a, frame) => frame >= a.start && frame < a.start + a.dur ? 1 : 0;
 
 function groundCircle(ctx, v, X, Y, rPx, off = 0) { // circle of radius rPx screen-pixels (at the map's scale) lying on the map
   const r = rPx / v.S, xy = new Float64Array(2 * 49);
@@ -827,7 +853,7 @@ function nameAnchor(f, cities, midX) {
   return f._anchor;
 }
 /** Country map extras: the country's name and its main cities (labels are nudged apart so they stay readable). */
-function drawAreaDetail(ctx, v, geo, th, proj, labels) {
+function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames) {
   const f = focusFeature(proj, geo); if (!f) return;
   const ar = areaOf(proj), b = f.mainBox, mid = (b[0] + b[2]) / 2, off = Math.round(v.cx - mid), st = labelStyleOf(proj);
   const cities = ar.cities ? citiesOf(geo, f.name) : [];
@@ -837,31 +863,33 @@ function drawAreaDetail(ctx, v, geo, th, proj, labels) {
     return { x0: x - w / 2, x1: x + w / 2, y0: y - fs, y1: y + fs, w };
   };
   const placed = [], hits = r => placed.some(p => r.x0 < p.x1 && r.x1 > p.x0 && r.y0 < p.y1 && r.y1 > p.y0);
-  const dots = cities.map(c => { const X0 = lonToX(c[2]), q = project(v, X0 + Math.round(mid - X0) + off, latToY(c[1])); return { c, q }; });
+  const dots = cities.map(c => { const X0 = lonToX(c[2]), ground = { X: X0 + Math.round(mid - X0) + off, Y: latToY(c[1]) }, q = project(v, ground.X, ground.Y); return { c, q, ground }; });
   for (const { q } of dots) placed.push({ x0: q.x - 8 * v.unit, x1: q.x + 8 * v.unit, y0: q.y - 8 * v.unit, y1: q.y + 8 * v.unit });
-  if (ar.name) {
+  if (ar.name && !routeNames.has(routeLabelKey(f.name))) {
     const a = nameAnchor(f, cities, mid), q = geo.details?.has(f.name) ? {x:v.W / 2,y:28 * v.unit} : project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
     placed.push(r);
-    labels.push({ x: q.x, y: q.y, text: f.name, alpha: .96, scale: 1.6, over: NAME_STYLE });
+    labels.push({ x: q.x, y: q.y, ground: { X: a.x + off, Y: a.y }, text: f.name, alpha: .96, scale: 1.6, over: NAME_STYLE });
   }
   ctx.save();
-  for (const { c, q } of dots) {
+  for (const { c, q, ground } of dots) {
     ctx.globalAlpha = 1; ctx.fillStyle = th.pillText; ctx.strokeStyle = th.pill; ctx.lineWidth = 2.4 * v.unit;
     ctx.beginPath(); ctx.arc(q.x, q.y, 4.2 * v.unit, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
+    if (routeNames.has(routeLabelKey(c[0]))) continue;
     const w = box(0, 0, c[0], .82).w, u = v.unit;
     const spots = [[0, -17 * u], [0, 17 * u], [w / 2 + 9 * u, 0], [-w / 2 - 9 * u, 0], [0, -34 * u], [0, 34 * u]];
     let pick = null;
     for (const sp of spots) { if (!hits(box(q.x + sp[0], q.y + sp[1], c[0], .82))) { pick = sp; break; } }
     if (!pick || q.x < 0 || q.x > v.W || q.y < 0 || q.y > v.H) continue;
     placed.push(box(q.x + pick[0], q.y + pick[1], c[0], .82));
-    labels.push({ x: q.x + pick[0], y: q.y + pick[1], text: c[0], alpha: 1, scale: .82 });
+    labels.push({ x: q.x + pick[0], y: q.y + pick[1], ground, groundOffset: { x: pick[0], y: pick[1] }, text: c[0], alpha: 1, scale: .82 });
   }
   if (ar.cities) for (const region of detailRegions(proj,geo)) {
     const q = project(v,region.cx + off,region.cy), text = region.name.split(' · ')[0];
+    if (routeNames.has(routeLabelKey(text))) continue;
     if (labels.some(l => l.text === text)) continue;
     const r = box(q.x,q.y,text,.65,{shape:'none'});
     if (q.x < 0 || q.x > v.W || q.y < 0 || q.y > v.H || hits(r)) continue;
-    placed.push(r); labels.push({x:q.x,y:q.y,text,alpha:.9,scale:.65,over:{shape:'none',halo:true}});
+    placed.push(r); labels.push({x:q.x,y:q.y,ground:{X:region.cx + off,Y:region.cy},text,alpha:.9,scale:.65,over:{shape:'none',halo:true}});
   }
   ctx.restore();
 }
@@ -889,7 +917,7 @@ function partialRing(r, p) {
 
 function drawBorder(ctx, v, geo, th, a, frame) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
-  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), p = ease(a.easing, t), w = a.width * v.unit;
+  const t = actionProgress(a, frame), p = ease(a.easing, t), w = a.width * v.unit;
   const all = a.target?.kind === 'all', list = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[a.target.level || 'district'] || [] : geo.pick(v.cam.zoom).features) : [geo.byName.get(a.target?.name)].filter(Boolean);
   if (!list.length) return;
   ctx.save();
@@ -928,7 +956,7 @@ function featureRadius(f) { // farthest ring point from the centroid, in map uni
 }
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
-  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), p = ease(a.easing, t), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3));
+  const t = actionProgress(a, frame), p = ease(a.easing, t), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3));
   if (['country', 'region'].includes(a.target?.kind)) {
     const f = geo.byName.get(a.target.name); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
@@ -943,7 +971,7 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
       ctx.restore();
     }
     ctx.restore();
-    if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y, text: a.label || f.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
+    if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y, ground: { X: f.cx + off, Y: f.cy }, text: a.label || f.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
     return;
   }
   const r = resolveLoc(geo, a.target, v.cx); if (!r) return;
@@ -963,7 +991,7 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   ctx.restore();
   const dot = ease('backOut', clamp01(t / .35)); // centre dot grows into place instead of fading
   if (dot > 0) { ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = '#fff'; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit; ctx.beginPath(); ctx.arc(c.x, c.y, 5 * v.unit * dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); }
-  if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y - 24 * v.unit, text: a.label || a.target.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
+  if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y - 24 * v.unit, ground: { X: r.X, Y: r.Y }, groundOffset: { y: -24 * v.unit }, text: a.label || a.target.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
 }
 
 // ---------------------------------------------------------------- Animation: plane
@@ -1104,9 +1132,9 @@ function loadRoute(v, r, s, off, lift) { // view-space points from the start of 
   loadPt(v, p.i + 1, p.X + off, p.Y, lift * Math.sin(Math.PI * s));
   return n;
 }
-function drawPlane(ctx, v, geo, th, a, frame, labels) {
+function drawPlane(ctx, v, geo, th, a, frame, labels, routeNames) {
   const r = planeRoute(geo, a), alpha = actAlpha(a, frame); if (!r || alpha <= 0) return;
-  const t = clamp01((frame - a.start) / Math.max(1, a.dur)), s = ease(a.easing, t), lift = a.lift * v.unit, off = Math.round(v.cx - r.mid);
+  const t = actionProgress(a, frame), s = ease(a.easing, t), lift = a.lift * v.unit, off = Math.round(v.cx - r.mid);
   const E = u => lift * Math.sin(Math.PI * u), w = a.width * v.unit;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (a.showPath) { // faint full route
@@ -1132,14 +1160,27 @@ function drawPlane(ctx, v, geo, th, a, frame, labels) {
   for (const [pt, hit] of [[A, true], [B, s >= 1]]) {
     ctx.globalAlpha = alpha; ctx.fillStyle = '#fff'; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit;
     ctx.beginPath(); ctx.arc(pt.x, pt.y, 5 * v.unit, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    if (hit && pt === B) { const q = ((frame - a.start - a.dur) / 40) % 1; if (frame >= a.start + a.dur) { ctx.globalAlpha = alpha * (1 - q) * .7; ctx.beginPath(); ctx.arc(pt.x, pt.y, (6 + q * 22) * v.unit, 0, Math.PI * 2); ctx.stroke(); } }
+    if (hit && pt === B) { const q = ((frame - a.start - animationDuration(a)) / 40) % 1; if (frame >= a.start + animationDuration(a)) { ctx.globalAlpha = alpha * (1 - q) * .7; ctx.beginPath(); ctx.arc(pt.x, pt.y, (6 + q * 22) * v.unit, 0, Math.PI * 2); ctx.stroke(); } }
   }
   if (a.showLabels) {
     // A drawn path only names its ends when they sit on a known city or the user typed a label (never raw coordinates).
     const nameOf = (custom, loc) => custom || (a.mode === 'path' && (!loc || loc.kind === 'point') ? '' : loc?.name || '');
     const t1 = nameOf(a.fromLabel, a.from), t2 = nameOf(a.toLabel, a.to);
-    if (t1) labels.push({ x: A.x, y: A.y - 24 * v.unit, text: t1, alpha, scale: 1 });
-    if (t2) labels.push({ x: B.x, y: B.y - 24 * v.unit, text: t2, alpha: alpha * clamp01(s * 4), scale: 1 });
+    const entered = text => {
+      const key = routeLabelKey(text);
+      const first = routeNames.reduce((entry, name) => routeLabelKey(name.text) === key ? Math.min(entry, name.enterS) : entry, Infinity);
+      return first === Infinity || passedRouteEntry(s, first);
+    };
+    if (t1 && entered(t1)) labels.push({ x: A.x, y: A.y - 24 * v.unit, ground: { X: r.X[0] + off, Y: r.Y[0] }, groundOffset: { y: -24 * v.unit }, text: t1, alpha, scale: 1 });
+    if (t2 && entered(t2)) labels.push({ x: B.x, y: B.y - 24 * v.unit, ground: { X: r.X[r.n - 1] + off, Y: r.Y[r.n - 1] }, groundOffset: { y: -24 * v.unit }, text: t2, alpha: alpha * clamp01(s * 4), scale: 1 });
+  }
+  if (a.showRouteLabels) {
+    for (const name of routeNames) {
+      if (!passedRouteEntry(s, name.enterS)) continue;
+      const q = project(v, name.X + off, name.Y);
+      if (q.z < v.near || q.x < -160 * v.unit || q.x > v.W + 160 * v.unit || q.y < -40 * v.unit || q.y > v.H + 40 * v.unit) continue;
+      labels.push({ x: q.x, y: q.y + 22 * v.unit, ground: { X: name.X + off, Y: name.Y }, groundOffset: { y: 22 * v.unit }, text: name.text, alpha, scale: .82 });
+    }
   }
   // aircraft + ground shadow
   if (t > 0 || frame >= a.start) {
@@ -1148,7 +1189,7 @@ function drawPlane(ctx, v, geo, th, a, frame, labels) {
     const q0 = project(v, p0.X + off, p0.Y, E(Math.max(0, s - .012))), q1 = project(v, p1.X + off, p1.Y, E(Math.min(1, s + .012)));
     const ang = r.total > 0 ? Math.atan2(q1.y - q0.y, q1.x - q0.x) : 0, size = a.size * v.unit * body.k;
     const sh = 1 + e / Math.max(1, 90 * v.unit);
-    const kind = Object.hasOwn(TRAVEL_ICONS, a.icon) ? a.icon : 'plane', phase = clamp01((frame - a.start) / Math.max(1, a.dur)) * a.dur * .35;
+    const kind = Object.hasOwn(TRAVEL_ICONS, a.icon) ? a.icon : 'plane', phase = t * animationDuration(a) * .35;
     drawTravelIcon(ctx, kind, g.x + e * .22, g.y + e * .34, ang, size * .86, '#000', alpha * .18 / sh, phase, a.symbol, true);
     drawTravelIcon(ctx, kind, body.x, body.y, ang, size, a.planeColor, alpha, phase, a.symbol, false);
   }
@@ -1186,47 +1227,73 @@ export function drawPathEditor(ctx, v, a) {
 // ---------------------------------------------------------------- Animation: pin
 function drawPin(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame), r = resolveLoc(geo, a.place, v.cx); if (!r || alpha <= 0) return;
-  const t = (frame - a.start) / Math.max(1, a.dur), drop = clamp01(t / .45), fall = (1 - bounce(drop)) * 240 * v.unit;
-  const g = project(v, r.X, r.Y, 0), top = project(v, r.X, r.Y, fall), s = a.size * v.unit * 24;
-  ctx.save(); ctx.lineJoin = 'round';
-  // ground shadow + ripples
-  ctx.globalAlpha = alpha * .28 * drop; ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(g.x, g.y, s * .5 * (1 - fall / (700 * v.unit)), s * .2 * (1 - fall / (700 * v.unit)), 0, 0, Math.PI * 2); ctx.fill();
-  if (t > .4) for (let i = 0; i < 2; i++) {
-    const q = (((frame - a.start) / 50) + i / 2) % 1;
-    ctx.beginPath(); groundCircle(ctx, v, r.X, r.Y, (10 + q * 54) * v.unit * a.size);
-    ctx.globalAlpha = alpha * (1 - q) * .75; ctx.strokeStyle = a.color; ctx.lineWidth = 2.4 * v.unit; ctx.stroke();
+  const t = actionProgress(a, frame), showIcon = a.showIcon !== false;
+  const g = project(v, r.X, r.Y, 0), s = a.size * v.unit * 24;
+  if (showIcon) {
+    const drop = clamp01(t / .45), fall = (1 - bounce(drop)) * 240 * v.unit, top = project(v, r.X, r.Y, fall);
+    ctx.save(); ctx.lineJoin = 'round';
+    // ground shadow + ripples
+    ctx.globalAlpha = alpha * .28 * drop; ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(g.x, g.y, s * .5 * (1 - fall / (700 * v.unit)), s * .2 * (1 - fall / (700 * v.unit)), 0, 0, Math.PI * 2); ctx.fill();
+    if (t > .4) for (let i = 0; i < 2; i++) {
+      const q = (((frame - a.start) / 50) + i / 2) % 1;
+      ctx.beginPath(); groundCircle(ctx, v, r.X, r.Y, (10 + q * 54) * v.unit * a.size);
+      ctx.globalAlpha = alpha * (1 - q) * .75; ctx.strokeStyle = a.color; ctx.lineWidth = 2.4 * v.unit; ctx.stroke();
+    }
+    // pin body (tip at the location)
+    const x = top.x, y = top.y;
+    ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x - s * .1, y - s * .55, x - s * .62, y - s * .95, x - s * .62, y - s * 1.5);
+    ctx.arc(x, y - s * 1.5, s * .62, Math.PI, 0, false);
+    ctx.bezierCurveTo(x + s * .62, y - s * .95, x + s * .1, y - s * .55, x, y);
+    ctx.fillStyle = a.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.2 * v.unit; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - s * 1.5, s * .24, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
-  // pin body (tip at the location)
-  const x = top.x, y = top.y;
-  ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(x, y);
-  ctx.bezierCurveTo(x - s * .1, y - s * .55, x - s * .62, y - s * .95, x - s * .62, y - s * 1.5);
-  ctx.arc(x, y - s * 1.5, s * .62, Math.PI, 0, false);
-  ctx.bezierCurveTo(x + s * .62, y - s * .95, x + s * .1, y - s * .55, x, y);
-  ctx.fillStyle = a.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.2 * v.unit; ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - s * 1.5, s * .24, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
   if (a.showLabel) {
-    const pop = ease('backOut', (t - .45) / .3);
-    if (pop > 0) labels.push({ x: g.x, y: g.y - s * 2.5 - 14 * v.unit, text: a.label || a.place.name, alpha: alpha * clamp01(pop * 1.5), scale: .9 + .2 * pop });
+    const pop = ease('backOut', (t - .45) / .3), offset = showIcon ? -s * 2.5 - 14 * v.unit : 0;
+    if (pop > 0) labels.push({ x: g.x, y: g.y + offset, ground: { X: r.X, Y: r.Y }, groundOffset: { y: offset }, text: a.label || a.place.name, alpha: alpha * clamp01(pop * 1.5), scale: .9 + .2 * pop });
   }
+}
+
+// Retain labels from projects saved while the standalone label tool was available.
+function queueTextLabel(v, geo, a, frame, labels) {
+  if (!actAlpha(a, frame) || !a.text.trim()) return;
+  const p = clamp01(ease(a.easing, actionProgress(a, frame)));
+  let x = v.W * (a.x ?? 50) / 100, y = v.H * (a.y ?? 15) / 100;
+  if (a.labelPlacement === 'map') {
+    const r = resolveLoc(geo, a.place, v.cx); if (!r) return;
+    const q = project(v, r.X, r.Y); if (q.z < v.near) return;
+    x = q.x + (a.offsetX ?? 0) * v.unit; y = q.y + (a.offsetY ?? -24) * v.unit;
+  }
+  const r = resolveLoc(geo, a.place, v.cx);
+  labels.push({ x, y: y + (1 - p) * 12 * v.unit, ...(r ? { ground: { X: r.X, Y: r.Y }, groundOffset: { x: (a.offsetX ?? 0) * v.unit, y: ((a.offsetY ?? -24) + (1 - p) * 12) * v.unit } } : {}), text: a.text, alpha: p, scale: .94 + .06 * p });
 }
 
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo) {
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
+  const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
+  for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
+    const r = planeRoute(geo, a);
+    const names = r ? routePlaceLabels(geo, r, { mode: a.routeLabelMode || 'auto', country: area.mode === 'country' ? area.country : undefined, detailLevel: area.detailLevel || 'district' }) : [];
+    routeNames.set(a, names);
+    for (const name of names) controlledNames.add(routeLabelKey(name.text));
+  }
   if (th.imagery && geo.imagery) v.img = { im: geo.imagery, id: proj.imagery || 'gibs' };
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   drawBase(ctx, v, geo, th, proj);
-  drawAreaDetail(ctx, v, geo, th, proj, labels);
+  // Route names belong to their travel clip, including before and after it.
+  drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
   for (const a of proj.actions) if (a.type === 'highlight') tag(a, () => drawHighlight(ctx, v, geo, th, a, frame, labels));
   // Composite texture over country highlights, underneath borders and labels.
   drawTexture(ctx, W, H, proj.texture);
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
-  for (const a of proj.actions) if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels));
+  for (const a of proj.actions) if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
   for (const a of proj.actions) if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
+  for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
@@ -1239,7 +1306,8 @@ export const ACTION_TYPES = {
   border: { label: 'Border', icon: '▱', dur: 60, hint: 'Draw a country outline, or sweep every border' },
   plane: { label: 'Travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
   highlight: { label: 'Highlight', icon: '◎', dur: 45, hint: 'Light up a country or a place' },
-  pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Drop a pin on a location' },
+  pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin icon, text, or both' },
+  label: { label: 'Label', icon: 'Aa', dur: 90, hidden: true },
 };
 const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });
 export const PRESETS = {
@@ -1257,14 +1325,17 @@ export const PRESETS = {
 const uid = () => crypto.randomUUID();
 
 export function makeAction(type, start, extra = {}) {
-  const base = { id: uid(), type, name: ACTION_TYPES[type].label, start, dur: ACTION_TYPES[type].dur, easing: 'easeInOut', keep: true };
+  const base = { id: uid(), type, name: ACTION_TYPES[type].label, start, dur: ACTION_TYPES[type].dur, easing: 'easeInOut' };
   const own = {
     border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18 },
-    plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
+    plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
     highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400 },
-    pin: { place: city('Paris', 48.8566, 2.3522), label: '', showLabel: true, color: '#e63946', size: 1 },
+    pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1 },
+    label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
   }[type];
-  return { ...base, ...own, ...extra };
+  const a = { ...base, ...own, ...extra };
+  a.animDur ??= a.dur;
+  return a;
 }
 export function makeShot(preset, start, extra = {}) {
   const P = PRESETS[preset];
@@ -1320,6 +1391,7 @@ function checkLabelStyle(s) {
   if (s.font !== undefined && (typeof s.font !== 'string' || s.font.length > 60)) bad();
   if (s.weight !== undefined && !LABEL_WEIGHTS.some(w => w[0] === s.weight)) bad();
   if (s.shape !== undefined && !Object.hasOwn(LABEL_SHAPES, s.shape)) bad();
+  if (s.placement !== undefined && !['screen', 'map'].includes(s.placement)) bad();
   for (const [k, lo, hi] of [['size', 6, 80], ['spacing', 0, 40], ['bgAlpha', 0, 1], ['borderW', 0, 8]]) if (s[k] !== undefined && !num(s[k], lo, hi)) bad();
   for (const k of ['text', 'bg', 'border']) if (s[k] !== undefined && !col(s[k])) bad();
   for (const k of ['italic', 'caps', 'useTheme', 'halo', 'shadow']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
@@ -1329,7 +1401,7 @@ function checkLabelStyle(s) {
 export function validateMapProject(p) {
   if (!p || p.version !== 1 || p.kind !== 'map' || !Array.isArray(p.actions) || !Array.isArray(p.shots)) throw Error('This is not a FrameFlow map project.');
   if (p.actions.length > 200 || p.shots.length > 200) throw Error('Too many items in this map project.');
-  if (![24, 30, 60].includes(p.fps) || !Number.isInteger(p.frames) || p.frames < 2 || p.frames > 1800) throw Error('Invalid frame settings.');
+  if (![24, 30, 60].includes(p.fps) || !Number.isSafeInteger(p.frames) || p.frames < 2) throw Error('Invalid frame settings.');
   if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || p.width < 100 || p.height < 100 || p.width > 3840 || p.height > 3840) throw Error('Invalid canvas size.');
   if (!ENUMS.theme.includes(p.theme)) throw Error('Unknown map theme.');
   if (p.imagery !== undefined && !/^[a-z0-9_-]{1,20}$/i.test(p.imagery)) throw Error('Invalid imagery source.');
@@ -1342,10 +1414,11 @@ export function validateMapProject(p) {
   for (const it of [...p.actions, ...p.shots]) {
     if (typeof it.id !== 'string' || ids.has(it.id) || typeof it.name !== 'string') throw Error('Invalid item.');
     ids.add(it.id);
-    if (!Number.isFinite(it.start) || it.start < 0 || !Number.isFinite(it.dur) || it.dur < 1 || it.dur > 3600 || !ENUMS.easing.includes(it.easing)) throw Error('Invalid item timing.');
+    if (!Number.isSafeInteger(it.start) || it.start < 0 || !Number.isSafeInteger(it.dur) || it.dur < 1 || !Number.isSafeInteger(it.start + it.dur) || !ENUMS.easing.includes(it.easing)) throw Error('Invalid item timing.');
   }
   for (const a of p.actions) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
+    if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
     if (a.type === 'border' && !((a.target?.kind === 'all') || (['country', 'region'].includes(a.target?.kind) && typeof a.target.name === 'string'))) throw Error('Invalid border target.');
     if (a.type === 'plane' && a.mode !== undefined && !['direct', 'path'].includes(a.mode)) throw Error('Invalid travel mode.');
     if (a.type === 'plane' && a.mode === 'path') checkPath(a);
@@ -1354,13 +1427,27 @@ export function validateMapProject(p) {
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
-    if (!col(a.color) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
+    if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
+    if (a.type === 'label') {
+      if (typeof a.text !== 'string' || a.text.length > 160) throw Error('Invalid label text.');
+      if (a.labelPlacement !== undefined && !['screen', 'map'].includes(a.labelPlacement)) throw Error('Invalid label placement.');
+      if (a.labelPlacement === 'map' && !isLoc(a.place)) throw Error('Invalid label location.');
+      for (const [k, lo, hi] of [['x', 0, 100], ['y', 0, 100], ['offsetX', -1000, 1000], ['offsetY', -1000, 1000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid label ' + k + '.');
+    }
+    if (a.type === 'plane' && ((a.showRouteLabels !== undefined && typeof a.showRouteLabels !== 'boolean') || (a.routeLabelMode !== undefined && !['auto', 'country', 'region'].includes(a.routeLabelMode)) || (a.routeLabelTiming !== undefined && !['all', 'visited'].includes(a.routeLabelTiming)))) throw Error('Invalid route label settings.');
+    if (((a.type !== 'label' || a.color !== undefined) && !col(a.color)) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
     for (const [k, lo, hi] of [['width', .5, 20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
   }
   for (const s of p.shots) {
     if (!ENUMS.preset.includes(s.preset)) throw Error('Unknown camera preset.');
     if (!isLoc(s.target)) throw Error('Invalid camera target.');
     for (const [k, lo, hi] of [['zoom', 0, 14], ['pitch', 0, 75], ['bearing', -3600, 3600], ['amount', -10, 10], ['degrees', -3600, 3600]]) if (!num(s[k], lo, hi)) throw Error('Invalid camera ' + k + '.');
+  }
+  // Freeze the original animation speed when opening projects saved before animDur.
+  for (const a of p.actions) {
+    a.animDur ??= a.dur;
+    // Older route-name settings must also reveal names on entry.
+    if (a.type === 'plane') a.routeLabelTiming = 'visited';
   }
   return p;
 }

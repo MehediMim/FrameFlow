@@ -76,6 +76,12 @@ export function defaultScene() {
       { ...makeCameraClip('orbit', 8.5, 3.5, human.id), distance: 8 }
     ] };
 }
+// Include every frame whose start falls within the chosen project duration.
+export function sceneFrameCount(p) {
+  const frames = Math.ceil(p.duration * p.fps);
+  if (!Number.isSafeInteger(frames) || frames < 1) throw Error('Invalid Scene Studio duration');
+  return frames;
+}
 // Overlapping clips: the clip that starts later wins, earlier ones are cut off where the next one begins.
 export function resolveClips(clips = []) {
   const s = [...clips].sort((a, b) => a.start - b.start);
@@ -588,7 +594,9 @@ export function renderScene(canvas, p, t) {
 }
 
 // ---------------------------------------------------------------- validation + migration
-const HEX = /^#[0-9a-f]{6}$/i, finite = (x, a, b) => typeof x === 'number' && Number.isFinite(x) && x >= a && x <= b;
+const HEX = /^#[0-9a-f]{6}$/i, finite = (x, a, b = Infinity) => typeof x === 'number' && Number.isFinite(x) && x >= a && x <= b;
+const safeTime = (value, minimum, fps) => finite(value, minimum) && Number.isSafeInteger(Math.ceil(value * fps));
+const safeTiming = (start, duration, fps) => safeTime(start, 0, fps) && safeTime(duration, .1, fps) && safeTime(start + duration, .1, fps);
 export function migrateScene(q) {
   if (q?.kind !== 'frameflow-scene' || ![1, 2].includes(q.version)) throw Error('Invalid Scene Studio project');
   if (q.version === 2) { q.cameraClips ||= []; return q; }
@@ -600,7 +608,7 @@ export function migrateScene(q) {
 }
 export function validateScene(input) {
   const q = migrateScene(input);
-  if (typeof q.name !== 'string' || !finite(q.duration, 1, 120) || ![24, 30, 60].includes(q.fps) || !Array.isArray(q.objects) || q.objects.length > 80) throw Error('Invalid Scene Studio project');
+  if (typeof q.name !== 'string' || ![24, 30, 60].includes(q.fps) || !safeTime(q.duration, 1, q.fps) || !Array.isArray(q.objects) || q.objects.length > 80) throw Error('Invalid Scene Studio project');
   if (!['white', 'texture'].includes(q.material) || !HEX.test(q.sky) || !finite(q.roadWidth, 4, 20) || ![q.left, q.right].every(v => ['city', 'park', 'trees', 'playground', 'none'].includes(v))) throw Error('Invalid environment');
   if (!Object.hasOwn(FINISHES, q.finish ?? 'none') || !finite(q.finishStrength ?? .6, 0, 1) || !finite(q.finishScale ?? 1, .1, 8)) throw Error('Invalid finish');
   const camSpec = k => { if (!CAMERA_MODES[k.mode] || !CAMERA_MOVES[k.move]) throw Error('Invalid camera');
@@ -610,7 +618,7 @@ export function validateScene(input) {
   if (!Array.isArray(q.cameraClips) || q.cameraClips.length > 100) throw Error('Invalid camera shots');
   if(q.baseRoad!==undefined&&typeof q.baseRoad!=='boolean')throw Error('Invalid base road');
   const ids = new Set();
-  for (const c of q.cameraClips) { camSpec(c); if (typeof c.id !== 'string' || ids.has(c.id) || !finite(c.start, 0, q.duration) || !finite(c.dur, .1, 120) || !finite(c.blend ?? .5, 0, 5)) throw Error('Invalid camera shot timing'); ids.add(c.id); }
+  for (const c of q.cameraClips) { camSpec(c); if (typeof c.id !== 'string' || ids.has(c.id) || !safeTiming(c.start, c.dur, q.fps) || !safeTime(c.blend ?? .5, 0, q.fps)) throw Error('Invalid camera shot timing'); ids.add(c.id); }
   const objIds = new Set();
   for (const o of q.objects) {
     if (typeof o.id !== 'string' || objIds.has(o.id) || typeof o.name !== 'string' || !Object.hasOwn(ITEM_TYPES,o.type) || !['inherit', 'white', 'color', 'texture'].includes(o.material) || !['linear', 'smooth'].includes(o.easing) || typeof o.visible !== 'boolean' || !HEX.test(o.color)) throw Error('Invalid object');
@@ -618,14 +626,19 @@ export function validateScene(input) {
     if(!finite(o.rotation??0,-360,360)||!['path','fixed'].includes(o.orientation??'path')||!finite(o.turnRadius??3,0,20))throw Error('Invalid rotation or turn radius');
     if(o.waypoints!==undefined&&(!Array.isArray(o.waypoints)||o.waypoints.length>60||o.waypoints.some(v=>!v||!finite(v.x,-100,150)||!finite(v.z,-100,150))))throw Error('Invalid route points');
     for(const k of ['width','length','height'])if(o[k]!==undefined&&!finite(o[k],.5,80))throw Error('Invalid object dimensions');
-    if(o.type==='traffic'){if(!['cycle','red','amber','green'].includes(o.signal??'cycle'))throw Error('Invalid signal');for(const k of ['redTime','greenTime','amberTime'])if(!finite(o[k]??(k==='redTime'?6:k==='greenTime'?5:2),.1,120))throw Error('Invalid signal timing');if(!finite(o.phase??0,0,360))throw Error('Invalid phase');}
+    if(o.type==='traffic'){
+      if(!['cycle','red','amber','green'].includes(o.signal??'cycle'))throw Error('Invalid signal');
+      const cycle=[o.redTime??6,o.greenTime??5,o.amberTime??2];
+      if(cycle.some(v=>!safeTime(v,.1,q.fps))||!safeTime(cycle.reduce((a,b)=>a+b,0),.1,q.fps))throw Error('Invalid signal timing');
+      if(!safeTime(o.phase??0,0,q.fps))throw Error('Invalid phase');
+    }
 
     if (!((o.finish ?? 'inherit') === 'inherit' || Object.hasOwn(FINISHES, o.finish)) || !finite(o.finishScale ?? 1, .1, 8)) throw Error('Invalid finish');
     if (o.type === 'human') { const lk = humanLook(o); if (!BODIES[lk.body] || !OUTFITS[lk.outfit] || !HAIR_STYLES[lk.hair] || !FACIAL[lk.facial] || ![lk.skin, lk.hairColor, lk.bottomColor].every(v => HEX.test(v))) throw Error('Invalid character look'); }
     for (const f of ['x', 'z', 'endX', 'endZ']) if (!finite(o[f], -100, 150)) throw Error('Invalid position');
-    if (!finite(o.scale, .2, 4) || !finite(o.start, 0, q.duration) || !finite(o.duration, .1, 120)) throw Error('Invalid timing or scale');
+    if (!finite(o.scale, .2, 4) || !safeTiming(o.start, o.duration, q.fps)) throw Error('Invalid timing or scale');
     if (!Array.isArray(o.clips) || o.clips.length > 60) throw Error('Invalid gesture clips');
-    for (const c of o.clips) { if (typeof c.id !== 'string' || ids.has(c.id) || !GESTURES[c.gesture] || !finite(c.start, 0, q.duration) || !finite(c.dur, .1, 120) || !finite(c.speed ?? 1, .25, 3)) throw Error('Invalid gesture clip'); ids.add(c.id); }
+    for (const c of o.clips) { if (typeof c.id !== 'string' || ids.has(c.id) || !GESTURES[c.gesture] || !safeTiming(c.start, c.dur, q.fps) || !finite(c.speed ?? 1, .25, 3)) throw Error('Invalid gesture clip'); ids.add(c.id); }
   }
   return q;
 }

@@ -2,6 +2,8 @@
 
 A browser based motion graphics editor with a frame timeline, transform keyframes, easing, layers, playback, and video export. Plain HTML, CSS, and JavaScript; no build step, backend, API key, or paid service is required.
 
+Set **Duration (seconds)** in each studio's settings to choose your project length. Motion, Map, Paper and Scene have no fixed duration cap; playback and export use the duration you choose.
+
 ## Host on GitHub Pages
 
 1. Extract this ZIP.
@@ -82,11 +84,13 @@ Switch to **Map Studio** with the toggle in the header. It animates a vector wor
 - **Border**: draws a country outline (with glow and optional fill), or sweeps every border across the world.
 - **Plane**: flies a plane along a great-circle route from one place to another, with a trail and optional place names.
 - **Highlight**: lights up a country (optionally dimming the rest) or a place with a radius and pulse.
-- **Pin**: drops a pin on a location with ripples and a label.
+- **Pin**: marks a location. Choose **Display → Icon + text**, **Icon only**, or **Text only** in Properties; icon pins drop in with ripples.
 
 **Camera presets** move the camera for you: Fly to, Cinematic swoop, Back to world, Push in, Pull back, Orbit, Tilt, Pan to, Frame flight, Follow plane. Tilt and rotation give a 3D viewing angle.
 
 **Choosing places**: type a city or country, type `lat, lon`, or press the target button and click the map (Shift+click picks a whole country for camera targets).
+
+To attach the existing labels flat to the map, choose **Label style → Start from a style → 2D · Attached to map** in Map settings or an item's custom label style. Place names, route names, pin labels and highlight labels follow the map's tilt and rotation with this preset.
 
 ### Country maps (Map area)
 
@@ -96,7 +100,9 @@ Open **Canvas settings → Map area** and choose **One country · detailed map**
 
 Add a **Travel** animation, then set **Travel along → My own path**. Press **Draw path on map** and click the points the icon should pass through, in order. Drag a point to move it, Alt+click (or ✕ in the list) removes it, Backspace removes the last one, Enter finishes. **Path shape** is a smooth curve through the points or straight lines. The icon, trail and optional path points animate along the whole path; camera presets such as *Frame route* and *Follow traveler* work with it. **Start → end (flight arc)** keeps the original great-circle behaviour.
 
-Drag bars on the map timeline to retime them; drag their edges to change length. Projects save as `.framemap.json`. Export uses the same real-time WebM/MP4 recorder as Motion mode.
+Turn on **Show route region / country names** in Travel properties to label the areas crossed by either route type. Names appear as the traveler enters each region or country and stay visible for the rest of the timeline bar. Choose **Countries**, **Regions** or **Auto regions / countries**. Region names follow the map boundary level and use country names where regional data is unavailable. **Show place names** independently controls the start and end labels.
+
+Drag bars on the map timeline to retime them; drag their edges to change how long an item is visible. Border, Travel, Highlight and Pin appear only during their timeline bars and disappear when their bars end. Set **Animation duration (frames)** in Properties to control how long the drawing, movement or entrance takes, independently of **Visible for (frames)**. A shorter animation holds its completed appearance until the bar ends; a longer animation is cut off at the bar's end. Camera shot lengths still control the duration of the camera move. Projects save as `.framemap.json`. Export uses the same real-time WebM/MP4 recorder as Motion mode.
 
 The map data files are loaded with `fetch`, so serve the folder over http (same as the module imports).
 

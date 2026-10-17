@@ -1,8 +1,9 @@
 import { installCountryDetail, detailRegions, regionAt, planeRoute, xToLon, yToLat, citiesOf } from './map-engine.mjs';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
-import { confirmStudio, exportMarkup } from './studio-ui.mjs';
-import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
+import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
+import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
+import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=timeline-rename-2';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
 import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs';
@@ -10,6 +11,7 @@ import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
+import { panMapCamera, zoomMapCamera } from './map-navigation.mjs';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,6 +23,7 @@ const EASE_OPTS = [['easeInOut', 'Ease in & out'], ['linear', 'Linear'], ['easeI
 let proj, sel = null, frame = 0, playing = false, loop = true, raf, startTime, startFrame;
 let undoStack = [], redoStack = [], geo = null, geoState = 'idle', geoError = '', pick = null, exporting = false, lastView = null, drag = null;
 let pathDraw = null, pathDrag = null; // pathDraw = { id } while points of a travel path are being clicked on the map
+let previewCamera = null, mapPan = null;
 
 // ------------------------------------------------------------------ helpers
 const items = () => [...proj.shots].sort((a, b) => a.start - b.start).concat(proj.actions);
@@ -172,10 +175,12 @@ function draw() {
     if (geoState === 'error') { ctx.font = `${Math.round(canvas.height / 44)}px Arial, sans-serif`; ctx.fillText('Serve this folder over http (for example: python -m http.server 8000) and reload.', canvas.width / 2, canvas.height / 2 + canvas.height / 20); }
     return;
   }
-  lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo);
+  lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera);
+  $('#mResetView').hidden = !previewCamera;
   if (pathDraw) { const a = proj.actions.find(x => x.id === pathDraw.id); if (a) drawPathEditor(ctx, lastView, a); }
 }
 function setFrame(n) {
+  if (!pathDraw && !pick) previewCamera = null;
   frame = clamp(Math.round(n) || 0, 0, proj.frames - 1);
   $('#mFrame').value = +(frame / proj.fps).toFixed(3); $('#mFrame').max = +((proj.frames - 1) / proj.fps).toFixed(3); $('#mFrame').step = '0.001';
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
@@ -269,7 +274,7 @@ function renderInspector() {
   if (!it) { box.innerHTML = '<p class="muted">Select an item in the timeline to edit it.<br><br>Add a <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>, then pick a camera preset. Presets move the camera for you.</p>'; $('#mInspTitle').textContent = 'Properties'; return; }
   const shot = isShot(it);
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
-  let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>` + F.text('name', 'Name', it.name, 100);
+  let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>`;
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
   h += `<div class="two">${F.num('start', 'Start frame', it.start, 0)}${F.num('dur', shot ? 'Length (frames)' : 'Visible for (frames)', it.dur, 1)}</div>` + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   if (!shot) h += F.num('animDur', 'Animation duration (frames)', it.animDur, 1) + '<p class="mini-label">The timeline bar controls when this is visible. Animation duration controls how long it takes to draw or move. It disappears when the bar ends.</p>';
@@ -316,11 +321,11 @@ function pathFields(a) {
     `<button type="button" data-mpath="reverse" ${pts.length > 1 ? '' : 'disabled'} title="Travel the path the other way">⇄ Reverse</button>` +
     `<button type="button" data-mpath="clear" ${pts.length ? '' : 'disabled'} title="Remove every point">Clear</button></div>` +
     (pts.length ? `<ol class="m-wps">${pts.map((p, i) => `<li><b>${i + 1}</b><span title="${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}">${esc(placeAt(p).name)}</span><button type="button" data-mwdel="${i}" title="Remove this point" aria-label="Remove point ${i + 1}">✕</button></li>`).join('')}</ol>` : '') +
-    `<p class="mini-label">${drawing ? 'Click the map to add points · drag a point to move it · Alt+click removes it · Enter when done.' : pts.length < 2 ? 'Press “Draw path on map”, then click at least two points. They are used in order.' : `${pts.length} points. They are used in order.`}</p>`;
+    `<p class="mini-label">${drawing ? 'Click to add points · drag a point to move it · right-drag or middle-drag to pan · scroll to zoom · Alt+click removes a point · Enter when done.' : pts.length < 2 ? 'Press “Draw path on map”, then click at least two points. They are used in order.' : `${pts.length} points. They are used in order.`}</p>`;
 }
 function startPathDraw(id) {
   cancelPick(); pause(); pathDraw = { id }; canvas.style.cursor = 'crosshair';
-  $('#mHint').textContent = 'Click the map to add path points · drag a point to move it · Alt+click removes it · Enter or “Finish drawing” when done';
+  $('#mHint').textContent = 'Click to add points · right-drag or middle-drag to pan · scroll to zoom · Enter to finish';
   notify('Click the map to add points to the path'); renderInspector(); draw();
 }
 function endPathDraw(silent) {
@@ -466,12 +471,30 @@ function labelFields(a) {
 
 // ------------------------------------------------------------------ pick a location on the map
 function startPick(key, kinds) {
-  pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click the map to choose a location · Esc to cancel';
+  pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click to choose a location · right-drag or middle-drag to pan · scroll to zoom · Esc to cancel';
   notify(kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isDetail() ? 'Click a region' : 'Click a country');
 }
 function cancelPick() { pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; }
-const HINT = 'Add animations on the left · camera presets move the view for you · scrub the timeline to preview';
+const HINT = 'Right-drag or middle-drag to pan · scroll to zoom · scrub the timeline to preview';
 function canvasXY(e) { const b = canvas.getBoundingClientRect(); return { sx: (e.clientX - b.left) / b.width * proj.width, sy: (e.clientY - b.top) / b.height * proj.height }; }
+function finishMapPan(e) {
+  if (!mapPan || (e && e.pointerId !== mapPan.pointerId)) return;
+  const id = mapPan.pointerId; mapPan = null;
+  if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  canvas.style.cursor = pathDraw || pick ? 'crosshair' : '';
+}
+$('#mResetView').onclick = () => { finishMapPan(); previewCamera = null; draw(); };
+canvas.oncontextmenu = e => e.preventDefault();
+canvas.addEventListener('wheel', e => {
+  if (!lastView || !geo || exporting) return;
+  e.preventDefault();
+  if (mapPan || pathDrag) return;
+  pause();
+  const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1);
+  previewCamera = zoomMapCamera(lastView, canvasXY(e), -clamp(delta, -240, 240) * .003);
+  draw();
+}, { passive: false });
+canvas.addEventListener('lostpointercapture', finishMapPan);
 function pathPointerDown(e) {
   const a = proj.actions.find(x => x.id === pathDraw.id); if (!a || !lastView || !geo) return;
   e.preventDefault();
@@ -491,17 +514,31 @@ function pathPointerDown(e) {
   syncPathEnds(a); changed(); renderInspector();
 }
 canvas.onpointermove = e => {
+  if (mapPan) {
+    if (e.pointerId !== mapPan.pointerId) return;
+    previewCamera = panMapCamera(mapPan.view, mapPan.point, canvasXY(e)) || previewCamera;
+    draw(); return;
+  }
   if (!pathDrag || !lastView) return;
   const a = proj.actions.find(x => x.id === pathDrag.id), { sx, sy } = canvasXY(e), ll = a && screenToLonLat(lastView, sx, sy); if (!ll) return;
   a.path[pathDrag.i] = { lat: +ll.lat.toFixed(4), lon: +ll.lon.toFixed(4) }; pathDrag.moved = true; draw();
 };
-canvas.onpointerup = canvas.onpointercancel = () => {
+canvas.onpointerup = canvas.onpointercancel = e => {
+  if (mapPan) { finishMapPan(e); return; }
   if (!pathDrag) return;
   const a = proj.actions.find(x => x.id === pathDrag.id), moved = pathDrag.moved; pathDrag = null;
   if (!moved) undoStack.pop(); else if (a) { syncPathEnds(a); changed(); renderInspector(); }
   updateHistory();
 };
 canvas.onpointerdown = e => {
+  if (exporting || mapPan || pathDrag) return;
+  if (e.button === 1 || e.button === 2) {
+    if (!lastView || !geo) return;
+    e.preventDefault(); pause();
+    mapPan = { pointerId: e.pointerId, point: canvasXY(e), view: lastView };
+    canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; return;
+  }
+  if (e.button !== 0) return;
   if (pathDraw) { pathPointerDown(e); return; }
   if (!pick || !lastView || !geo) return;
   const b = canvas.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * proj.width, sy = (e.clientY - b.top) / b.height * proj.height, ll = screenToLonLat(lastView, sx, sy);
@@ -611,13 +648,14 @@ function bindSettings() {
 
 // ------------------------------------------------------------------ timeline
 function frameFromEvent(e) { const b = $('#mTracks').getBoundingClientRect(); return clamp(Math.round((e.clientX - b.left) / b.width * (proj.frames - 1)), 0, proj.frames - 1); }
+bindTimelineRename($('#mTrackLabels'), { attribute: 'data-mtl', getItem: id => items().find(it => it.id === id), checkpoint, changed: () => { changed(); renderInspector(); }, pause });
 function renderTimeline() {
   const zoom = +$('#mZoomT').value, its = items(), last = proj.frames - 1;
   $('#mTracks').style.width = `${zoom * 100}%`;
   const step = Math.max(1, Math.round(proj.frames / (10 * zoom)));
   let ticks = ''; for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${f}</span>`;
   $('#mRuler').innerHTML = ticks;
-  $('#mTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-mtl="${esc(it.id)}"><span>${iconOf(it)}</span>${esc(it.name)}</div>`).join('');
+  $('#mTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-mtl="${esc(it.id)}"><span>${iconOf(it)}</span><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(it.name)}</span></div>`).join('');
   $('#mTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-mrow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-mclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div></div>`).join('');
   $('#mTrackLabels').style.transform = `translateY(-${$('#mScroll').scrollTop}px)`;
   $$('[data-mtl]').forEach(el => el.onclick = () => select(el.dataset.mtl));
@@ -736,7 +774,7 @@ function setMode(m) {
 }
 $$('.modes [data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 window.addEventListener('keydown', e => {
-  if (!pathDraw || !document.body.classList.contains('mode-map')) return;
+  if (!pathDraw || !document.body.classList.contains('mode-map') || document.activeElement?.classList.contains('ff-timeline-name-input')) return;
   const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
   if (e.key === 'Escape' || (e.key === 'Enter' && !typing)) { e.preventDefault(); e.stopImmediatePropagation(); endPathDraw(); notify('Path ready'); }
   else if ((e.key === 'Backspace' || e.key === 'Delete') && !typing) {
@@ -747,6 +785,7 @@ window.addEventListener('keydown', e => {
 }, true);
 window.addEventListener('keydown', e => {
   if (!document.body.classList.contains('mode-map')) return;
+  if (document.activeElement?.classList.contains('ff-timeline-name-input')) return;
   if (e.key === 'Escape' && pick) { cancelPick(); return; }
   if ($('#mModal').open || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); history(e.shiftKey ? 'redo' : 'undo'); return; }
@@ -757,9 +796,8 @@ window.addEventListener('keydown', e => {
 
 function renderAll() { if (geo) { buildLists(); for (const c of wantedCountries()) if (!geo.details?.has(c) && !detailLoads.has(c)) void loadDetail(c); } if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
 
-// Fullscreen the entire Map Studio root. This avoids fullscreen/layout conflicts
-// with the nested grid and keeps playback controls available.
-const mapFullscreenRoot = document.getElementById('mapStudio');
+// Match Motion Studio: fullscreen the preview toolbar, canvas and transport.
+const mapFullscreenRoot = document.querySelector('#mapStudio main');
 const mapFullscreenButton = document.getElementById('mapFullscreen');
 async function toggleMapFullscreen() {
   try {

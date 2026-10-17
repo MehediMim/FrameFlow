@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Make every frame count</title><meta name="description" content="Create motion graphics with a frame based timeline, keyframes and video export."><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="map.css"><link rel="stylesheet" href="paper.css"><style>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Make every frame count</title><meta name="description" content="Create motion graphics with a frame based timeline, keyframes and video export."><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css"><link rel="stylesheet" href="paper.css"><style>
 /* Color presets across Motion and Map Studio; native picker remains available. */
 .ff-palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 12px;max-width:100%;line-height:1}
 .ff-color-chip{appearance:none;display:inline-block;position:relative;flex:0 0 19px;width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;margin:0!important;padding:0!important;border:1px solid #ffffff66!important;border-radius:5px!important;background:var(--chip-color)!important;cursor:pointer;box-shadow:0 1px 3px #0004;transition:transform .1s,box-shadow .1s}
@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=6"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=6"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=preview-controls-1"></head><body class="landing">
 <style>
 /* Support links shared by both studios and landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -265,7 +265,7 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 </aside>
 <main>
 <div class="stagebar"><span><i class="dot"></i> Map <b id="mCompLabel">1280 × 720</b></span><div><button id="mSettingsButton" type="button" aria-expanded="false" aria-controls="mSettingsPanel">⚙ Map settings</button><button id="mGraticule" title="Toggle grid lines">▦ Grid lines</button><button id="mSnapshot">PNG ↓</button><button id="mapFullscreen" type="button" title="Show map fullscreen (F)">⛶ Fullscreen</button></div></div>
-<div class="stage-area"><div class="canvas-wrap"><canvas id="mCanvas" width="1280" height="720" aria-label="Map canvas"></canvas></div><div class="stage-hint" id="mHint"></div></div>
+<div class="stage-area"><div class="canvas-wrap"><canvas id="mCanvas" width="1280" height="720" aria-label="Map canvas"></canvas></div><button id="mResetView" type="button" hidden title="Return to the animation camera. Mouse navigation only changes the editor preview.">Reset view</button><div class="stage-hint" id="mHint"></div></div>
 <div class="transport"><span class="time" id="mTimecode">00:00:00</span><div class="play-controls"><button id="mStart" title="First frame">|◀</button><button id="mPrev" title="Previous frame">‹</button><button id="mPlay" class="play" title="Play / pause (Space)">▶</button><button id="mNext" title="Next frame">›</button><button id="mEnd" title="Last frame">▶|</button><button id="mLoop" class="active" title="Loop playback">↻</button></div><label>FRAME <input id="mFrame" type="number" min="0" value="0"></label></div><div class="ff-audio-slot" data-audio-studio="map"></div>
 </main>
 <aside class="right">
@@ -334,7 +334,7 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 <input hidden type="file" id="pProjectFile" accept="application/json,.json"><input hidden type="file" id="pImageFile" accept="image/*">
 <dialog id="pModal"><div id="pModalBody"></div><button id="pCloseModal">Close</button></dialog>
 </div>
-<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=7"></script><script type="module" src="app.js"></script><script type="module" src="map-ui.js"></script><script type="module" src="paper-ui.js"></script><script type="module" src="audio-reference.mjs"></script><script type="module">
+<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=preview-controls-1"></script><script type="module" src="app.js?v=preview-controls-1"></script><script type="module" src="map-ui.js?v=preview-controls-1"></script><script type="module" src="paper-ui.js?v=preview-controls-1"></script><script type="module" src="audio-reference.mjs?v=timeline-rename-2"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {

@@ -161,7 +161,7 @@ export function validatePaperProject(p) {
   const out = { ...base, version: 1, kind: 'paper', name: str(p.name, 'Untitled newspaper', 100) || 'Untitled newspaper', width: p.width, height: p.height, fps: p.fps, frames: p.frames, template: str(p.template, 'blank', 40) };
   const sc = p.scene || {}; out.scene = { type: Object.hasOwn(SCENES, sc.type) ? sc.type : 'dark', color: isHex(sc.color) ? sc.color : base.scene.color };
   const pa = p.paper || {};
-  out.paper = { ...base.paper, w: clamp(num(pa.w, 1200), 200, 4000), h: clamp(num(pa.h, 800), 200, 5000), stock: Object.hasOwn(STOCKS, pa.stock) ? pa.stock : 'newsprint', color: isHex(pa.color) ? pa.color : '',
+  out.paper = { ...base.paper, name: str(pa.name, 'Newspaper sheet', 100) || 'Newspaper sheet', w: clamp(num(pa.w, 1200), 200, 4000), h: clamp(num(pa.h, 800), 200, 5000), stock: Object.hasOwn(STOCKS, pa.stock) ? pa.stock : 'newsprint', color: isHex(pa.color) ? pa.color : '',
     edge: Object.hasOwn(EDGES, pa.edge) ? pa.edge : 'clean', fold: Object.hasOwn(FOLDS, pa.fold) ? pa.fold : 'none', wear: clamp(num(pa.wear, .25), 0, 1), grain: clamp(num(pa.grain, .5), 0, 1), shadow: pa.shadow !== false,
     tilt: clamp(num(pa.tilt, 0), -45, 45), enter: Object.hasOwn(SHEET_ENTRANCES, pa.enter) ? pa.enter : 'none', start: timingFrame(pa.start, 0, 0), dur: timingFrame(pa.dur, 24, 1), easing: Object.hasOwn(easings, pa.easing) ? pa.easing : 'easeOut' };
   validateTiming(out.paper);

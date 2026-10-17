@@ -1,3 +1,4 @@
+import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { poseAt } from './engine.mjs';
 // FrameFlow Motion Studio: layered 2.5D camera with focus tracking and depth of field.
 // Camera motion is deterministic for a given timeline frame (including export).
@@ -186,12 +187,12 @@ export function attachMotionCamera(host){
  const aside=$('.workspace.motion-only .left'),anchor=aside?.querySelector('.add-grid');if(aside){if(aside.classList.contains('ff-left-accordion'))aside.append(panel);else if(anchor)anchor.insertAdjacentElement('afterend',panel);else aside.append(panel);}
  panel.addEventListener('click',e=>{const b=e.target.closest('[data-camera-add]');if(!b)return;host.pause();host.checkpoint();const p=host.project(),f=host.frame(),s=makeCameraShot(p,b.dataset.cameraAdd,f,host.selectedLayer());(p.cameraShots||(p.cameraShots=[])).push(s);active=s.id;host.selectLayer(null);host.changed();});
  const find=()=>cameraShots(host.project()).find(s=>s.id===active);
+ bindTimelineRename($('#trackLabels'), { attribute: 'data-cam-select', getItem: id => cameraShots(host.project()).find(s => s.id === id), checkpoint: host.checkpoint, changed: host.changed, pause: host.pause, maxLength: 80 });
  function inspect(){
   const s=find();if(!s)return false;const p=host.project();
   rebaseCameraShot(p,s,s.start);
   const option=(key,label,val)=>`<label>${label}<input data-cam="${key}" type="number" step="1" ${key.endsWith('A')?'readonly title="Automatically follows the camera at shot start"':''} value="${finite(val)}"></label>`;
   $('#inspector').innerHTML=`<div class="inspector-title"><span>◉</span> ${esc(s.name)}</div>
-  <label>Shot name<input data-cam="name" maxlength="80" value="${esc(s.name)}"></label>
   <label>Preset<select data-cam="preset">${Object.entries(CAMERA_PRESETS).map(([k,n])=>`<option value="${k}" ${k===s.preset?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
   <div class="section-title">CAMERA SHOT</div><div class="two"><label>Start (s)<input data-cam="start" type="number" min="0" max="${(p.frames-1)/p.fps}" step="0.01" value="${(s.start/p.fps).toFixed(2)}"></label><label>Duration (s)<input data-cam="dur" type="number" min="0.03" max="${p.frames/p.fps}" step="0.01" value="${(s.dur/p.fps).toFixed(2)}"></label></div>
   <div class="section-title">3D-STYLE CAMERA / PARALLAX</div>
@@ -238,7 +239,7 @@ export function attachMotionCamera(host){
  function timeline(){
   const p=host.project(),shots=[...cameraShots(p)].sort((a,b)=>a.start-b.start);if(!shots.length)return;
   const labs=$('#trackLabels'),rows=$('#trackRows');if(!labs||!rows)return;
-  labs.insertAdjacentHTML('afterbegin',shots.map(s=>`<div class="track-label ${s.id===active?'selected':''}" data-cam-select="${s.id}"><span>◉</span>${esc(s.name)}</div>`).join(''));
+  labs.insertAdjacentHTML('afterbegin',shots.map(s=>`<div class="track-label ${s.id===active?'selected':''}" data-cam-select="${s.id}"><span>◉</span><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(s.name)}</span></div>`).join(''));
   rows.insertAdjacentHTML('afterbegin',shots.map(s=>{const left=100*s.start/(p.frames-1),right=100*(p.frames-1-Math.min(p.frames-1,s.start+s.dur))/(p.frames-1);return `<div class="track-row" data-cam-select="${s.id}"><div class="clip clip-editable ff-camera-clip ${s.id===active?'selected':''}" data-camera-clip="${s.id}" style="left:${left}%;right:${right}%"><span class="clip-handle clip-left" data-camera-trim="left"></span><span class="clip-label">◉ ${esc(s.name)}</span><span class="clip-handle clip-right" data-camera-trim="right"></span></div></div>`}).join(''));
   rows.querySelectorAll('[data-camera-clip]').forEach(el=>el.onpointerdown=e=>{if(e.button!==0)return;e.stopPropagation();e.preventDefault();host.pause();const s=cameraShots(p).find(q=>q.id===el.dataset.cameraClip);if(!s)return;active=s.id;host.selectLayer(null);host.checkpoint();drag={id:s.id,startX:e.clientX,start:s.start,dur:s.dur,mode:e.target.closest('[data-camera-trim]')?.dataset.cameraTrim||'move'};host.renderInspector();timelineRefresh();});
   for(const el of document.querySelectorAll('[data-cam-select]'))if(!el.closest('[data-camera-clip]'))el.addEventListener('click',()=>{active=el.dataset.camSelect;host.selectLayer(null);host.renderInspector();host.renderTimeline();});

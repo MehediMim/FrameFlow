@@ -40,10 +40,14 @@ export function installCanvasZoom(canvas,root) {
   wrap.classList.add('ff-zoom-wrap');area.classList.add('ff-zoom-area');canvas.classList.add('ff-zoom-canvas');
   const controls=document.createElement('div');controls.className='canvas-zoom';controls.dataset.previewZoom='';controls.setAttribute('role','group');controls.setAttribute('aria-label','Preview zoom');
   controls.innerHTML='<button type="button" data-zoom="out" title="Zoom out" aria-label="Zoom out">−</button><span data-zoom-label>Fit</span><button type="button" data-zoom="in" title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit all</button>';
-  bar.append(controls);let scale=1,mode='fit';
+  const actions=bar.querySelector(':scope > div:last-of-type');
+  (actions||bar).append(controls);
+  const fullscreen=bar.querySelector('#mapFullscreen,#pFullscreen,[data-action="fullscreen"]');
+  if(fullscreen)controls.append(fullscreen);
+  let scale=1,mode='fit';
   function update(){
     const aw=area.clientWidth,ah=area.clientHeight;if(!aw||!ah)return;
-    if(mode==='fit')scale=Math.max(.01,Math.min((aw-48)/canvas.width,(ah-48)/canvas.height));
+    if(mode==='fit')scale=Math.max(.05,Math.min((aw-48)/canvas.width,(ah-48)/canvas.height));
     const w=canvas.width*scale,h=canvas.height*scale;
     canvas.style.setProperty('width',w+'px','important');canvas.style.setProperty('height',h+'px','important');
     wrap.style.width=Math.max(aw,w+48)+'px';wrap.style.height=Math.max(ah,h+48)+'px';
@@ -88,6 +92,18 @@ function install() {
   if(sceneSettings&&sceneNew)sceneNew.after(sceneSettings);
   for(const [canvasId,rootId] of [['mCanvas','mapStudio'],['pCanvas','paperStudio'],['scCanvas','sceneStudio']]){
     installCanvasZoom(document.getElementById(canvasId),document.getElementById(rootId));
+  }
+  for(const canvasId of ['canvas','mCanvas','pCanvas','scCanvas']){
+    const preview=document.getElementById(canvasId)?.closest('main');
+    if(!preview)continue;
+    preview.classList.add('ff-preview');
+    const png=preview.querySelector('#snapshot,#mSnapshot,#pSnapshot,[data-action="png"]');
+    if(png){png.textContent='PNG ↓';png.title='Download current frame as PNG';png.setAttribute('aria-label','Download current frame as PNG');}
+    const button=preview.querySelector('#motionFullscreen,#mapFullscreen,#pFullscreen,[data-action="fullscreen"]');
+    if(button){
+      const update=()=>{const active=document.fullscreenElement===preview;button.textContent=active?'⛶ Exit fullscreen':'⛶ Fullscreen';button.title=active?'Exit fullscreen (Esc or F)':'Show preview fullscreen (F)';button.setAttribute('aria-pressed',String(active));};
+      document.addEventListener('fullscreenchange',update);update();
+    }
   }
   for(const prefix of ['motion','m','p','sc']){
     const panel=document.getElementById(prefix+'SettingsPanel'),button=document.getElementById(prefix+'SettingsButton');

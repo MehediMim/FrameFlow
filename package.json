@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Frame based browser motion graphics editor (Motion, Map and Paper studios)",
   "scripts": {
+    "test:timeline-rename": "node tests/timeline-rename.test.mjs",
+    "test:timeline-rename:browser": "node tests/timeline-rename.browser.test.mjs",
+    "test:map-navigation": "node tests/map-navigation.test.mjs",
     "test": "node tests/map-engine.test.mjs && node tests/map-timing.test.mjs && node tests/map-route-labels.test.mjs && node tests/map-labels.test.mjs && npm run test:durations && node tests/paper-engine.test.mjs && node tests/map-imagery.test.mjs && node tests/map-country-details.test.mjs",
     "test:map-timing": "node tests/map-timing.test.mjs",
     "test:map-labels": "node tests/map-route-labels.test.mjs && node tests/map-labels.test.mjs",

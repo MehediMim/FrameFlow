@@ -46,7 +46,8 @@ body.mode-map #mapStudio{display:flex}
 .m-playhead{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);pointer-events:none;z-index:4}
 .m-playhead span{position:absolute;top:0;left:-5px;width:11px;height:13px;background:var(--accent);clip-path:polygon(0 0,100% 0,100% 65%,50% 100%,0 65%)}
 .stagebar button.active{color:var(--accent)}
-#mCanvas{cursor:default}
+#mCanvas{cursor:default;touch-action:none}
+#mResetView{position:absolute;top:12px;right:16px;font-size:11px;z-index:2}
 
 /* Separate, dismissible map settings drawer */
 #mapStudio .right{position:relative}

@@ -1291,8 +1291,8 @@ const OBJ_H = { resolveLoc, project, groundCircle, actionProgress, actAlpha, pla
 
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
-export function drawMap(ctx, W, H, proj, frame, geo) {
-  const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
+export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null) {
+  const th = THEMES[proj.theme] || THEMES.earth, v = makeView(previewCamera || cameraAt(proj, geo, W, H, frame), W, H), labels = [];
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
   for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
     const r = planeRoute(geo, a);

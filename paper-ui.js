@@ -1,9 +1,10 @@
-import { confirmStudio, exportMarkup } from './studio-ui.mjs';
+import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
+import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
 // FrameFlow Paper Studio: editor UI (parts, camera, timeline, playback, templates, export).
-import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs';
+import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=timeline-rename-2';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs';
 import { exportMapVideo } from './map-video-export.mjs';
-import * as PE from './paper-engine.mjs';
+import * as PE from './paper-engine.mjs?v=timeline-rename-2';
 import { TEMPLATE_LIST, buildTemplate } from './paper-templates.mjs';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -21,7 +22,7 @@ const seenFonts = new Set();
 
 // ------------------------------------------------------------------ helpers
 const isSheet = it => it?.kind === 'sheet', isShot = it => it?.kind === 'shot';
-const sheetItem = () => ({ id: 'sheet', kind: 'sheet', name: 'Newspaper sheet', start: proj.paper.start, dur: proj.paper.dur });
+const sheetItem = () => ({ id: 'sheet', kind: 'sheet', name: proj.paper.name || 'Newspaper sheet', start: proj.paper.start, dur: proj.paper.dur });
 const items = () => [...[...proj.shots].sort((a, b) => a.start - b.start), sheetItem(), ...[...proj.parts].reverse()];
 const current = () => items().find(i => i.id === sel);
 const iconOf = it => (isShot(it) ? PE.SHOT_TYPES[it.type].icon : isSheet(it) ? '▤' : PE.KINDS[it.kind].icon);
@@ -232,15 +233,14 @@ function renderInspector() {
   if (audioUI?.renderInspector()) return;
   const it = current(), box = $('#pInspector'), title = $('#pInspTitle');
   if (!it) { box.innerHTML = '<p class="muted">Click a part on the page, or pick one in the list, to edit it.<br><br>Drag a part to move it. Drag its green corner to resize. Add parts and camera moves on the left.</p>'; title.textContent = 'Properties'; return; }
-  const name = F.text('name', 'Name', it.name, 100);
   let h;
   if (isSheet(it)) { title.textContent = 'Newspaper sheet'; h = `<div class="inspector-title"><span>▤</span> <em>Newspaper sheet</em></div>` + sheetFields(); }
   else if (isShot(it)) {
     title.textContent = 'Camera move';
-    h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + name + F.sel('type', 'Camera move', it.type, o(PE.SHOT_TYPES).map(([k, v]) => [k, v.label])) + `<div class="two">${F.num('start', 'Start frame', it.start, 0)}${F.num('dur', 'Length (frames)', it.dur, 1)}</div>` + F.sel('easing', 'Motion', it.easing, PE.EASE_OPTS) + F.sep('CAMERA') + shotFields(it);
+    h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + F.sel('type', 'Camera move', it.type, o(PE.SHOT_TYPES).map(([k, v]) => [k, v.label])) + `<div class="two">${F.num('start', 'Start frame', it.start, 0)}${F.num('dur', 'Length (frames)', it.dur, 1)}</div>` + F.sel('easing', 'Motion', it.easing, PE.EASE_OPTS) + F.sep('CAMERA') + shotFields(it);
   } else {
     title.textContent = PE.KINDS[it.kind].label;
-    h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + name + timingFields(it) + kindFields(it) + (it.kind === 'marker' && it.target ? '' : layoutFields(it));
+    h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="pInspName">${esc(it.name)}</em></div>` + timingFields(it) + kindFields(it) + (it.kind === 'marker' && it.target ? '' : layoutFields(it));
   }
   box.innerHTML = h; bindInspector(it);
 }
@@ -331,13 +331,14 @@ function bindSettings() {
 // ------------------------------------------------------------------ timeline
 const frameFromEvent = e => { const b = $('#pTracks').getBoundingClientRect(); return clamp(Math.round((e.clientX - b.left) / b.width * (proj.frames - 1)), 0, proj.frames - 1); };
 function setTiming(it, start, dur) { if (isSheet(it)) { proj.paper.start = start; proj.paper.dur = dur; } else { it.start = start; it.dur = dur; } }
+bindTimelineRename($('#pTrackLabels'), { attribute: 'data-ptl', getItem: id => id === 'sheet' ? proj.paper : items().find(it => it.id === id), checkpoint, changed: () => { changed(); renderInspector(); }, pause });
 function renderTimeline() {
   const zoom = +$('#pZoomT').value, its = items(), last = Math.max(1, proj.frames - 1);
   $('#pTracks').style.width = `${zoom * 100}%`;
   const step = Math.max(1, Math.round(proj.frames / (10 * zoom))); let ticks = '';
   for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${f}</span>`;
   $('#pRuler').innerHTML = ticks;
-  $('#pTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-ptl="${esc(it.id)}"><span>${iconOf(it)}</span>${esc(it.name)}</div>`).join('');
+  $('#pTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-ptl="${esc(it.id)}"><span>${iconOf(it)}</span><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(it.name)}</span></div>`).join('');
   $('#pTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-prow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-pclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div></div>`).join('');
   $('#pTrackLabels').style.transform = `translateY(-${$('#pScroll').scrollTop}px)`;
   $$('[data-ptl]').forEach(el => el.onclick = () => select(el.dataset.ptl));
@@ -490,7 +491,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('#pDelete').click(); }
   else if (e.key.toLowerCase() === 'f' && !e.repeat && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleFullscreen(); }
 });
-const fsRoot = $('#paperStudio'), fsButton = $('#pFullscreen');
+const fsRoot = $('#paperStudio main'), fsButton = $('#pFullscreen');
 async function toggleFullscreen() {
   try {
     if (document.fullscreenElement === fsRoot) await document.exitFullscreen();

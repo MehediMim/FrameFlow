@@ -1,4 +1,5 @@
-import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES } from './studio-ui.mjs';
+import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
+import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES } from './studio-ui.mjs?v=preview-controls-1';
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
 // clip timeline below. Gestures and camera shots are clips you place on the timeline.
 import { defaultScene, sceneFrameCount, makeObject, makeClip, makeCameraClip, renderScene, cityScene, ITEM_TYPES, isMobile, itemSize, routePoints, actorYaw, trafficState, actorPosition, cameraAt, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, FINISHES, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs?v=6';
@@ -53,7 +54,7 @@ const targetHuman = () => { const o = currentObject(); return o?.type === 'human
 function checkpoint() { undo.push(JSON.stringify(p)); if (undo.length > 60) undo.shift(); redo = []; }
 function saveLocal() { try { localStorage.setItem(STORE, JSON.stringify(p)); $('#scStatus').textContent = 'Saved locally'; } catch { $('#scStatus').textContent = 'Storage full — download project'; } }
 function draw() {
-  const dims=CANVAS_SIZES.some(([v])=>v===`${p.width},${p.height}`)?[p.width,p.height]:[1280,720];const [w,h]=dims;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=`${w}/${h}`;} if(viewMode === '2d') drawPlan(); else { renderScene(canvas, p, time); root.querySelector('.sc-hint').textContent = '3D preview · Drag to orbit · Scroll to zoom · Switch to 2D layout to place items and fixed cameras'; } $('#scTime').textContent = `${String(Math.floor(time/60)).padStart(2,'0')}:${(time%60).toFixed(2).padStart(5,'0')}`; $('#scSeek').value = time.toFixed(3); $('#scScrub').value = time; root.style.setProperty('--sc-progress', time / p.duration * 100 + '%'); }
+  const dims=CANVAS_SIZES.some(([v])=>v===`${p.width},${p.height}`)?[p.width,p.height]:[1280,720];const [w,h]=dims;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;canvas.style.aspectRatio=`${w}/${h}`;} if(viewMode === '2d') drawPlan(); else { renderScene(canvas, p, time); root.querySelector('.sc-hint').textContent = '3D preview · Right-drag or middle-drag to orbit · Scroll to zoom · Switch to 2D layout to place items and fixed cameras'; } $('#scTime').textContent = `${String(Math.floor(time/60)).padStart(2,'0')}:${(time%60).toFixed(2).padStart(5,'0')}`; $('#scSeek').value = time.toFixed(3); $('#scScrub').value = time; root.style.setProperty('--sc-progress', time / p.duration * 100 + '%'); }
 function pause() { playing = false; cancelAnimationFrame(raf); root.querySelector('[data-action="play"]').textContent = '▶'; }
 function seek(t) { if (!Number.isFinite(t)) return; pause(); time = clamp(snap(t), 0, lastTime()); draw(); }
 function play() {
@@ -102,8 +103,7 @@ function renderInspector() {
   } else if (o) {
     title = `${esc(o.type[0].toUpperCase() + o.type.slice(1))} <em>${esc(o.name)}</em>`;
     const mobile = ['human', 'car', 'bus'].includes(o.type), human = o.type === 'human';
-    body = section('GENERAL', field('object.name', 'Name', o.name, 'text'))
-      + section('APPEARANCE', select('object.material', 'Surface', o.material, [['inherit', 'Use scene surface'], ['white', 'White model'], ['color', 'Solid color'], ['texture', 'Textured / colored']]) + select('object.finish', 'Finish', o.finish ?? 'inherit', [['inherit', 'Use scene finish'], ...Object.entries(FINISHES)]) + field('object.finishScale', 'Texture scale (×)', o.finishScale ?? 1, 'number', 'min="0.1" max="8"') + field('object.color', human ? (humanLook(o).outfit === 'dress' ? 'Dress color' : 'Top / jacket color') : 'Object color', o.color, 'color') + field('object.scale', 'Scale', o.scale))
+    body = section('APPEARANCE', select('object.material', 'Surface', o.material, [['inherit', 'Use scene surface'], ['white', 'White model'], ['color', 'Solid color'], ['texture', 'Textured / colored']]) + select('object.finish', 'Finish', o.finish ?? 'inherit', [['inherit', 'Use scene finish'], ...Object.entries(FINISHES)]) + field('object.finishScale', 'Texture scale (×)', o.finishScale ?? 1, 'number', 'min="0.1" max="8"') + field('object.color', human ? (humanLook(o).outfit === 'dress' ? 'Dress color' : 'Top / jacket color') : 'Object color', o.color, 'color') + field('object.scale', 'Scale', o.scale))
       + section('ROTATION', field('object.rotation',mobile?'Facing offset (degrees)':'Rotation (degrees)',o.rotation??0) + (mobile?select('object.orientation','Orientation',o.orientation??'path',[['path','Turn with route'],['fixed','Keep fixed facing']]):'') + '<div class="sc-actions"><button data-action="rotate-left">↶ 90°</button><button data-action="rotate-right">↷ 90°</button></div>')
       + (['road','junction','crossing','building','park'].includes(o.type)?section('DIMENSIONS',field('object.width','Width (m)',itemSize(o)[0])+field('object.length','Length / depth (m)',itemSize(o)[1])+(o.type==='building'?field('object.height','Height (m)',o.height??8):'')):'')
       + (o.type==='traffic'?section('TRAFFIC LIGHT',select('object.signal','Signal',o.signal??'cycle',[['cycle','Automatic cycle'],['red','Red'],['amber','Amber'],['green','Green']])+field('object.redTime','Red seconds',o.redTime??6)+field('object.greenTime','Green seconds',o.greenTime??5)+field('object.amberTime','Amber seconds',o.amberTime??2)+field('object.phase','Cycle offset (s)',o.phase??0)+'<p class="mini-label">Visual signals. Vehicles follow their routes independently.</p>'):'')
@@ -131,6 +131,7 @@ function renderSettings() {
 }
 
 // ------------------------------------------------------------------ timeline
+bindTimelineRename($('#scTracks'), { attribute: 'data-object', getItem: id => p.objects.find(o => o.id === id), checkpoint, changed: sync, pause });
 function renderTimeline() {
   $('#scFpsLabel').textContent=p.fps+' FPS';
   const scroll = $('#scTimelineScroll'), laneWidth = Math.max(300, (scroll.clientWidth - 215) * timelineZoom), pct = v => v / p.duration * 100;
@@ -143,7 +144,7 @@ function renderTimeline() {
     const human = o.type === 'human', mobile = ['car', 'bus'].includes(o.type);
     const content = human ? `<u class="sc-life" style="left:${pct(o.start)}%;width:${pct(Math.max(0, Math.min(o.duration, p.duration - o.start)))}%"></u>` + (o.clips || []).map(c => clipEl(c, 'g-' + c.gesture, GESTURES[c.gesture], 'data-clip', `${GESTURES[c.gesture]} · ${c.start.toFixed(2)}–${(c.start + c.dur).toFixed(2)}s`)).join('')
       : clipEl({ ...o, id: o.id }, 'travel', mobile ? 'Travel' : 'Visible', 'data-travel', `${mobile ? 'Travel' : 'Visible'} · ${o.start.toFixed(2)}–${(o.start + o.duration).toFixed(2)}s`, selected === o.id && !selClip);
-    return `<div class="sc-track ${selected === o.id && !selClip ? 'selected' : ''}" data-row="${esc(o.id)}"><span class="sc-track-name" data-object="${esc(o.id)}"><i>${OBJECT_ICON[o.type]}</i>${esc(o.name)}</span><div class="sc-lane">${content}<b></b></div></div>`;
+    return `<div class="sc-track ${selected === o.id && !selClip ? 'selected' : ''}" data-row="${esc(o.id)}"><span class="sc-track-name" data-object="${esc(o.id)}"><i>${OBJECT_ICON[o.type]}</i><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(o.name)}</span></span><div class="sc-lane">${content}<b></b></div></div>`;
   }).join('');
   $('#scTracks').innerHTML = `<div class="sc-ruler-row"><div class="sc-ruler-label">ITEM <span>SECONDS →</span></div><div class="sc-ruler">${ticks}<b class="sc-ruler-head"></b></div></div>` + camRow + rows;
 }
@@ -215,8 +216,8 @@ const actions = {
   new: async () => { if (!await confirmStudio('Start an empty scene? Your current scene can be restored with Undo.')) return; checkpoint(); pause(); p = defaultScene(); p.objects = []; p.cameraClips = []; p.left=p.right='none'; p.baseRoad=false; viewMode='2d'; placement=null; time = 0; selected = null; selClip = null; sync(); },
   demo: () => { checkpoint(); pause(); p = cityScene(); time = 0; selected = p.objects.find(isMobile)?.id; selClip = null; fitPlan(); sync(); },
   save: () => download(new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' }), 'scene.frameflow.json'),
-  open: () => $('#scFile').click(), png: () => { renderScene(canvas,p,time); canvas.toBlob(b => { if(b) download(b,'scene.png'); draw(); }); },
-  fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen(),
+  open: () => $('#scFile').click(), png: () => { const c=document.createElement('canvas');c.width=p.width||1280;c.height=p.height||720;renderScene(c,p,time);const name=(p.name||'scene').replace(/[^a-z0-9 _-]/gi,'').trim()||'scene';c.toBlob(b=>{if(b)download(b,`${name}-frame-${Math.round(time*p.fps)}.png`);},'image/png'); },
+  fullscreen: async () => { try { const preview=canvas.closest('main');if(document.fullscreenElement===preview)await document.exitFullscreen();else if(!document.fullscreenElement)await preview.requestFullscreen();else alertStudio('Exit the current fullscreen view first'); } catch(err){alertStudio('Fullscreen unavailable: '+(err?.message||err));} },
   'select-owner': () => { const f = findClip(selClip); if (f?.owner) { selected = f.owner.id; selClip = null; sync(); } },
   delete: () => {
     const f = findClip(selClip); if (!f && !currentObject()) return; checkpoint();
@@ -311,18 +312,21 @@ $('#scFile').onchange = async e => {
 // Canvas drag/scroll edits whichever camera is active at the playhead (a shot, or the default camera).
 const activeCamSpec = () => { const c = resolveClips(p.cameraClips).find(c => time >= c.start && time < c.end); return c ? p.cameraClips.find(x => x.id === c.id) : p.camera; };
 let orbit = null;
-canvas.onpointerdown = e => { if (busy) return; if(viewMode === '2d') return planDown(e); pause(); checkpoint(); const spec = activeCamSpec(); orbit = { spec, x: e.clientX, y: e.clientY, yaw: spec.yaw, height: spec.height }; canvas.setPointerCapture(e.pointerId); };
+canvas.onpointerdown = e => { if (busy) return; if(viewMode === '2d') return planDown(e); if(e.button!==2&&e.button!==1)return; e.preventDefault(); pause(); checkpoint(); const spec = activeCamSpec(); orbit = { spec, x: e.clientX, y: e.clientY, yaw: spec.yaw, height: spec.height }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor='grabbing'; };
 canvas.onpointermove = e => { if(viewMode === '2d') return planMove(e); if (!orbit) return; const s = orbit.spec; if(s.move==='static' && Number.isFinite(s.fixedX)){ s.aimX=clamp((s.aimX??0)+(e.clientX-orbit.x)*.015,-100,150); s.aimZ=clamp((s.aimZ??0)-(e.clientY-orbit.y)*.015,-100,150);orbit.x=e.clientX;orbit.y=e.clientY;draw();return; } if (['first', 'second'].includes(s.mode)) s.mode = 'third'; s.yaw = clamp(orbit.yaw + (e.clientX - orbit.x) * .3, -360, 360); s.height = clamp(orbit.height + (e.clientY - orbit.y) * .04, 1, 60); draw(); };
-canvas.onpointerup = canvas.onpointercancel = () => { if(planDrag){ const changed=planDrag.changed; planDrag=null; if(changed) sync(); else draw(); } if (orbit) { orbit = null; sync(); } };
+canvas.onpointerup = canvas.onpointercancel = e => { canvas.style.cursor=''; if(planDrag){ const d=planDrag; planDrag=null; if(d.kind==='pan'&&!d.moved&&e.button===2&&e.type!=='pointercancel') removePlanWaypoint(e); if(d.changed) sync(); else draw(); } if (orbit) { orbit = null; sync(); } };
 canvas.onwheel = e => { e.preventDefault(); if (busy) return; if(viewMode==='2d'){ planView.zoom=clamp(planView.zoom*Math.exp(-e.deltaY*.001),2,70); draw(); return; } checkpoint(); const s = activeCamSpec(); if(s.move==='static' && Number.isFinite(s.fixedX)){s.fov=clamp(s.fov+e.deltaY*.02,25,100);sync();return;} s.distance = clamp(s.distance + e.deltaY * .015, 2, 80); sync(); };
 // Capture only Scene shortcuts: legacy Motion handlers otherwise run in unknown modes.
 window.addEventListener('keydown', e => {
-  if (!document.body.classList.contains('mode-scene')) return; e.stopImmediatePropagation();
-  if (document.querySelector('dialog[open]') || busy || ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if (!document.body.classList.contains('mode-scene')) return;
+  if (e.target.closest('input,select,textarea,[contenteditable="true"]')) return;
+  e.stopImmediatePropagation();
+  if (document.querySelector('dialog[open]') || busy) return;
   if (e.key === 'Escape') { placement=null;planTool='select';draw(); }
   else if (e.code === 'Space') { e.preventDefault(); play(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); seek(time + (e.key === 'ArrowLeft' ? -1 : 1) / p.fps); }
   else if (e.key === 'Delete') actions.delete();
+  else if (e.key.toLowerCase() === 'f' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); actions.fullscreen(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); actions[e.shiftKey ? 'redo' : 'undo'](); }
 }, true);
 document.addEventListener('click', e => {
@@ -372,10 +376,12 @@ function drawPlan(){
  const sel=currentObject();if(sel&&!selClip){const rp=rotationPoint(sel);line(screenPoint(sel.x,sel.z),screenPoint(...rp),'#f5ad66',2);circle(...rp,11,'#f5ad66','↻');}
  const cam=cameraAt(p,time),cp=screenPoint(cam.pos[0],cam.pos[2]),aim=screenPoint(cam.look[0],cam.look[2]);line(cp,aim,'#71cfff',2,[6,4]);circle(cam.pos[0],cam.pos[2],13,'#71cfff','C');circle(cam.look[0],cam.look[2],7,'#71cfff','');
  g.fillStyle='#c7d5df';g.font='15px sans-serif';g.textAlign='left';g.fillText('TOP VIEW  ·  X ↔  Z ↑  ·  grid '+step+' m',22,30);
- root.querySelector('.sc-hint').textContent=placement?'Click to place '+ITEM_TYPES[placement]+' · Escape cancels':planTool==='route'?'Click to add turn points before B · Drag points after pressing Escape · Right-click a point to remove':planTool==='camera'?'Click to place the fixed camera':planTool==='aim'?'Click where the fixed camera should look':'Drag to move · Orange handle rotates (Shift: 15° steps) · Shift-drag A moves its route · Empty space pans · Scroll zooms';
+ root.querySelector('.sc-hint').textContent=placement?'Click to place '+ITEM_TYPES[placement]+' · Escape cancels':planTool==='route'?'Click to add turn points before B · Drag points after pressing Escape · Right-click a point to remove':planTool==='camera'?'Click to place the fixed camera':planTool==='aim'?'Click where the fixed camera should look':'Drag to move · Orange handle rotates (Shift: 15° steps) · Shift-drag A moves its route · Right-drag or middle-drag pans · Scroll zooms';
 }
 function planDown(e){
- pause();const q=eventPoint(e);if(e.button===2)return;canvas.setPointerCapture(e.pointerId);
+ if(e.button!==0&&e.button!==1&&e.button!==2)return;
+ pause();const q=eventPoint(e);canvas.setPointerCapture(e.pointerId);
+ if(e.button===2||e.button===1){e.preventDefault();planDrag={kind:'pan',sx:q.sx,sy:q.sy,x:planView.x,z:planView.z,moved:false};canvas.style.cursor='grabbing';return;}
  if(placement){const type=placement;placement=null;const n=p.objects.length;addObject(type);if(p.objects.length===n)return;const o=currentObject();o.x=Math.round(q.x*2)/2;o.z=Math.round(q.z*2)/2;o.endX=o.x;o.endZ=isMobile(o)?Math.min(150,o.z+15):o.z;if(type==='human')o.clips=[makeClip('walk',0,p.duration,1)];sync();return;}
  if(planTool==='route'){const o=currentObject();if(!o||!isMobile(o)){planTool='select';draw();return;}if((o.waypoints||[]).length>=60){alertStudio('Maximum 60 route points.');return;}checkpoint();(o.waypoints||=[]).push({x:Math.round(q.x*2)/2,z:Math.round(q.z*2)/2});sync();return;}
  if(planTool==='camera'||planTool==='aim'){checkpoint();const c=activeCamSpec(),cam=cameraAt(p,time);c.move='static';c.mode='third';c.fixedX??=clamp(cam.pos[0],-100,150);c.fixedZ??=clamp(cam.pos[2],-100,150);c.aimX??=clamp(cam.look[0],-100,150);c.aimZ??=clamp(cam.look[2],-100,150);if(planTool==='camera'){c.fixedX=q.x;c.fixedZ=q.z;}else{c.aimX=q.x;c.aimZ=q.z;}planTool='select';sync();return;}
@@ -386,10 +392,10 @@ function planDown(e){
  const rank=o=>['road','junction','crossing','park'].includes(o.type)?0:1;
  const candidates=[...p.objects].reverse().sort((a,b)=>rank(b)-rank(a));
  const o=candidates.find(o=>{const y=actorYaw(o,0),dx=q.x-o.x,dz=q.z-o.z,x=dx*Math.cos(y)-dz*Math.sin(y),z=dx*Math.sin(y)+dz*Math.cos(y),[w,d]=itemSize(o);return Math.abs(x)<=Math.max(w*o.scale/2,10/planView.zoom)&&Math.abs(z)<=Math.max(d*o.scale/2,10/planView.zoom);});
- if(o){selected=o.id;selClip=null;planDrag={kind:'object',o,dx:q.x-o.x,dz:q.z-o.z};refreshSide();}else planDrag={kind:'pan',sx:q.sx,sy:q.sy,x:planView.x,z:planView.z};
+ if(o){selected=o.id;selClip=null;planDrag={kind:'object',o,dx:q.x-o.x,dz:q.z-o.z};refreshSide();}
 }
 function planMove(e){
- if(!planDrag)return;const q=eventPoint(e),d=planDrag;if(d.kind==='pan'){planView.x=d.x-(q.sx-d.sx)/planView.zoom;planView.z=d.z+(q.sy-d.sy)/planView.zoom;draw();return;}
+ if(!planDrag)return;const q=eventPoint(e),d=planDrag;if(d.kind==='pan'){if(Math.hypot(q.sx-d.sx,q.sy-d.sy)>3)d.moved=true;if(d.moved){planView.x=d.x-(q.sx-d.sx)/planView.zoom;planView.z=d.z+(q.sy-d.sy)/planView.zoom;draw();}return;}
  if(!d.changed){checkpoint();d.changed=true;}const snapXY=v=>clamp(Math.round(v*2)/2,-100,150);
  if(d.kind==='rotate'){let angle=(Math.atan2(q.x-d.o.x,q.z-d.o.z)-d.base)*180/Math.PI;if(e.shiftKey)angle=Math.round(angle/15)*15;d.o.rotation=((angle+540)%360)-180;}
  else if(d.kind==='waypoint'){d.o.waypoints[d.index]={x:snapXY(q.x),z:snapXY(q.z)};}
@@ -397,7 +403,8 @@ function planMove(e){
  else if(d.kind==='camera'){d.o.fixedX=snapXY(q.x);d.o.fixedZ=snapXY(q.z);}
  else{const x=snapXY(q.x-d.dx),z=snapXY(q.z-d.dz),dx=x-d.o.x,dz=z-d.o.z;d.o.x=x;d.o.z=z;if(!isMobile(d.o)){d.o.endX=x;d.o.endZ=z;}else if(e.shiftKey){d.o.endX=clamp(d.o.endX+dx,-100,150);d.o.endZ=clamp(d.o.endZ+dz,-100,150);d.o.waypoints=(d.o.waypoints||[]).map(v=>({x:clamp(v.x+dx,-100,150),z:clamp(v.z+dz,-100,150)}));}}draw();
 }
-canvas.oncontextmenu=e=>{if(viewMode!=='2d')return;e.preventDefault();const o=currentObject();if(!o)return;const q=eventPoint(e),i=(o.waypoints||[]).findIndex(v=>{const a=screenPoint(v.x,v.z);return Math.hypot(a[0]-q.sx,a[1]-q.sy)<15;});if(i>=0){checkpoint();o.waypoints.splice(i,1);sync();}};
+function removePlanWaypoint(e){const o=currentObject();if(!o)return;const q=eventPoint(e),i=(o.waypoints||[]).findIndex(v=>{const a=screenPoint(v.x,v.z);return Math.hypot(a[0]-q.sx,a[1]-q.sy)<15;});if(i>=0){checkpoint();o.waypoints.splice(i,1);sync();}}
+canvas.oncontextmenu=e=>e.preventDefault();
 
 fitPlan();
 sync();

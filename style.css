@@ -192,3 +192,11 @@ html, body, * {
 .workspace.motion-only .stage-area{padding:0!important;overflow:auto!important;scrollbar-width:none!important;-ms-overflow-style:none!important;overscroll-behavior:contain}
 .workspace.motion-only .stage-area::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
 .workspace.motion-only .canvas-wrap{min-width:0!important;min-height:0!important;padding:0!important}
+.track-label .ff-layer-name,.sc-track-name .ff-layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text;touch-action:manipulation}
+.track-label .ff-timeline-name-input,.sc-track-name .ff-timeline-name-input{flex:1;min-width:0;width:100%;height:26px;padding:3px 5px;font:inherit;color:var(--text);border:1px solid var(--accent);border-radius:3px}
+
+/* Keep time ticks and the playhead handle visible while scrolling layer rows. */
+#ruler,#mRuler,#pRuler{position:sticky;top:0;z-index:5}
+.timeline-labels>.ruler-label{position:relative;z-index:7;background:#1d2125;border-bottom:1px solid #33383d}
+#playhead,#mPlayhead,#pPlayhead{z-index:6}
+#playhead>span,#mPlayhead>span,#pPlayhead>span{position:sticky;top:0;left:auto;display:block;margin-left:-5px}

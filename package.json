@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Frame based browser motion graphics editor (Motion, Map and Paper studios)",
   "scripts": {
-    "test": "node tests/map-engine.test.mjs && node tests/map-timing.test.mjs && node tests/map-route-labels.test.mjs && node tests/map-labels.test.mjs && npm run test:durations && node tests/paper-engine.test.mjs && node tests/map-imagery.test.mjs",
+    "test": "node tests/map-engine.test.mjs && node tests/map-timing.test.mjs && node tests/map-route-labels.test.mjs && node tests/map-labels.test.mjs && npm run test:durations && node tests/paper-engine.test.mjs && node tests/map-imagery.test.mjs && node tests/map-country-details.test.mjs",
     "test:map-timing": "node tests/map-timing.test.mjs",
     "test:map-labels": "node tests/map-route-labels.test.mjs && node tests/map-labels.test.mjs",
     "test:durations": "node tests/motion-duration.test.mjs && node tests/motion-content-duration.test.mjs && node tests/map-duration.test.mjs && node tests/paper-duration.test.mjs && node tests/scene-duration.test.mjs && node tests/export-duration.test.mjs",
-    "check": "node --check app.js && node --check engine.mjs && node --check charts.mjs && node --check motion-extras.mjs && node --check motion-structured.mjs && node --check motion-diagram.mjs && node --check vector-layers.mjs && node --check motion-camera.mjs && node --check map-engine.mjs && node --check map-route-labels.mjs && node --check map-ui.js && node --check map-places.mjs && node --check map-imagery.mjs && node --check map-video-export.mjs && node --check paper-engine.mjs && node --check paper-templates.mjs && node --check paper-ui.js && node --check scene-engine.mjs && node --check scene-studio.mjs"
+    "check": "node --check app.js && node --check engine.mjs && node --check charts.mjs && node --check motion-extras.mjs && node --check motion-structured.mjs && node --check motion-diagram.mjs && node --check vector-layers.mjs && node --check motion-camera.mjs && node --check map-engine.mjs && node --check map-route-labels.mjs && node --check map-country-details.mjs && node --check map-ui.js && node --check map-places.mjs && node --check map-imagery.mjs && node --check map-video-export.mjs && node --check paper-engine.mjs && node --check paper-templates.mjs && node --check paper-ui.js && node --check scene-engine.mjs && node --check scene-studio.mjs"
   }
 }

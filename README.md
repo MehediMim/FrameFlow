@@ -56,7 +56,9 @@ On Windows, you can use `py -m http.server 8000` if `python` is unavailable. Ope
 | `map-ui.js` | Map Studio editor: animations, camera presets, timeline, export |
 | `map-engine.mjs` | Map Studio engine: vector map, camera, plane/border/highlight/pin drawing |
 | `map-places.mjs` | Built-in city list and start-view regions |
-| `map-data/` | Natural Earth country outlines (via world-atlas, public domain) |
+| `map-country-details.mjs` | Finds and describes country detail packs (`map-data/<country>-detail.json`) |
+| `map-data/` | Natural Earth country outlines (via world-atlas, public domain) and country detail packs (`*-detail.json`) |
+| `tools/` | `build-myanmar-detail.py`: how the Myanmar pack was produced; a template for other countries |
 | `map.css` | Map Studio styles |
 | `tests/` | `npm test` checks the map engine |
 | `.nojekyll` | Serves the repository as a static site without Jekyll processing |
@@ -95,6 +97,39 @@ To attach the existing labels flat to the map, choose **Label style → Start fr
 ### Country maps (Map area)
 
 Open **Canvas settings → Map area** and choose **One country · detailed map**. Pick any country from the list (Bangladesh, India, United States of America…). The view is framed on that country using the detailed 50 m outlines; neighbouring countries can be dimmed, shown or hidden, and the country name and its main cities can be switched on or off. **Margin around the country** controls how tightly it is framed. Turn off **Frame the view on this country** to place the start view yourself. Switch back to **World map** at any time; nothing else in the project changes.
+
+When a country has a detail pack, a **Boundary level** list appears (for Myanmar: *States / regions* and *Districts*). Border and Highlight can then target any state, region or district, and route names use them. Countries without a pack stay plain country maps.
+
+### Country detail packs
+
+To add detailed boundaries for a country, add **one file** to `map-data/`; no code changes:
+
+`map-data/<country>-detail.json` where `<country>` is the country name exactly as it appears in the Map area list, in lower case with spaces and punctuation turned into `-`. Examples: `myanmar-detail.json`, `bangladesh-detail.json`, `united-states-of-america-detail.json`, `cote-d-ivoire-detail.json`.
+
+Reload the app, choose the country under **Map area**, and it loads automatically. Run `npm test` to validate it: every `*-detail.json` in `map-data/` is checked (names, keys, levels, outline, cities).
+
+```jsonc
+{
+  "country": "Myanmar",                 // required, must match the Map area name exactly
+  "features": [                         // required, GeoJSON Polygon / MultiPolygon, WGS84 lon/lat
+    { "type": "Feature",
+      "properties": { "key": "Yangon Region", "name": "Yangon", "level": "division" },
+      "geometry": { "type": "MultiPolygon", "coordinates": [] } }
+  ],
+  "defaultLevel": "division",           // optional: level shown first (default: first level)
+  "defaultRegion": "Yangon Region",     // optional: key or name new Border / Highlight items start on
+  "levelLabels": { "division": "States / regions", "district": "Districts" },   // optional: names and order in the list
+  "ready": "Shown under Map area once loaded.",    // optional
+  "attribution": "Data source and licence.",       // optional
+  "cities": [["Yangon", 16.8409, 96.1735, "Myanmar"]]   // optional: [name, lat, lon, country]
+}
+```
+
+- Exactly one feature with `"level": "country"` is the outline used to frame the view. Every other feature belongs to a level.
+- **Level ids are free-form** (`division`, `district`, `province`, `municipality`, ...). Use `levelLabels` to name them and to set their order.
+- **`key` must be unique** across the pack and must not equal a country name (projects store it). `name` is the text shown on the map. Using `"Mandalay Region"` as key and `"Mandalay"` as name is a good pattern.
+- Keep the file small: simplify the geometry and round coordinates to 3 or 4 decimals. About 1 MB is fine; GitHub Pages compresses it.
+- Older packs without the optional fields still work (Bangladesh uses built-in defaults for them).
 
 ### Travel along your own path
 

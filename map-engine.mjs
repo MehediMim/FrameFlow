@@ -2,6 +2,8 @@
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
 import { easings, fontStack, cleanFont } from './engine.mjs';
 import { routePlaceLabels } from './map-route-labels.mjs';
+import { detailLevelOf, isLevelId } from './map-country-details.mjs';
+export { detailLevelOf } from './map-country-details.mjs';
 
 const RAD = Math.PI / 180, MAX_LAT = 85.0511287798, BASE_PX = 512, FOV = 45 * RAD;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -191,31 +193,43 @@ export function buildGeo(hiTopo, loTopo) {
 }
 
 // Country packs are registered once, without adding regions to the world layer.
+// Hand-made packs are checked here so a mistake fails with a readable message.
+//   feature.properties: key (unique, what projects store), name (shown), level (any id; "country" = outline)
 export function installCountryDetail(geo, pack) {
-  const arcs = [], geometries = [];
-  for (const f of pack.features) {
-    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+  if (!pack || typeof pack.country !== 'string' || !Array.isArray(pack.features) || !pack.features.length) throw Error('A country pack needs "country" and a non-empty "features" list.');
+  const arcs = [], geometries = [], meta = [];
+  pack.features.forEach((f, i) => {
+    const p = f?.properties, g = f?.geometry;
+    if (!p || !(p.key || p.name) || !isLevelId(p.level) || !g || !['Polygon', 'MultiPolygon'].includes(g.type)) throw Error(`Feature ${i} of the ${pack.country} pack needs properties.key (or name), properties.level and a Polygon or MultiPolygon geometry.`);
+    const key = String(p.key ?? p.name);
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
     const polyArcs = polys.map(poly => poly.map(ring => {
       let x = 0, y = 0;
-      const arc = ring.map(p => { const d = [p[0] - x, p[1] - y]; x = p[0]; y = p[1]; return d; });
+      const arc = ring.map(q => { const d = [q[0] - x, q[1] - y]; x = q[0]; y = q[1]; return d; });
       arcs.push(arc); return [arcs.length - 1];
     }));
-    geometries.push({type:'MultiPolygon', properties:{name:f.properties.key}, arcs:polyArcs});
-  }
+    geometries.push({type:'MultiPolygon', properties:{name:key}, arcs:polyArcs});
+    meta.push({ key, name: String(p.name ?? p.key), level: p.level });
+  });
   const set = buildSet({transform:{scale:[1,1],translate:[0,0]}, arcs, objects:{countries:{geometries}}});
   const levels = {division:[],district:[],local:[]};
-  pack.features.forEach((f,i) => {
-    const feature = set.features[i]; feature.key = f.properties.key; feature.name = f.properties.name;
-    feature.level = f.properties.level; feature.country = pack.country;
-    if (feature.level === 'country') set.country = feature;
-    else { levels[feature.level].push(feature); geo.byName.set(feature.key, feature); }
-  });
-  geo.details ||= new Map(); geo.details.set(pack.country, {...set, levels, cities:pack.cities});
+  // buildSet drops a feature that has no drawable ring, so pair results with the input by key, in order.
+  let j = 0;
+  for (const f of set.features) {
+    while (j < meta.length && meta[j].key !== f.name) j++;
+    const m = meta[j++]; if (!m) break;
+    f.key = m.key; f.name = m.name; f.level = m.level; f.country = pack.country;
+    if (f.level === 'country') set.country = f;
+    else { (levels[f.level] ||= []).push(f); if (geo.byName.has(f.key)) console.warn(`${pack.country} pack: key "${f.key}" is already used by a country or another region, so name targets may resolve to the wrong one. Keep keys unique, e.g. "${f.key} Region".`); geo.byName.set(f.key, f); }
+  }
+  const cities = Array.isArray(pack.cities) ? pack.cities.filter(c => Array.isArray(c) && typeof c[0] === 'string' && Number.isFinite(c[1]) && Number.isFinite(c[2])).map(c => [c[0], c[1], c[2], c[3] || pack.country]) : undefined;
+  geo.details ||= new Map();
+  geo.details.set(pack.country, {...set, levels, cities, defaultLevel:pack.defaultLevel, sources:pack.sources, defaultRegion:pack.defaultRegion, levelLabels:pack.levelLabels, ready:pack.ready, attribution:pack.attribution});
   return geo.details.get(pack.country);
 }
 export function detailRegions(proj, geo) {
   const a = areaOf(proj);
-  return a.mode === 'country' ? geo.details?.get(a.country)?.levels[a.detailLevel || 'district'] || [] : [];
+  return a.mode === 'country' ? geo.details?.get(a.country)?.levels[detailLevelOf(geo, a.country, a.detailLevel)] || [] : [];
 }
 export function regionAt(proj, geo, lon, lat) {
   return countryAt({hi:{features:detailRegions(proj,geo).map(f => ({...f,name:f.key}))}},lon,lat);
@@ -918,7 +932,7 @@ function partialRing(r, p) {
 function drawBorder(ctx, v, geo, th, a, frame) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t = actionProgress(a, frame), p = ease(a.easing, t), w = a.width * v.unit;
-  const all = a.target?.kind === 'all', list = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[a.target.level || 'district'] || [] : geo.pick(v.cam.zoom).features) : [geo.byName.get(a.target?.name)].filter(Boolean);
+  const all = a.target?.kind === 'all', list = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[detailLevelOf(geo, a.target.country, a.target.level)] || [] : geo.pick(v.cam.zoom).features) : [geo.byName.get(a.target?.name)].filter(Boolean);
   if (!list.length) return;
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1277,7 +1291,7 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
   for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
     const r = planeRoute(geo, a);
-    const names = r ? routePlaceLabels(geo, r, { mode: a.routeLabelMode || 'auto', country: area.mode === 'country' ? area.country : undefined, detailLevel: area.detailLevel || 'district' }) : [];
+    const names = r ? routePlaceLabels(geo, r, { mode: a.routeLabelMode || 'auto', country: area.mode === 'country' ? area.country : undefined, detailLevel: area.detailLevel }) : [];
     routeNames.set(a, names);
     for (const name of names) controlledNames.add(routeLabelKey(name.text));
   }
@@ -1374,7 +1388,7 @@ function checkArea(s) {
   if (s.mode !== undefined && !Object.hasOwn(AREA_MODES, s.mode)) bad();
   if (s.country !== undefined && (typeof s.country !== 'string' || !s.country || s.country.length > 100)) bad();
   if (s.neighbors !== undefined && !Object.hasOwn(NEIGHBOR_MODES, s.neighbors)) bad();
-  if (s.detailLevel !== undefined && !['division','district','local'].includes(s.detailLevel)) bad();
+  if (s.detailLevel !== undefined && !isLevelId(s.detailLevel)) bad();
   if (s.pad !== undefined && !num(s.pad, .02, .45)) bad();
   for (const k of ['fit', 'name', 'cities']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
 }

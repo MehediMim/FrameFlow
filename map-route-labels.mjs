@@ -1,5 +1,6 @@
 // Route labels use the geometry already loaded by Map Studio. Work is cached per
 // route; drawing subsequent frames only checks the small route coordinate arrays.
+import { detailLevelOf } from './map-country-details.mjs';
 const routeCache = new WeakMap(), featureCache = new WeakMap();
 const EPS = 1e-12, PARAM_EPS = 1e-10;
 const cross = (ax, ay, bx, by) => ax * by - ay * bx;
@@ -103,8 +104,8 @@ function sourceState(geo, mode, country, detailLevel) {
   return {
     countries, countryRefs: geometryRefs(countries),
     details: details.filter(([, pack]) => pack).map(([name, pack]) => {
-      const regions = pack.levels?.[detailLevel];
-      return { name, pack, regions, regionRefs: geometryRefs(regions) };
+      const level = detailLevelOf(geo, name, detailLevel), regions = pack.levels?.[level];
+      return { name, pack, level, regions, regionRefs: geometryRefs(regions) };
     }),
   };
 }
@@ -113,16 +114,16 @@ const sameRefs = (a, b) => a.length === b.length && a.every((value, i) => value 
 function sameSources(a, b) {
   return a.countries === b.countries && sameRefs(a.countryRefs, b.countryRefs)
     && a.details.length === b.details.length && a.details.every((d, i) =>
-      d.name === b.details[i].name && d.pack === b.details[i].pack && d.regions === b.details[i].regions
+      d.name === b.details[i].name && d.pack === b.details[i].pack && d.level === b.details[i].level && d.regions === b.details[i].regions
       && sameRefs(d.regionRefs, b.details[i].regionRefs));
 }
 
-function placeFeatures(sources, detailLevel) {
+function placeFeatures(sources) {
   const regions = [], countries = [];
   const wrap = (f, key) => ({ text: String(f.name || '').trim(), key, geometry: geometry(f) });
   for (const detail of sources.details) {
     for (const feature of detail.regions || []) {
-      regions.push(wrap(feature, `region:${detail.name}:${detailLevel}:${feature.key || feature.name}`));
+      regions.push(wrap(feature, `region:${detail.name}:${detail.level}:${feature.key || feature.name}`));
     }
   }
   for (const feature of sources.countries) countries.push(wrap(feature, `country:${feature.name}`));
@@ -208,7 +209,7 @@ function traceLabels(route, features) {
  * country limits detail to that pack; otherwise all loaded packs are eligible.
  * Exact polygon intersections also detect narrow places on two-point paths.
  */
-export function routePlaceLabels(geo, route, { mode = 'auto', country, detailLevel = 'district' } = {}) {
+export function routePlaceLabels(geo, route, { mode = 'auto', country, detailLevel } = {}) {
   if (!route || typeof route !== 'object') return [];
   mode = mode === 'country' ? 'country' : 'auto';
   let state = routeCache.get(route);
@@ -220,7 +221,7 @@ export function routePlaceLabels(geo, route, { mode = 'auto', country, detailLev
   const sources = sourceState(geo, mode, country, detailLevel);
   const hit = state.entries.find(e => e.mode === mode && e.country === country && e.detailLevel === detailLevel && sameSources(e.sources, sources));
   if (hit) return hit.labels;
-  const labels = traceLabels(state, placeFeatures(sources, detailLevel));
+  const labels = traceLabels(state, placeFeatures(sources));
   // Keep a few recent property combinations; obsolete geometry is not retained
   // indefinitely when detail packs load or the selected detail level changes.
   state.entries.push({ mode, country, detailLevel, sources, labels });

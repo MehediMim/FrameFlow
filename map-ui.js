@@ -1,4 +1,4 @@
-import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=image-badges-1';
+import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=image-badges-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -320,6 +320,10 @@ function badgeFields(a) {
   return `<div class="m-badge"><span class="mini-label">Picture</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image…' : 'Choose image…'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden>${a.image ? '' : '<p class="mini-label">No picture yet. Choose a photo, logo or flag.</p>'}`
     + F.sel('badgeShape', 'Shape', b.badgeShape, Object.entries(BADGE_SHAPES))
     + (['polygon', 'star'].includes(b.badgeShape) ? F.range('badgeSides', b.badgeShape === 'star' ? 'Points' : 'Sides', b.badgeSides, 3, 12, 1) : '')
+    + F.sel('badgeStem', 'Pointer to the location', b.badgeStem, Object.entries(BADGE_STEMS))
+    + (b.badgeStem !== 'none' ? F.range('badgeStemLen', 'Pointer length', b.badgeStemLen, 0, 200, 1, x => x + ' px') : '')
+    + F.sel('badgeExit', 'When the bar ends', b.badgeExit, Object.entries(BADGE_EXITS))
+    + (b.badgeExit !== 'none' ? '<p class="mini-label">The exit plays during the last frames of this item\'s timeline bar (up to 18 frames).</p>' : '')
     + F.color('badgeBorder', 'Border color', b.badgeBorder) + F.range('badgeBorderW', 'Border width', b.badgeBorderW, 0, 20, .5)
     + F.color('badgeBg', 'Background (behind the picture)', b.badgeBg) + F.chk('badgeShadow', 'Shadow', b.badgeShadow)
     + (a.image ? F.range('badgeZoom', 'Zoom picture', b.badgeZoom, 1, 4, .05, x => x + '×') + F.range('badgeX', 'Move picture left / right', b.badgeX, -100, 100, 1) + F.range('badgeY', 'Move picture up / down', b.badgeY, -100, 100, 1) : '')
@@ -432,7 +436,7 @@ function bindInspector(it) {
       el.oninput = () => {
         if (!gesture) { checkpoint(); gesture = true; }
         const v = t === 'range' ? Number(el.value) : el.value; it[key] = v;
-        const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + '°' : key === 'size' || key === 'badgeZoom' ? v + '×' : key === 'badgeLabelY' ? v + '%' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
+        const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + '°' : key === 'size' || key === 'badgeZoom' ? v + '×' : key === 'badgeLabelY' ? v + '%' : key === 'badgeStemLen' ? v + ' px' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
         draw();
       };
       el.onchange = () => { gesture = false; changed(); };
@@ -476,7 +480,7 @@ function bindInspector(it) {
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
-      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape') renderInspector();
+      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });

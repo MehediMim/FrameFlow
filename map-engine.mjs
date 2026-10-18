@@ -1269,7 +1269,9 @@ export function drawPathEditor(ctx, v, a) {
 
 // ---------------------------------------------------------------- Image badge (a pin shown as a shaped picture)
 export const BADGE_SHAPES = { polygon: 'Polygon', circle: 'Circle', rounded: 'Rounded square', star: 'Star' };
-export const BADGE_DEFAULTS = { badgeShape: 'polygon', badgeSides: 7, badgeBg: '#1b1b1b', badgeBorder: '#111111', badgeBorderW: 3, badgeShadow: true, badgeZoom: 1, badgeX: 0, badgeY: 0, badgeLabelY: 0 };
+export const BADGE_STEMS = { none: 'No pointer', line: 'Line', pointer: 'Pointer (tapered)' };
+export const BADGE_EXITS = { none: 'Stay until the bar ends', fade: 'Fade out', shrink: 'Shrink away', pop: 'Pop and vanish' };
+export const BADGE_DEFAULTS = { badgeStem: 'none', badgeStemLen: 40, badgeExit: 'fade', badgeShape: 'polygon', badgeSides: 7, badgeBg: '#1b1b1b', badgeBorder: '#111111', badgeBorderW: 3, badgeShadow: true, badgeZoom: 1, badgeX: 0, badgeY: 0, badgeLabelY: 0 };
 export const badgeOf = a => ({ ...BADGE_DEFAULTS, ...Object.fromEntries(Object.keys(BADGE_DEFAULTS).filter(k => a[k] !== undefined).map(k => [k, a[k]])) });
 const badgeCache = new Map(); let badgeListener = null;
 export const onBadgeImage = fn => { badgeListener = fn; };
@@ -1303,24 +1305,41 @@ function badgePath(ctx, x, y, r, st) {
 }
 function drawBadge(ctx, v, geo, a, frame, labels) {
   const alpha = actAlpha(a, frame), loc = resolveLoc(geo, a.place, v.cx); if (!loc || alpha <= 0) return;
-  const t = actionProgress(a, frame), pop = ease('backOut', clamp01(t / .4)); if (pop <= 0) return;
-  const st = badgeOf(a), g = project(v, loc.X, loc.Y, 0), R = a.size * v.unit * 46, r = R * Math.max(.001, pop);
-  ctx.save(); ctx.globalAlpha = alpha * clamp01(pop * 1.5); ctx.lineJoin = 'round';
+  const st = badgeOf(a), t = actionProgress(a, frame), pop = ease('backOut', clamp01(t / .4));
+  // exit: plays over the last frames of the item's bar (fewer when the bar is short)
+  const span = Math.max(1, Math.min(18, Math.round(a.dur * .4))), q = clamp01((frame - (a.start + a.dur - span)) / span);
+  let fade = 1, grow = 1;
+  if (st.badgeExit === 'fade') fade = 1 - q;
+  else if (st.badgeExit === 'shrink') grow = 1 - q * q;
+  else if (st.badgeExit === 'pop') grow = q < .25 ? 1 + .18 * (q / .25) : 1.18 * (1 - (q - .25) / .75) ** 2;
+  const k = pop * grow; if (k <= .001 || fade <= 0) return;
+  const g = project(v, loc.X, loc.Y, 0), R = a.size * v.unit * 46, r = R * k, stem = st.badgeStem !== 'none';
+  const reach = stem ? st.badgeStemLen * v.unit * a.size * k : 0, cx = g.x, cy = g.y - (stem ? r + reach : 0);
+  const baseAlpha = alpha * clamp01(pop * 1.5) * fade;
+  ctx.save(); ctx.globalAlpha = baseAlpha; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (stem) { // pointer from the badge down to the exact location
+    const col = st.badgeBorderW > 0 ? st.badgeBorder : st.badgeBg, lw = Math.max(2, st.badgeBorderW) * v.unit;
+    ctx.save(); ctx.globalAlpha = baseAlpha * .3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(g.x, g.y, Math.max(4 * v.unit, r * .24), Math.max(1.5 * v.unit, r * .08), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    ctx.fillStyle = col; ctx.strokeStyle = col;
+    const n = clamp(Math.round(st.badgeSides), 3, 12), low = cy + r * .9 * (st.badgeShape === 'star' ? .45 : st.badgeShape === 'polygon' && n % 2 ? Math.cos(Math.PI / n) : 1); // start at the badge's lower edge so a fade shows no overlap
+    if (st.badgeStem === 'line') { ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(cx, low); ctx.lineTo(g.x, g.y); ctx.stroke(); ctx.beginPath(); ctx.arc(g.x, g.y, lw * 1.5, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.beginPath(); ctx.moveTo(cx - r * .3, low); ctx.lineTo(cx + r * .3, low); ctx.lineTo(g.x, g.y); ctx.closePath(); ctx.fill(); }
+  }
   if (st.badgeShadow) { ctx.shadowColor = '#000a'; ctx.shadowBlur = 14 * v.unit; ctx.shadowOffsetY = 4 * v.unit; }
-  badgePath(ctx, g.x, g.y, r, st); ctx.fillStyle = st.badgeBg; ctx.fill();
+  badgePath(ctx, cx, cy, r, st); ctx.fillStyle = st.badgeBg; ctx.fill();
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   const entry = a.image ? badgeEntry(a.image) : null;
   if (entry?.ok) { // fill the shape, cropping the picture; zoom and focus move the crop
     const img = entry.img, s = Math.max(2 * r / img.naturalWidth, 2 * r / img.naturalHeight) * st.badgeZoom, w = img.naturalWidth * s, h = img.naturalHeight * s;
-    ctx.save(); badgePath(ctx, g.x, g.y, r, st); ctx.clip();
-    ctx.drawImage(img, g.x - w / 2 - st.badgeX / 100 * (w - 2 * r) / 2, g.y - h / 2 - st.badgeY / 100 * (h - 2 * r) / 2, w, h);
+    ctx.save(); badgePath(ctx, cx, cy, r, st); ctx.clip();
+    ctx.drawImage(img, cx - w / 2 - st.badgeX / 100 * (w - 2 * r) / 2, cy - h / 2 - st.badgeY / 100 * (h - 2 * r) / 2, w, h);
     ctx.restore();
   }
-  if (st.badgeBorderW > 0) { badgePath(ctx, g.x, g.y, r, st); ctx.lineWidth = st.badgeBorderW * v.unit; ctx.strokeStyle = st.badgeBorder; ctx.stroke(); }
+  if (st.badgeBorderW > 0) { badgePath(ctx, cx, cy, r, st); ctx.lineWidth = st.badgeBorderW * v.unit; ctx.strokeStyle = st.badgeBorder; ctx.stroke(); }
   ctx.restore();
   if (a.showLabel) {
     const lp = ease('backOut', (t - .3) / .3);
-    if (lp > 0) { const offset = R * (.9 + st.badgeLabelY / 100); labels.push({ x: g.x, y: g.y + offset, ground: { X: loc.X, Y: loc.Y }, groundOffset: { y: offset }, text: a.label || a.place.name, alpha: alpha * clamp01(lp * 1.5), scale: .9 + .2 * lp }); }
+    if (lp > 0) { const y = cy + R * (.9 + st.badgeLabelY / 100) * grow; labels.push({ x: cx, y, ground: { X: loc.X, Y: loc.Y }, groundOffset: { y: y - g.y }, text: a.label || a.place.name, alpha: alpha * clamp01(lp * 1.5) * fade, scale: (.9 + .2 * lp) * Math.max(.05, grow) }); }
   }
 }
 
@@ -1552,9 +1571,11 @@ export function validateMapProject(p) {
       if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
       if (a.image !== undefined && (typeof a.image !== 'string' || a.image.length > 2e6 || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(a.image))) throw Error('Invalid pin image.');
       if (a.badgeShape !== undefined && !Object.hasOwn(BADGE_SHAPES, a.badgeShape)) throw Error('Invalid badge shape.');
+      if (a.badgeStem !== undefined && !Object.hasOwn(BADGE_STEMS, a.badgeStem)) throw Error('Invalid badge pointer.');
+      if (a.badgeExit !== undefined && !Object.hasOwn(BADGE_EXITS, a.badgeExit)) throw Error('Invalid badge exit.');
       if (a.badgeShadow !== undefined && typeof a.badgeShadow !== 'boolean') throw Error('Invalid badge shadow.');
       for (const k of ['badgeBg', 'badgeBorder']) if (a[k] !== undefined && !/^#[0-9a-f]{6}$/i.test(a[k])) throw Error('Invalid badge color.');
-      for (const [k, lo, hi] of [['badgeSides', 3, 12], ['badgeBorderW', 0, 20], ['badgeZoom', 1, 4], ['badgeX', -100, 100], ['badgeY', -100, 100], ['badgeLabelY', -100, 300]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid badge ' + k + '.');
+      for (const [k, lo, hi] of [['badgeSides', 3, 12], ['badgeStemLen', 0, 300], ['badgeBorderW', 0, 20], ['badgeZoom', 1, 4], ['badgeX', -100, 100], ['badgeY', -100, 100], ['badgeLabelY', -100, 300]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid badge ' + k + '.');
     }
     if (a.type === 'label') {
       if (typeof a.text !== 'string' || a.text.length > 160) throw Error('Invalid label text.');

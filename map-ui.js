@@ -371,7 +371,7 @@ function actionFields(a) {
       const country = ['country','region','regions'].includes(a.target.kind);
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) : F.loc('target', 'Place', a.target, 'place')) + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
-    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.sel('__move', 'Position', a.mode === 'path' ? 'path' : 'stay', [['stay', 'Stay in one place'], ['path', 'Move along my path']]) + (a.mode === 'path' ? pathFields(a) + F.chk('trail', 'Draw a trail behind it', a.trail !== false) : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) + F.chk('__moveKeys', 'Set movement start / end keyframes', a.moveStart !== undefined) + (a.moveStart !== undefined ? F.num('moveStart', 'Start keyframe (frame)', a.moveStart, a.start, a.start + a.dur - 1) + F.num('moveEnd', 'End keyframe (frame)', a.moveEnd, a.moveStart + 1, a.start + a.dur) + '<div class="two"><button type="button" data-movekey="moveStart">Set start at playhead</button><button type="button" data-movekey="moveEnd">Set end at playhead</button></div>' : '') : '') + (a.glyph === 'image' ? badgeFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
     case 'pin': {
@@ -379,8 +379,8 @@ function actionFields(a) {
       const mv = a.mode === 'move' || a.mode === 'path' ? a.mode : 'stay', ownColor = a.badge || a.showIcon === false;
       return F.sel('__pinMove', 'Position', mv, Object.entries(PIN_MODES)) + (mv === 'stay' ? F.loc('place', 'Location', a.place, 'place') : mv === 'move' ? F.loc('place', 'From', a.place, 'place') + F.loc('to', 'To', a.to, 'place') + '<p class="mini-label">It travels for the animation duration above, then stays at the end until the bar ends.</p>' : pathFields(a))
         + (mv !== 'stay' ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) + (ownColor ? F.color('color', 'Trail color', a.color) : '') : '')
-        + F.sel('__pinDisplay', 'Display', display, [['both', 'Icon + text'], ['icon', 'Icon only'], ['text', 'Text only'], ['badge', 'Image badge']])
-        + (display === 'badge' ? badgeFields(a) + F.chk('showLabel', 'Show label', a.showLabel) : (a.showIcon !== false ? F.color('color', 'Pin color', a.color) : ''))
+        + F.sel('__pinDisplay', 'Display', display, [['both', 'Icon + text'], ['icon', 'Icon only'], ['text', 'Text only'], ...(a.badge ? [['badge', 'Image badge (legacy)']] : [])])
+        + (display === 'badge' ? '<button type="button" data-imageobject>Move image to Objects</button>' + badgeFields(a) + F.chk('showLabel', 'Show label', a.showLabel) : (a.showIcon !== false ? F.color('color', 'Pin color', a.color) : ''))
         + (a.showIcon !== false || a.badge ? F.range('size', a.badge ? 'Badge size' : 'Pin size', a.size, .5, 3, .1, x => x + '×') : '')
         + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the place name') : '')
         + (a.badge && a.showLabel ? F.range('badgeLabelY', 'Label position', badgeOf(a).badgeLabelY, -100, 300, 5, x => x + '%') + '<p class="mini-label">Label font, shape and colors: use Custom style for this label below. Try the Black ribbon preset.</p>' : '');
@@ -479,6 +479,7 @@ function bindInspector(it) {
         changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return;
       }
       if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
+      if (key === '__moveKeys') { if (v) { it.moveStart = it.start; it.moveEnd = it.start + Math.min(it.animDur ?? it.dur, it.dur); } else { delete it.moveStart; delete it.moveEnd; } changed(); renderInspector(); return; }
       if (key === '__move') { it.mode = v === 'path' ? 'path' : 'stay'; if (it.mode === 'path') it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return; }
       for (const [k, cat, base] of [['glyph', OBJECT_ICONS, 'Object'], ['fx', EFFECTS, 'Effect'], ['shape', SHAPES, 'Arrow / zone']]) if (key === k) { // new look: follow its default color and name unless the user changed them
         const old = cat[it[k]], nu = cat[v]; if (!nu) return;
@@ -502,11 +503,16 @@ function bindInspector(it) {
           v = Math.max(lo, Math.round(v));
           const end = key === 'start' ? v + it.dur : key === 'dur' ? it.start + v : it.start + it.dur;
           if (!Number.isSafeInteger(v) || !Number.isSafeInteger(end)) { el.value = it[key]; notify('Enter a valid frame number.'); return; }
+          if (it.moveStart !== undefined && key === 'start') { const shift = v - it.start; it.moveStart += shift; it.moveEnd += shift; }
+          if (it.moveStart !== undefined && key === 'dur') { it.moveEnd = Math.min(it.moveEnd, it.start + v); it.moveStart = Math.min(it.moveStart, it.moveEnd - 1); }
           it[key] = v; if (key !== 'animDur') ensureLength(end); el.value = v; changed(); return;
         }
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
+      if (key === 'count') v = Math.round(v);
+      if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
+      if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
@@ -534,6 +540,8 @@ function bindInspector(it) {
     if (clear) clear.onclick = () => { pause(); checkpoint(); delete it.image; changed(); renderInspector(); }; }
   $$('#mInspector [data-mopenset]').forEach(el => el.onclick = () => $('#mSettingsButton').click());
   const combine = $('#mInspector [data-mcombine]'); if (combine) combine.onchange = () => { if (combine.value === 'separate') splitRegions(it); };
+  const imageObject = $('#mInspector [data-imageobject]'); if (imageObject) imageObject.onclick = () => { checkpoint(); it.type = 'object'; it.glyph = 'image'; it.count = 1; it.enter = 'drop'; it.idle = 'none'; it.exit = 'none'; changed(); renderInspector(); };
+  $$('#mInspector [data-movekey]').forEach(el => el.onclick = () => { const key = el.dataset.movekey; if (frame < it.start || frame > it.start + it.dur || (key === 'moveStart' ? frame >= it.moveEnd : frame <= it.moveStart)) { notify('Choose a frame inside the bar, with end after start.'); return; } checkpoint(); it[key] = frame; changed(); renderInspector(); });
   $$('#mInspector [data-borderpoint]').forEach(el=>el.onclick=()=>startPick(el.dataset.borderpoint,'borderpoint'));
   $$('#mInspector [data-mpath]').forEach(el => el.onclick = () => pathAction(it, el.dataset.mpath));
   $$('#mInspector [data-mwdel]').forEach(el => el.onclick = () => { checkpoint(); it.path.splice(+el.dataset.mwdel, 1); syncPathEnds(it); changed(); renderInspector(); });
@@ -585,7 +593,7 @@ function renderLabelPanel() {
   bindLabelStyle(box, 'mProjLbl', () => (proj.labelStyle ||= { ...DEFAULT_LABEL_STYLE }), v => { proj.labelStyle = v; }, renderLabelPanel);
 }
 function labelFields(a) {
-  if (!['plane', 'highlight', 'pin', 'label'].includes(a.type)) return '';
+  if (!['plane', 'highlight', 'pin', 'label', 'object'].includes(a.type)) return '';
   return '<div class="section-title m-sep">LABEL STYLE</div>' + F.chk('__lscustom', 'Custom style for this label', !!a.labelStyle) + (a.labelStyle ? labelStyleHtml(labelStyleOf(proj, a), 'mItemLbl') : '<p class="mini-label">Using the project label style (Map settings → Label style).</p>');
 }
 

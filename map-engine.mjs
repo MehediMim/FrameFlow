@@ -679,6 +679,7 @@ const bounce = t => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * 
 // Timeline length controls visibility; animation duration controls the reveal/movement.
 const animationDuration = a => a.animDur ?? a.dur;
 export const actionProgress = (a, frame) => clamp01((frame - a.start) / Math.max(1, animationDuration(a)));
+export const objectMoveProgress = (a, frame) => a.moveStart === undefined ? actionProgress(a, frame) : clamp01((frame - a.moveStart) / Math.max(1, a.moveEnd - a.moveStart));
 const actAlpha = (a, frame) => frame >= a.start && frame < a.start + a.dur ? 1 : 0;
 
 function groundCircle(ctx, v, X, Y, rPx, off = 0) { // circle of radius rPx screen-pixels (at the map's scale) lying on the map
@@ -1283,7 +1284,7 @@ function badgeEntry(src) {
 }
 /** Resolves once every badge picture in the project has loaded, so exports never miss one. */
 export function preloadBadges(proj) {
-  const srcs = [...new Set(proj.actions.filter(a => a.type === 'pin' && a.badge && a.image).map(a => a.image))];
+  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'pin' && a.badge) || (a.type === 'object' && a.glyph === 'image')) && a.image).map(a => a.image))];
   return Promise.all(srcs.map(src => new Promise(done => {
     const e = badgeEntry(src); if (!e || e.ok) { done(); return; }
     e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
@@ -1315,7 +1316,7 @@ function pinRoute(geo, a) {
 function pinSpot(v, geo, a, frame) {
   const r = pinRoute(geo, a);
   if (!r) { const loc = resolveLoc(geo, a.place, v.cx); return loc && { X: loc.X, Y: loc.Y, route: null, p: 0 }; }
-  const p = ease(a.easing, actionProgress(a, frame)), pt = routeAt(r, p), off = Math.round(v.cx - r.mid);
+  const p = ease(a.easing, a.type === 'object' ? objectMoveProgress(a, frame) : actionProgress(a, frame)), pt = routeAt(r, p), off = Math.round(v.cx - r.mid);
   return { X: pt.X + off, Y: pt.Y, route: r, off, pt, p };
 }
 /** Progress of the pin's own appearance (drop / pop). A moving pin keeps the normal speed instead of stretching it over the whole journey. */
@@ -1419,7 +1420,7 @@ function queueTextLabel(v, geo, a, frame, labels) {
 }
 
 // Helpers handed to map-objects.mjs (objects, effects, arrows and zones).
-const OBJ_H = { resolveLoc, project, groundCircle, actionProgress, actAlpha, planeRoute, routeAt, ease, clamp01, bounce };
+const OBJ_H = { drawBadge, resolveLoc, project, groundCircle, actionProgress: objectMoveProgress, actAlpha, planeRoute, routeAt, ease, clamp01, bounce };
 
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
@@ -1447,7 +1448,18 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null) {
   for (const a of proj.actions) {
     if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
     else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
-    else if (a.type === 'object') tag(a, () => drawObject(OBJ_H, ctx, v, geo, a, frame, labels));
+    else if (a.type === 'object') tag(a, () => {
+      if (!actAlpha(a, frame)) return;
+      const count = Math.max(1, Math.min(100, Math.round(a.count || 1))), cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols);
+      const defaultGap = a.glyph === 'image' ? 104 : 64;
+      const gapX = (a.gapX ?? defaultGap) * (a.size || 1) * v.unit, gapY = (a.gapY ?? defaultGap) * (a.size || 1) * v.unit;
+      for (let i = 0; i < count; i++) {
+        const dx = ((i % cols) - (Math.min(cols, count - Math.floor(i / cols) * cols) - 1) / 2) * gapX, dy = (Math.floor(i / cols) - (rows - 1) / 2) * gapY;
+        ctx.save(); ctx.translate(dx, dy);
+        const itemLabels = []; drawObject(OBJ_H, ctx, v, geo, { ...a, showLabel: a.showLabel && i === 0 }, frame, itemLabels);
+        ctx.restore(); labels.push(...itemLabels.map(l => ({ ...l, x: l.x + dx, y: l.y + dy, groundOffset: { x: (l.groundOffset?.x || 0) + dx, y: (l.groundOffset?.y || 0) + dy } })));
+      }
+    });
     else if (a.type === 'effect') tag(a, () => drawEffect(OBJ_H, ctx, v, geo, a, frame, labels));
   }
   for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
@@ -1491,7 +1503,7 @@ export function makeAction(type, start, extra = {}) {
     plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
     highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400, invert: false },
     pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1, mode: 'stay' },
-    object: { place: city('Paris', 48.8566, 2.3522), glyph: 'tank', color: OBJECT_ICONS.tank.color, size: 1.2, enter: 'drop', idle: 'none', exit: 'none', mode: 'stay', path: [], curve: 'smooth', trail: true, showLabel: false, label: '' },
+    object: { place: city('Paris', 48.8566, 2.3522), glyph: 'tank', count: 1, color: OBJECT_ICONS.tank.color, size: 1.2, enter: 'drop', idle: 'none', exit: 'none', mode: 'stay', path: [], curve: 'smooth', trail: true, showLabel: false, label: '' },
     effect: { place: city('Paris', 48.8566, 2.3522), fx: 'explosion', color: EFFECTS.explosion.color, size: 1.5, repeat: 1, from: { kind: 'point', name: 'Launch site', lat: 45.5, lon: -1.5 }, showLabel: false, label: '' },
     shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, fillAlpha: .28, showLabel: false, label: '' },
     label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
@@ -1599,7 +1611,7 @@ export function validateMapProject(p) {
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
-    if (a.type === 'pin') {
+    if (a.type === 'pin' || (a.type === 'object' && a.glyph === 'image')) {
       if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
       if (a.mode !== undefined && !Object.hasOwn(PIN_MODES, a.mode)) throw Error('Invalid pin movement.');
       if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid pin destination.');
@@ -1622,7 +1634,11 @@ export function validateMapProject(p) {
     if (a.type === 'plane' && ((a.showRouteLabels !== undefined && typeof a.showRouteLabels !== 'boolean') || (a.routeLabelMode !== undefined && !['auto', 'country', 'region'].includes(a.routeLabelMode)) || (a.routeLabelTiming !== undefined && !['all', 'visited'].includes(a.routeLabelTiming)))) throw Error('Invalid route label settings.');
     const inList = (list, x) => list.some(([k]) => k === x);
     if (a.type === 'object') {
-      if (!Object.hasOwn(OBJECT_ICONS, a.glyph) || (a.enter !== undefined && !inList(OBJECT_ENTER, a.enter)) || (a.idle !== undefined && !inList(OBJECT_IDLE, a.idle)) || (a.exit !== undefined && !inList(OBJECT_EXIT, a.exit)) || (a.mode !== undefined && !['stay', 'path'].includes(a.mode))) throw Error('Invalid object.');
+      for (const key of ['gapX', 'gapY']) if (a[key] !== undefined && !num(a[key], 0, 1000)) throw Error('Invalid object spacing.');
+      if (a.count !== undefined && (!Number.isInteger(a.count) || a.count < 1 || a.count > 100)) throw Error('Object count must be between 1 and 100.');
+      if ((a.moveStart !== undefined || a.moveEnd !== undefined) && (!Number.isSafeInteger(a.moveStart) || !Number.isSafeInteger(a.moveEnd) || a.moveStart < a.start || a.moveEnd <= a.moveStart || a.moveEnd > a.start + a.dur)) throw Error('Movement keyframes must be inside the object timeline bar, with the end after the start.');
+      if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid object destination.');
+      if (!Object.hasOwn(OBJECT_ICONS, a.glyph) || (a.enter !== undefined && !inList(OBJECT_ENTER, a.enter)) || (a.idle !== undefined && !inList(OBJECT_IDLE, a.idle)) || (a.exit !== undefined && !inList(OBJECT_EXIT, a.exit)) || (a.mode !== undefined && !['stay', 'move', 'path'].includes(a.mode))) throw Error('Invalid object.');
       if (a.mode === 'path') checkPath(a); else if (!isLoc(a.place)) throw Error('Invalid object location.');
     }
     if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');

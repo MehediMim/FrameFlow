@@ -12,6 +12,7 @@ const mirrorY = pts => pts.map(([x, y]) => [x, -y]);
 // Each icon is drawn in a box of about -1..1 (s = half size in px), facing right.
 // rot: turns fully to its heading when it moves; otherwise it just mirrors. air: floats above the ground.
 export const OBJECT_ICONS = {
+  image: { label: 'Image badge', color: '#ffffff' },
   soldier: { label: 'Soldier', color: '#5b7f3a', draw: (c, s, col) => { rect(c, -.2, .2, .16, .55, dark, s); rect(c, .04, .2, .16, .55, dark, s); rect(c, -.22, -.42, .44, .62, col, s); circ(c, 0, -.6, .2, '#e0b88f', s); poly(c, [[-.25, -.62], [.25, -.62], [.2, -.84], [-.2, -.84]], col, s); seg(c, .1, -.15, .85, -.4, dark, .1, s); } },
   tank: { label: 'Tank', color: '#6b7f4a', draw: (c, s, col) => { rect(c, -.9, .25, 1.8, .4, dark, s, .2); poly(c, [[-.85, .25], [.85, .25], [.7, -.1], [-.7, -.1]], col, s); rect(c, -.35, -.42, .7, .34, col, s, .12); rect(c, .3, -.34, .75, .12, metal, s); for (let x = -.65; x <= .66; x += .26) circ(c, x, .45, .12, metal, s); } },
   warship: { label: 'Warship', color: '#8a9aa6', draw: (c, s, col) => { poly(c, [[-1, 0], [1, 0], [.8, .4], [-.85, .4]], col, s); rect(c, -.3, -.35, .55, .35, light, s); rect(c, -.1, -.68, .2, .33, dark, s); rect(c, .4, -.2, .5, .1, dark, s); seg(c, -.6, 0, -.6, -.5, dark, .05, s); } },
@@ -46,10 +47,11 @@ export const SHAPES = {
 // ---------------------------------------------------------------- objects
 export function drawObject(H, c, v, geo, a, frame, labels) {
   if (!H.actAlpha(a, frame)) return;
+  if (a.glyph === 'image') { H.drawBadge(c, v, geo, a, frame, labels); return; }
   const ic = OBJECT_ICONS[a.glyph] || OBJECT_ICONS.tank, u = v.unit, size = a.size || 1, s = 26 * size * u, t = frame - a.start;
   let X, Y, ang = null;
-  if (a.mode === 'path') {
-    const r = H.planeRoute(geo, a); if (!r) return;
+  if (a.mode === 'path' || a.mode === 'move') {
+    const r = H.planeRoute(geo, a.mode === 'move' ? { ...a, mode: 'direct', from: a.place } : a); if (!r) return;
     const p = H.ease(a.easing, H.actionProgress(a, frame)), pt = H.routeAt(r, p), k = Math.round(v.cx - pt.X);
     X = pt.X + k; Y = pt.Y;
     const p0 = H.routeAt(r, Math.max(0, p - .02)), p1 = H.routeAt(r, Math.min(1, p + .02)), q0 = H.project(v, p0.X + k, p0.Y), q1 = H.project(v, p1.X + k, p1.Y);

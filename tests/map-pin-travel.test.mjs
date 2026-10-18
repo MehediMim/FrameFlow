@@ -116,3 +116,21 @@ const screen = (v, loc) => E.project(v, E.lonToX(loc.lon), E.latToY(loc.lat));
   assert.throws(() => ok(badge({ trail: 'yes' })), /trail/);
 }
 console.log('pin travel tests passed');
+
+// Objects share from/to travel, and wait at each endpoint around their movement keys.
+{
+  const a = E.makeAction('object', 10, { glyph: 'tank', count: 4, mode: 'move', place: LONDON, to: NYC, dur: 200, moveStart: 60, moveEnd: 120, easing: 'linear', enter: 'none' });
+  const shadows = f => project([a], f).log.filter(l => l.op === 'ellipse');
+  assert.equal(shadows(30).length, 4, 'count renders four tanks');
+  assert.deepEqual(shadows(30), shadows(60), 'holds at origin until start key');
+  assert.deepEqual(shadows(120), shadows(170), 'holds at destination after end key');
+  assert.notDeepEqual(shadows(60), shadows(90), 'travels between keys');
+  assert.equal(E.objectMoveProgress(a, 90), .5);
+  const p = E.newMapProject(); p.frames = 400; p.actions = [a];
+  E.validateMapProject(p);
+  assert.throws(() => E.validateMapProject({ ...p, actions: [{ ...a, count: 101 }] }), /count/);
+  assert.throws(() => E.validateMapProject({ ...p, actions: [{ ...a, moveEnd: 50 }] }), /keyframes/);
+  const image = E.makeAction('object', 10, { glyph: 'image', mode: 'move', place: LONDON, to: NYC, dur: 200, moveStart: 60, moveEnd: 120 });
+  E.validateMapProject({ ...p, actions: [image] });
+  assert.ok(project([image], 90).log.length, 'image object renders without a loaded image');
+}

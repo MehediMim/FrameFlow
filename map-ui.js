@@ -356,7 +356,7 @@ function actionFields(a) {
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
       return F.loc('place', 'Location', a.place, 'place') + F.sel('__pinDisplay', 'Display', display, [['both', 'Icon + text'], ['icon', 'Icon only'], ['text', 'Text only'], ['badge', 'Image badge']])
-        + (display === 'badge' ? badgeFields(a) : (a.showIcon !== false ? F.color('color', 'Pin color', a.color) : ''))
+        + (display === 'badge' ? badgeFields(a) + F.chk('showLabel', 'Show label', a.showLabel) : (a.showIcon !== false ? F.color('color', 'Pin color', a.color) : ''))
         + (a.showIcon !== false || a.badge ? F.range('size', a.badge ? 'Badge size' : 'Pin size', a.size, .5, 3, .1, x => x + '×') : '')
         + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the place name') : '')
         + (a.badge && a.showLabel ? F.range('badgeLabelY', 'Label position', badgeOf(a).badgeLabelY, -100, 300, 5, x => x + '%') + '<p class="mini-label">Label font, shape and colors: use Custom style for this label below. Try the Black ribbon preset.</p>' : '');

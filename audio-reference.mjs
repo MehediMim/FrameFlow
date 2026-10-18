@@ -44,6 +44,8 @@ export function registerAudioStudio(studio, host) {
   }
   function remove(){const l=current();if(!l)return false;host.pause();checkpoint();state.layers=state.layers.filter(a=>a.id!==l.id);refresh(state.layers.at(-1)?.id||null);return true;}
   function duplicate(){const l=current();if(!l)return false;host.pause();checkpoint();const c={...l,id:crypto.randomUUID(),name:l.name+' copy'};state.layers.push(c);refresh(c.id);return true;}
+  function canMove(d){const l=current();if(!l)return false;const j=state.layers.indexOf(l)+d;return j>=0&&j<state.layers.length;}
+  function move(d){if(!canMove(d))return false;const l=current(),i=state.layers.indexOf(l);host.pause();checkpoint();[state.layers[i],state.layers[i+d]]=[state.layers[i+d],state.layers[i]];refresh(l.id);return true;}
   function split(){const l=current(),t=time();if(!l||t<=l.start+1e-6||t>=l.start+l.duration-1e-6){notify('Move the playhead inside the selected audio layer.');return;}
     host.pause();checkpoint();const left=t-l.start,c={...l,id:crypto.randomUUID(),name:l.name+' · part 2',start:t,source:l.source+left,duration:l.duration-left};l.duration=left;state.layers.splice(state.layers.indexOf(l)+1,0,c);refresh(c.id);
   }
@@ -123,7 +125,7 @@ export function registerAudioStudio(studio, host) {
   window.addEventListener('pointerup',()=>{if(drag){drag=null;refresh();}});
   for(const type of ['ff-play','ff-frame'])window.addEventListener(type,e=>{if(e.detail.studio!==studio)return;playing=e.detail.playing;sync(type==='ff-play');});
   window.addEventListener('blur',()=>{if(drag){drag=null;refresh();}});
-  return {renderList,renderTimeline,renderInspector,remove,duplicate,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
+  return {renderList,renderTimeline,renderInspector,remove,duplicate,move,canMove,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
     handlesHistory:()=>!!current()||(!host.getSelected()&&!!(state.history.length||state.future.length)),
     historyState:()=>current()||(!host.getSelected()&&(state.history.length||state.future.length))?{undo:!!state.history.length,redo:!!state.future.length}:null,
     reset(){++state.generation;state.loading=false;state.layers=[];state.history=[];state.future=[];stop();},count:()=>state.layers.length};

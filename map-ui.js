@@ -283,6 +283,23 @@ function renderItems() {
   $$('[data-mid]').forEach(el => el.onclick = () => select(el.dataset.mid));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current();
   audioUI?.renderList();
+  updateMoveButtons();
+}
+/** Step the selected layer up or down the list. Camera shots follow their start time, so only animations and audio layers move. */
+function moveItem(dir) {
+  if (audioUI?.isSelected()) { if (typeof audioUI.move === 'function') audioUI.move(dir); return; }
+  const it = current(); if (!it) return;
+  if (isShot(it)) { notify('Camera shots are ordered by their start time'); return; }
+  const list = proj.actions, i = list.indexOf(it), j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  pause(); checkpoint(); [list[i], list[j]] = [list[j], list[i]];
+  saveLocal(); renderItems(); renderTimeline(); draw();
+}
+function updateMoveButtons() {
+  let up = false, down = false;
+  if (audioUI?.isSelected()) { if (typeof audioUI.canMove === 'function') { up = audioUI.canMove(-1); down = audioUI.canMove(1); } }
+  else { const it = current(), i = it && !isShot(it) ? proj.actions.indexOf(it) : -1; up = i > 0; down = i >= 0 && i < proj.actions.length - 1; }
+  $('#mMoveUp').disabled = !up; $('#mMoveDown').disabled = !down;
 }
 function select(id) { if (pathDraw && pathDraw.id !== id) endPathDraw(true); if (pick?.key === '__members' && pick.id !== id) cancelPick(); sel = id; renderItems(); renderInspector(); renderTimeline(); }
 
@@ -856,6 +873,7 @@ function bindToolbar() {
   $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };
   $('#mFrame').onchange = e => { pause(); setFrame(Math.round(+e.target.value * proj.fps)); };
   $('#mZoomT').oninput = () => { renderTimeline(); setFrame(frame); };
+  $('#mMoveUp').onclick = () => moveItem(-1); $('#mMoveDown').onclick = () => moveItem(1);
   $('#mDuplicate').onclick = () => {
     if (audioUI?.duplicate()) return;
     const it = current(); if (!it) return; checkpoint();

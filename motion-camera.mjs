@@ -204,7 +204,7 @@ export function attachMotionCamera(host){
   rebaseCameraShot(p,s,s.start);
   const option=(key,label,val)=>`<label>${label}<input data-cam="${key}" type="number" step="1" ${key.endsWith('A')?'readonly title="Automatically follows the camera at shot start"':''} value="${finite(val)}"></label>`;
   $('#inspector').innerHTML=`<div class="inspector-title"><span>◉</span> ${esc(s.name)}</div>
-  <label>Preset<select data-cam="preset">${Object.entries(CAMERA_PRESETS).map(([k,n])=>`<option value="${k}" ${k===s.preset?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+  <div class="section-title">CAMERA PRESET</div><label>Preset<select data-cam="preset">${Object.entries(CAMERA_PRESETS).map(([k,n])=>`<option value="${k}" ${k===s.preset?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
   <div class="section-title">CAMERA SHOT</div><div class="two"><label>Start (s)<input data-cam="start" type="number" min="0" max="${(p.frames-1)/p.fps}" step="0.01" value="${(s.start/p.fps).toFixed(2)}"></label><label>Duration (s)<input data-cam="dur" type="number" min="0.03" max="${p.frames/p.fps}" step="0.01" value="${(s.dur/p.fps).toFixed(2)}"></label></div>
   <div class="section-title">3D-STYLE CAMERA / PARALLAX</div>
   <p class="mini-label">Start is automatically sampled at this clip's timeline position. End is relative to that start (and continues following any underlying camera motion). Move the clip to rebase both endpoints.</p>
@@ -231,8 +231,8 @@ export function attachMotionCamera(host){
   <label>Return time (seconds)<input data-cam="returnTime" type="number" min="0.03" step="0.05" value="${finite(s.returnTime,Math.min(.7,Math.max(.16,s.dur/p.fps*.28))).toFixed(2)}" ${s.endBehavior==='hold'?'disabled':''}></label>
   <p class="mini-label">Return smoothly restores pan, zoom, 3D rotation, parallax and focus blur. Hold final keeps the ending camera until another clip overrides it.</p>
   <div class="section-title">TIMING</div><label>Easing<select data-cam="easing">${['easeInOut','linear','easeIn','easeOut'].map(k=>`<option value="${k}" ${s.easing===k?'selected':''}>${k}</option>`).join('')}</select></label>
-  <label>Shake strength<input data-cam="strength" type="number" min="0" max="100" value="${finite(s.strength,12)}"></label>
-  <button id="ffCameraRemove" type="button">Delete camera shot</button><p class="mini-label">This is a layered 2.5D camera: the artwork remains flat, but camera rotation, perspective, parallax and optical blur are rendered frame by frame, including video exports.</p>`;
+  <div class="section-title">CAMERA SHAKE</div><label>Shake strength<input data-cam="strength" type="number" min="0" max="100" value="${finite(s.strength,12)}"></label>
+  <div class="section-title">CAMERA ACTIONS</div><button id="ffCameraRemove" type="button">Delete camera shot</button><p class="mini-label">This is a layered 2.5D camera: the artwork remains flat, but camera rotation, perspective, parallax and optical blur are rendered frame by frame, including video exports.</p>`;
   $('#inspector').querySelectorAll('[data-cam]').forEach(el=>el.addEventListener(el.type==='range'?'change':'change',()=>{
    const k=el.dataset.cam,v=el.type==='checkbox'?el.checked:el.value;
    if(el.readOnly)return;

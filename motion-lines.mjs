@@ -14,17 +14,21 @@ export function installLineDrawing(host) {
   const { canvas, ctx } = host;
   let mode = null, points = [], pointer = null;
   const panel = document.createElement('div');
-  panel.innerHTML = '<div class="section-title">DRAW LINES</div><div class="add-grid"><button type="button" id="drawStraightLine">Straight line</button><button type="button" id="drawFreehandLine">Freehand</button></div><p class="mini-label" id="lineDrawingHint" hidden>Drag on the canvas to draw. Escape cancels.</p>';
-  document.querySelector('.workspace.motion-only .add-grid').after(panel);
-  function stop() { mode = null; points = []; pointer = null; canvas.style.cursor = ''; panel.querySelector('#lineDrawingHint').hidden = true; host.draw(); }
-  for (const [id, value] of [['drawStraightLine', 'straight'], ['drawFreehandLine', 'freehand']]) panel.querySelector('#' + id).onclick = () => {
-    host.pause(); host.finishPath(); mode = value; points = []; canvas.style.cursor = 'crosshair'; panel.querySelector('#lineDrawingHint').hidden = false;
-    host.notify('Drag on the canvas to draw a ' + (value === 'straight' ? 'line' : 'freehand line') + '. Escape cancels.');
+  panel.innerHTML = '<p class="mini-label" id="lineDrawingHint" hidden>Drag to draw. Hold Shift for a straight line. Escape cancels.</p>';
+  const grid = document.querySelector('.workspace.motion-only .add-grid');
+  grid.insertAdjacentHTML('beforeend', '<button type="button" id="drawLine" title="Draw freely; hold Shift for a straight line" aria-pressed="false"><b aria-hidden="true">✎</b>Draw</button>');
+  grid.after(panel);
+  const button = grid.querySelector('#drawLine');
+  function stop() { mode = null; points = []; pointer = null; canvas.style.cursor = ''; button.setAttribute('aria-pressed', 'false'); panel.querySelector('#lineDrawingHint').hidden = true; host.draw(); }
+  button.onclick = () => {
+    if (mode) { stop(); return; }
+    host.pause(); host.finishPath(); mode = 'freehand'; points = []; canvas.style.cursor = 'crosshair'; button.setAttribute('aria-pressed', 'true'); panel.querySelector('#lineDrawingHint').hidden = false;
+    host.notify('Drag to draw. Hold Shift for a straight line. Escape cancels.');
   };
   const screen = e => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height }; };
   canvas.addEventListener('pointerdown', e => {
     if (!mode || e.button !== 0) return;
-    e.preventDefault(); e.stopImmediatePropagation(); pointer = e.pointerId; points = [screen(e)]; canvas.setPointerCapture(pointer);
+    e.preventDefault(); e.stopImmediatePropagation(); mode = e.shiftKey ? 'straight' : 'freehand'; pointer = e.pointerId; points = [screen(e)]; canvas.setPointerCapture(pointer);
   }, true);
   canvas.addEventListener('pointermove', e => {
     if (pointer !== e.pointerId) return;

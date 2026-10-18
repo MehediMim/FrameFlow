@@ -15,3 +15,7 @@
 .ff-inspector-content .section-title{margin-top:10px!important;margin-bottom:10px!important}
 .ff-inspector-content .two{min-width:0}
 .ff-inspector-content input,.ff-inspector-content textarea,.ff-inspector-content select{max-width:100%}
+#inspector .ff-inspector-content>.property{margin-bottom:8px}
+#inspector .ff-inspector-content>label,#inspector .ff-inspector-content>.two{margin-bottom:12px}
+#inspector .ff-inspector-content .mini-label{line-height:1.6;color:var(--muted)}
+#inspector .ff-inspector-content> :last-child{margin-bottom:0}

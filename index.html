@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=6"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=preview-controls-1"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=6"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=preview-controls-1"></head><body class="landing">
 <style>
 /* Support links shared by both studios and landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -334,7 +334,7 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 <input hidden type="file" id="pProjectFile" accept="application/json,.json"><input hidden type="file" id="pImageFile" accept="image/*">
 <dialog id="pModal"><div id="pModalBody"></div><button id="pCloseModal">Close</button></dialog>
 </div>
-<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=motion-media-1"></script><script type="module" src="app.js?v=lines-blur-1"></script><script type="module" src="map-ui.js?v=motion-media-1"></script><script type="module" src="paper-ui.js?v=motion-media-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
+<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=motion-media-1"></script><script type="module" src="app.js?v=layer-blur-3"></script><script type="module" src="map-ui.js?v=motion-media-1"></script><script type="module" src="paper-ui.js?v=motion-media-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {
@@ -438,4 +438,4 @@ new MutationObserver(records => {
   for (const record of records) for (const node of record.addedNodes) scan(node);
 }).observe(document.documentElement, { childList: true, subtree: true });
 
-</script><script type="module" src="inspector-panels.mjs"></script><script type="module" src="left-panels.mjs"></script></body></html>
+</script><script type="module" src="inspector-panels.mjs?v=inspector-order-1"></script><script type="module" src="left-panels.mjs"></script></body></html>

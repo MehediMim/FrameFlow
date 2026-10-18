@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { lineArtwork } from '../motion-lines.mjs';
 import { cameraAt, layerBlur, makeCameraShot } from '../motion-camera.mjs';
-import { validateProject } from '../engine.mjs';
+import { validateProject, poseAt } from '../engine.mjs';
+import { migrateBlurClips } from '../motion-blur.mjs';
 const layers = ['back','subject','front'].map(id => ({id,name:id,type:'rect',x:200,y:200,w:100,h:100,scale:1,rotation:0,opacity:1,blur:0,in:0,out:119,keys:{}}));
 const project = {version:1,width:800,height:600,fps:30,frames:120,bg:'#000000',layers};
 const shot = {...makeCameraShot(project,'focus',0,'subject'),frontBlur:12,backBlur:32,endBehavior:'hold',trackFocus:false};
@@ -25,6 +26,24 @@ assert.match(art.svgMarkup,/fill="none"/);
 assert.equal(lineArtwork([{x:0,y:0}]),null);
 project.layers.push({...layers[0],...art,type:'vector',id:'line'});
 assert.equal(validateProject(JSON.parse(JSON.stringify(project))).layers.at(-1).isDrawnLine,true);
+const legacy=structuredClone(project);
+legacy.layers[0].keys.blur=[{f:0,v:3,e:'easeInOut'},{f:119,v:12,e:'linear'}];
+legacy.layers[0].fxClips=[
+ {id:'blur1',kind:'blur',name:'blur',start:10,dur:40,amount:25,endBehavior:'return'},
+ {id:'blur2',kind:'blur',name:'blur',start:30,dur:50,amount:12,endBehavior:'hold',returnStart:55,returnDuration:20},
+ {id:'move',kind:'loop',name:'float',start:0,dur:100,endBehavior:'return'}
+];
+const original=Array.from({length:legacy.frames},(_,f)=>poseAt(legacy.layers[0],f));
+assert.equal(migrateBlurClips(legacy),true);
+assert.deepEqual(legacy.layers[0].fxClips.map(fx=>fx.id),['move']);
+assert.equal(legacy.layers.length,project.layers.length);
+for(let f=0;f<legacy.frames;f++){
+ const actual=poseAt(legacy.layers[0],f);
+ assert.ok(Math.abs(actual.blur-original[f].blur)<1e-8,`saved blur preserved at frame ${f}`);
+ assert.equal(actual.y,original[f].y,'other effects remain unchanged');
+}
+assert.equal(migrateBlurClips(legacy),false,'migration is idempotent');
+validateProject(legacy);
 shot.frontBlur=81;
 assert.throws(()=>validateProject(project),/camera blur/);
 console.log('Drawn line project round trip and independent front/back camera blur passed');

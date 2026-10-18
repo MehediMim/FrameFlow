@@ -1,6 +1,45 @@
 // Shared chrome for all FrameFlow studios. Keep native controls and their listeners.
 export const CANVAS_SIZES = [['1280,720','Landscape · 1280 × 720'],['1920,1080','Full HD · 1920 × 1080'],['1080,1920','Portrait · 1080 × 1920'],['1080,1080','Square · 1080 × 1080']];
 const esc = v => String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function settingsSection(title, content, { collapsible = false, open = true } = {}) {
+  return collapsible
+    ? `<details class="ff-settings-section"${open ? ' open' : ''}><summary>${esc(title)}</summary><div class="ff-settings-fields">${content}</div></details>`
+    : `<section class="ff-settings-section"><h3>${esc(title)}</h3><div class="ff-settings-fields">${content}</div></section>`;
+}
+function arrangeSettings(panel, prefix) {
+  const heading = panel.querySelector(':scope > .section-title');
+  const close = heading?.querySelector('button');
+  if (!heading) return;
+  const title = document.createElement('h2');
+  title.id = `${prefix}SettingsTitle`;title.textContent = 'Canvas settings';
+  heading.replaceChildren(title);if(close){close.setAttribute('aria-label','Close canvas settings');heading.append(close);}
+  panel.setAttribute('aria-labelledby', title.id);
+  const body = document.createElement('div');body.className = 'ff-settings-body';
+  if (prefix === 'sc') body.append(document.getElementById('scSettings'));
+  else {
+    const section = (name, nodes) => {
+      const holder = document.createElement('div');holder.innerHTML = settingsSection(name, '');
+      const group = holder.firstElementChild;
+      for (const node of nodes) if(node) group.querySelector('.ff-settings-fields').append(node);
+      body.append(group);
+    };
+    const control = id => document.getElementById(id)?.closest('label');
+    const size = control(prefix === 'motion' ? 'size' : `${prefix}Size`);
+    const timing = document.getElementById(prefix === 'motion' ? 'fps' : `${prefix}Fps`)?.closest('.two');
+    section('Composition', [size, timing]);
+    if(prefix === 'motion') section('Appearance', [control('background')]);
+    if(prefix === 'm') {
+      section('Map appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSection'), document.getElementById('mLabelStyle')]);
+      section('Country details', [document.getElementById('mAreaBox')]);
+      section('Starting view', [control('mRegion'), document.getElementById('mStartZoom')?.closest('.two'), control('mStartBearing')]);
+    }
+  }
+  heading.after(body);
+  const footer = document.createElement('div');footer.className = 'ff-settings-footer';
+  const note = document.createElement('span');note.textContent = 'Changes apply immediately';
+  const done = document.createElement('button');done.type = 'button';done.className = 'primary';done.textContent = 'Done';done.addEventListener('click',()=>panel.close());
+  footer.append(note,done);panel.append(footer);
+}
 export function confirmStudio(message, title = 'Create new project', accept = 'Create project') {
   return new Promise(resolve => {
     const d = document.createElement('dialog'); d.className='ff-dialog ff-confirm';
@@ -108,13 +147,9 @@ function install() {
   for(const prefix of ['motion','m','p','sc']){
     const panel=document.getElementById(prefix+'SettingsPanel'),button=document.getElementById(prefix+'SettingsButton');
     if(!panel)continue;panel.classList.add('ff-dialog','ff-settings');panel.setAttribute('aria-label','Canvas settings');
-    const heading=panel.querySelector(':scope > .section-title');
-    if(heading){const close=heading.querySelector('button');heading.replaceChildren(document.createTextNode('Canvas settings'));if(close)heading.append(close)}
+    arrangeSettings(panel,prefix);
     if(button){button.textContent='⚙ Canvas settings';button.setAttribute('aria-controls',panel.id);button.setAttribute('aria-haspopup','dialog');}
   }
-  // Match the common Canvas → Frame rate / Duration order without cloning inputs.
-  const mp=document.getElementById('mSettingsPanel'),size=document.getElementById('mSize'),fps=document.getElementById('mFps');
-  if(mp&&size&&fps){const title=mp.firstElementChild;title.after(size.closest('label'));size.closest('label').after(fps.closest('.two'));}
   for(const id of ['modal','mModal','pModal'])document.getElementById(id)?.classList.add('ff-dialog');
   for(const el of document.querySelectorAll('.starter > .eyebrow,.starter > h3,.starter > p'))el.hidden=true;
   for(const el of document.querySelectorAll('.timeline-head > div > b'))el.textContent='Timeline';

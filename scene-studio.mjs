@@ -1,5 +1,5 @@
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
-import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES } from './studio-ui.mjs?v=preview-controls-1';
+import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES, settingsSection } from './studio-ui.mjs?v=preview-controls-1';
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
 // clip timeline below. Gestures and camera shots are clips you place on the timeline.
 import { defaultScene, sceneFrameCount, makeObject, makeClip, makeCameraClip, renderScene, cityScene, ITEM_TYPES, isMobile, itemSize, routePoints, actorYaw, trafficState, actorPosition, cameraAt, validateScene, resolveClips, clamp, GESTURES, GESTURE_DURATION, CAMERA_MODES, CAMERA_MOVES, CAMERA_PRESETS, BODIES, OUTFITS, HAIR_STYLES, FACIAL, FINISHES, SKIN_TONES, HAIR_COLORS, defaultLook, humanLook } from './scene-engine.mjs?v=6';
@@ -121,13 +121,15 @@ function renderInspector() {
 // ------------------------------------------------------------------ scene settings dialog
 function renderSettings() {
   const c = p.camera;
-  $('#scSettings').innerHTML = select('canvasSize', 'Canvas', `${p.width||1280},${p.height||720}`, CANVAS_SIZES) + '<div class="two">' + select('fps', 'Frame rate', p.fps, [['24','24'],['30','30'],['60','60']]) + field('duration', 'Duration (seconds)', p.duration, 'number', 'min="1"') + '</div>'
-    + group('ENVIRONMENT', select('baseRoad','Generated main road',p.baseRoad!==false,[['true','Show'],['false','Hide — use placed roads']]) + select('left', 'Left roadside', p.left, ['city', 'park', 'trees', 'playground', 'none']) + select('right', 'Right roadside', p.right, ['city', 'park', 'trees', 'playground', 'none']) + field('roadWidth', 'Road width (m)', p.roadWidth)
-      + select('material', 'Scene surface', p.material, [['white', 'White model'], ['texture', 'Textured / colored']]) + field('sky', 'Sky', p.sky, 'color')
-      + select('finish', 'Scene finish', p.finish || 'none', Object.entries(FINISHES)) + field('finishStrength', 'Finish strength (0 – 1)', p.finishStrength ?? .6, 'number', 'min="0" max="1"') + field('finishScale', 'Texture scale (×)', p.finishScale ?? 1, 'number', 'min="0.1" max="8"')
-      + '<p class="mini-label">Textures are mapped onto every surface (road, walls, roofs, limbs) and follow its perspective. Larger scale means bigger dots, stripes and checks. Objects can override finish and scale in their Appearance section.</p>')
-    + group('DEFAULT CAMERA', `<p class="mini-label">Used wherever no camera shot is on the timeline.</p>` + select('camera.mode', 'Point of view', c.mode, Object.entries(CAMERA_MODES)) + select('camera.move', 'Movement', c.move, Object.entries(CAMERA_MOVES)) + select('camera.target', 'Subject', c.target || '', subjectOptions())
-      + field('camera.yaw', 'Orbit angle (degrees)', c.yaw) + field('camera.height', 'Height (m)', c.height) + field('camera.distance', 'Distance (m)', c.distance) + field('camera.fov', 'Field of view', c.fov));
+  const folded = new Set([...$('#scSettings').querySelectorAll('details:not([open])')].map(el => el.querySelector('summary').textContent));
+  const extra = (title, content) => settingsSection(title, content, {collapsible:true, open:!folded.has(title)});
+  $('#scSettings').innerHTML = settingsSection('Composition', select('canvasSize', 'Canvas', `${p.width||1280},${p.height||720}`, CANVAS_SIZES) + '<div class="two">' + select('fps', 'Frame rate', p.fps, [['24','24'],['30','30'],['60','60']]) + field('duration', 'Duration (seconds)', p.duration, 'number', 'min="1"') + '</div>')
+    + extra('Environment', select('baseRoad','Generated main road',p.baseRoad!==false,[['true','Show'],['false','Hide — use placed roads']]) + '<div class="two">' + select('left', 'Left roadside', p.left, ['city', 'park', 'trees', 'playground', 'none']) + select('right', 'Right roadside', p.right, ['city', 'park', 'trees', 'playground', 'none']) + '</div>' + field('roadWidth', 'Road width (m)', p.roadWidth))
+    + extra('Appearance', select('material', 'Scene surface', p.material, [['white', 'White model'], ['texture', 'Textured / colored']]) + field('sky', 'Sky', p.sky, 'color')
+      + select('finish', 'Scene finish', p.finish || 'none', Object.entries(FINISHES)) + '<div class="two">' + field('finishStrength', 'Finish strength (0 – 1)', p.finishStrength ?? .6, 'number', 'min="0" max="1"') + field('finishScale', 'Texture scale (×)', p.finishScale ?? 1, 'number', 'min="0.1" max="8"') + '</div>'
+      + '<p class="mini-label">Textures follow each surface’s perspective. Increase the scale for larger patterns. Individual objects can override these settings.</p>')
+    + extra('Default camera', `<p class="mini-label">Used wherever no camera shot is on the timeline.</p>` + select('camera.mode', 'Point of view', c.mode, Object.entries(CAMERA_MODES)) + select('camera.move', 'Movement', c.move, Object.entries(CAMERA_MOVES)) + select('camera.target', 'Subject', c.target || '', subjectOptions())
+      + '<div class="two">' + field('camera.yaw', 'Orbit angle (degrees)', c.yaw) + field('camera.height', 'Height (m)', c.height) + field('camera.distance', 'Distance (m)', c.distance) + field('camera.fov', 'Field of view', c.fov) + '</div>');
 }
 
 // ------------------------------------------------------------------ timeline

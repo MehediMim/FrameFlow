@@ -67,3 +67,42 @@ body.ff-unified :is(#mapStudio,#paperStudio) main.ff-preview:fullscreen .ff-zoom
 body.ff-unified :is(#mapStudio,#paperStudio) main.ff-preview:fullscreen .ff-zoom-wrap{width:auto;height:auto}
 body.ff-unified :is(#mapStudio,#paperStudio) main.ff-preview:fullscreen canvas.ff-zoom-canvas{max-width:none!important;max-height:none!important}
 body.ff-unified main.ff-preview:fullscreen .transport{flex:0 0 52px}
+/* Settings share a calm form layout, independent of inspector/sidebar density. */
+body.ff-unified dialog.ff-dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel){width:min(560px,calc(100vw - 32px));max-width:560px;max-height:min(820px,calc(100dvh - 48px));padding:0;overflow:hidden}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel)[open]{display:flex;flex-direction:column}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) > .section-title{flex:0 0 auto;gap:24px;margin:0;padding:22px 24px;border-bottom:1px solid var(--ff-border);background:var(--ff-surface)}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) > .section-title h2{margin:0;font:700 20px/1.4 Manrope,sans-serif;letter-spacing:-.3px;color:var(--text)}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .section-title button{display:grid;place-items:center;width:32px;height:32px;padding:0;background:transparent;border-color:transparent}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:#495258 transparent}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(.ff-settings-body,#scSettings){display:flex;flex-direction:column;gap:24px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section{min-width:0;margin:0;padding:0;border:0;background:transparent}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section + .ff-settings-section{border-top:1px solid var(--ff-border);padding-top:24px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section > :is(h3,summary){margin:0;color:#e2e7eb;font-size:12px;line-height:1.5;font-weight:650;letter-spacing:.1px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section > summary{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section > summary::-webkit-details-marker{display:none}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section > summary::after{content:'+';font-size:16px;color:var(--muted)}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-section[open] > summary::after{content:'\2212'}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-fields{display:grid;gap:18px;padding-top:18px;min-width:0}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label{display:flex;flex-direction:column;gap:8px;min-width:0;margin:0;font-size:12px;line-height:1.5;color:#b6c0c8;letter-spacing:0}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label[hidden]{display:none}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label :is(input,select,textarea){margin:0;max-width:100%}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(input:not([type=checkbox]):not([type=range]):not([type=color]),select){width:100%;min-width:0;min-height:40px;padding:10px 12px;font-size:12px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .two{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label:has(> input:is([type=checkbox],[type=color])){flex-direction:row;align-items:center;justify-content:space-between;min-height:32px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label:has(> input[type=checkbox]){justify-content:flex-start;gap:10px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) input[type=checkbox]{flex:0 0 16px;width:16px;height:16px;padding:0}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) input[type=color]{flex:0 0 48px;width:48px;height:32px;padding:3px;border-radius:6px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .mini-label{margin:0;font-size:11px;line-height:1.65;color:#929fa9}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) #mAreaBox{display:grid;gap:16px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) #mAreaBox > button{justify-self:start;margin:0;min-height:36px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .m-dcs:empty,body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .mini-label:empty{display:none}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details){border:1px solid var(--ff-border);border-radius:8px;padding:14px;background:#1b2024}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details) > summary{margin:0!important;cursor:pointer;letter-spacing:.4px;line-height:1.5}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details) > :is(label,.two,.mini-label){margin-top:16px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label:has(> input[type=range]){flex-wrap:wrap;flex-direction:row;justify-content:space-between}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) input[type=range]{flex:0 0 100%;width:100%;min-height:20px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;border-top:1px solid var(--ff-border);background:#1b2024}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer span{color:#929fa9;font-size:11px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer button{margin:0;min-height:36px;min-width:80px;padding:8px 20px}
+@media(max-width:520px){body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .two{grid-template-columns:minmax(0,1fr)}body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-body{padding:20px}}
+@media(max-height:600px){body.ff-unified dialog.ff-dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel){max-height:calc(100dvh - 24px)}body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) > .section-title{padding:14px 24px}}

@@ -39,11 +39,26 @@ assert.deepEqual(legacy.layers[0].fxClips.map(fx=>fx.id),['move']);
 assert.equal(legacy.layers.length,project.layers.length);
 for(let f=0;f<legacy.frames;f++){
  const actual=poseAt(legacy.layers[0],f);
- assert.ok(Math.abs(actual.blur-original[f].blur)<1e-8,`saved blur preserved at frame ${f}`);
+ assert.ok(Math.abs(actual.blur-original[f].blur)<=1/3+1e-8,`saved blur preserved at frame ${f}`);
  assert.equal(actual.y,original[f].y,'other effects remain unchanged');
 }
 assert.equal(migrateBlurClips(legacy),false,'migration is idempotent');
 validateProject(legacy);
+const pulse={frames:120,layers:[{...layers[0],keys:{},fxClips:[{kind:'blur',name:'blur',start:10,dur:60,amount:25,endBehavior:'return'}]}]};
+const baked=structuredClone(pulse);
+const pulseFrames=Array.from({length:120},(_,f)=>poseAt(pulse.layers[0],f).blur);
+baked.layers[0].keys.blur=pulseFrames.map((v,f)=>({f,v,e:'linear'})).filter(k=>k.f===0||k.f>=10&&k.f<=70||k.f===119);
+baked.layers[0].fxClips=[];
+for(const p of [pulse,baked]){
+ assert.equal(migrateBlurClips(p),true);
+ assert.ok(p.layers[0].keys.blur.length<=5,'a saved pulse uses only start, peak, end and hold boundaries');
+ for(let f=0;f<120;f++)assert.ok(Math.abs(poseAt(p.layers[0],f).blur-pulseFrames[f])<=1/3+1e-8);
+ assert.equal(migrateBlurClips(p),false,'compaction is idempotent');
+}
+const manual={frames:120,layers:[{...layers[0],keys:{blur:[{f:0,v:0,e:'linear'},{f:30,v:25,e:'easeOut'},{f:60,v:0,e:'linear'}]}}]};
+const manualBefore=structuredClone(manual);
+assert.equal(migrateBlurClips(manual),false);
+assert.deepEqual(manual,manualBefore,'sparse manual keys are preserved');
 shot.frontBlur=81;
 assert.throws(()=>validateProject(project),/camera blur/);
 console.log('Drawn line project round trip and independent front/back camera blur passed');

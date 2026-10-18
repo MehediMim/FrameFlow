@@ -2,7 +2,7 @@ import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
 // FrameFlow Paper Studio: editor UI (parts, camera, timeline, playback, templates, export).
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
-import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=motion-media-1';
+import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
 import { exportMapVideo } from './map-video-export.mjs';
 import * as PE from './paper-engine.mjs?v=timeline-rename-2';
 import { TEMPLATE_LIST, buildTemplate } from './paper-templates.mjs';

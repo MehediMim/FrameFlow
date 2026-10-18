@@ -1,15 +1,16 @@
-import { installCountryDetail, detailRegions, regionAt, planeRoute, xToLon, yToLat, citiesOf } from './map-engine.mjs';
+import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints } from './map-engine.mjs?v=multi-regions-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
+import { detailCountriesOf, targetMembers, targetFeatures, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs?v=multi-regions-1';
 import { CITIES, REGIONS } from './map-places.mjs';
-import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=motion-media-1';
-import { exportMapVideo } from './map-video-export.mjs';
+import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
+import { exportMapVideo } from './map-video-export.mjs?v=multi-regions-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs';
 
@@ -74,30 +75,18 @@ const detailLoads = new Map();  // country -> Promise<boolean>. Kept after a fai
 const detailErrors = new Map(); // country -> message, for a pack file that exists but could not be used
 const noDetail = new Set();     // countries with no pack file: they simply stay plain country maps
 const areaCountry = () => (areaOf(proj).mode === 'country' ? areaOf(proj).country : null);
-const detailCountry = () => { const c = areaCountry(); return c && !noDetail.has(c) ? c : null; }; // the country whose regions are being edited
-const isDetail = () => !!detailCountry();
-const localCities = () => { const c = detailCountry(); return c && geo ? citiesOf(geo, c) : CITIES; };
+const detailCountry = () => { const countries=detailCountriesOf(areaOf(proj)).filter(c=>!noDetail.has(c)); return countries.includes(areaOf(proj).country)?areaOf(proj).country:countries[0] || null; };
+const isDetail = () => !!geo && detailRegions(proj,geo).length>0;
+const localCities = () => geo ? [...new Map([...CITIES,...detailCountriesOf(areaOf(proj)).flatMap(c=>citiesOf(geo,c))].map(c=>[`${c[0]}:${c[3]}`,c])).values()] : CITIES;
 // Which country's pack does a location need? Region targets saved before they carried a country were Bangladesh-only.
 const regionCountryOf = t => (t?.kind === 'region' ? t.country || areaCountry() || LEGACY_REGION_COUNTRY : t?.kind === 'all' ? t.country || null : null);
 function packCountries() { // packs the project needs to draw its regions
-  const set = new Set(), a = areaCountry(); if (a) set.add(a);
-  for (const it of [...proj.actions, ...proj.shots]) for (const t of [it.target, it.from, it.to, it.place]) { const c = regionCountryOf(t); if (c) set.add(c); }
+  const set = new Set(detailCountriesOf(areaOf(proj)));
+  for (const it of [...proj.actions, ...proj.shots]) for (const target of [it.target, it.from, it.to, it.place]) for(const t of targetMembers(target)) { const c = regionCountryOf(t); if (c) set.add(c); }
   return [...set].filter(c => !noDetail.has(c));
 }
-const routeCountryCache = new WeakMap();
-function routeCountries() { // countries a region-labelled route passes through, so their region names are available
-  const out = new Set(); if (!geo) return out;
-  for (const a of proj.actions) {
-    if (a.type !== 'plane' || !a.showRouteLabels || a.routeLabelMode === 'country') continue;
-    const r = planeRoute(geo, a); if (!r) continue;
-    let seen = routeCountryCache.get(r);
-    if (!seen) { seen = new Set(); const step = Math.max(1, Math.floor(r.n / 200)); for (let i = 0; i < r.n; i += step) { const c = countryAt(geo, xToLon(r.X[i]), yToLat(r.Y[i])); if (c) seen.add(c); } routeCountryCache.set(r, seen); }
-    seen.forEach(c => out.add(c));
-  }
-  return out;
-}
 const requiresDetail = () => packCountries().length > 0;
-const wantedCountries = () => (geo ? [...new Set([...packCountries(), ...routeCountries()])].filter(c => !noDetail.has(c)) : []);
+const wantedCountries = () => geo ? packCountries() : [];
 function loadDetail(country) {
   if (geo.details?.has(country)) return Promise.resolve(true);
   if (detailLoads.has(country)) return detailLoads.get(country);
@@ -127,18 +116,18 @@ async function ensureDetail() {
 function defaultRegion() {
   const c = detailCountry(), list = geo ? detailRegions(proj,geo) : [], want = c && geo ? detailInfo(geo, c).defaultRegion : '';
   const f = list.find(f => f.key === want || f.name === want) || list[0];
-  return f ? {kind:'region',name:f.key,country:c} : {kind:'country',name:areaOf(proj).country};
+  return f ? {kind:'region',name:f.key,country:f.country} : {kind:'country',name:areaOf(proj).country};
 }
 const cityKey = c => (geo && geo.byName.has(c[0]) ? `${c[0]} (city)` : c[0]);
 function buildLists() {
   const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = localCities().map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
   const dc = detailCountry(), levelName = dc && geo ? Object.fromEntries(detailInfo(geo, dc).levels) : {};
   const regions = geo ? detailRegions(proj,geo).map(f => opt(f.key, levelName[f.level] || f.level)).join('') : '';
-  $('#mDlBorder').innerHTML = regions ? opt('All regions','Every regional border') + regions : opt('All countries','Every border') + countries; $('#mDlCountry').innerHTML = regions || countries;
-  $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + (regions || countries);
+  $('#mDlBorder').innerHTML = opt('All countries','Every country border') + countries + (regions ? opt('All regions','Every regional border') + regions : ''); $('#mDlCountry').innerHTML = countries + regions;
+  $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + countries + regions;
   const area = $('#mAreaCountry'); if (area) area.innerHTML = geo ? geo.names.map(n => opt(n, n)).join('') : '';
 }
-const locText = l => (!l ? '' : l.kind === 'all' ? (l.country ? 'All regions' : 'All countries') : l.kind === 'city' && geo && geo.byName.has(l.name) ? `${l.name} (city)` : l.name);
+const locText = l => (!l ? '' : l.kind === 'regions' ? l.name : l.kind === 'all' ? (l.country ? 'All regions' : 'All countries') : l.kind === 'city' && geo && geo.byName.has(l.name) ? `${l.name} (city)` : l.name);
 function parseLoc(text, kinds) {
   const t = text.trim(), low = t.toLowerCase();
   if (!t) return null;
@@ -148,7 +137,7 @@ function parseLoc(text, kinds) {
     const dc = detailCountry();
     if (kinds === 'border' && ['all regions','all'].includes(low)) return {kind:'all',name:'All regions',country:dc,level:detailLevelOf(geo, dc, areaOf(proj).detailLevel)};
     const f = detailRegions(proj,geo).find(f => f.key.toLowerCase() === low || f.name.toLowerCase() === low);
-    if (f) return {kind:'region',name:f.key,country:dc};
+    if (f) return {kind:'region',name:f.key,country:f.country};
   }
   if (wantCountry && geo) { const n = geo.names.find(x => x.toLowerCase() === low); if (n) return { kind: 'country', name: n }; }
   if (wantPlace) {
@@ -176,6 +165,8 @@ function draw() {
     return;
   }
   lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera);
+  if (pick?.key === '__members') { const a = current(); if (a && regionTarget(a)) drawRegionSelection(ctx, lastView, geo, targetMembers(a.target)); }
+  if(!playing)drawBorderEndpoints(ctx,lastView,geo,current());
   $('#mResetView').hidden = !previewCamera;
   if (pathDraw) { const a = proj.actions.find(x => x.id === pathDraw.id); if (a) drawPathEditor(ctx, lastView, a); }
 }
@@ -202,6 +193,47 @@ function play() {
 }
 
 // ------------------------------------------------------------------ left panel
+// ---- several countries / regions on one Border or Highlight item (edited in its Properties)
+const regionKey = t => `${t.kind}:${t.country || ''}:${t.name}`;
+const regionTarget = a => ['country', 'region', 'regions'].includes(a?.target?.kind);
+const memberLabel = t => (t.kind === 'region' && geo?.byName.get(t.name)?.name) || t.name;
+const membersOf = a => (regionTarget(a) ? [...targetMembers(a.target)] : []);
+function setMembers(a, members) {
+  const list = members.map(({ label, ...t }) => t);
+  a.target = list.length === 1 ? list[0] : { kind: 'regions', name: `${list.length} regions`, members: list };
+  delete a.borderRing;
+}
+/** Adds a country / region to the item. With `toggle`, one already present is removed instead. Returns false when nothing changed. */
+function addMember(a, loc, toggle) {
+  const list = membersOf(a), i = list.findIndex(t => regionKey(t) === regionKey(loc));
+  if (i >= 0) {
+    if (!toggle) { notify(`${memberLabel(loc)} is already selected`); return false; }
+    if (list.length === 1) { notify('Keep at least one region'); return false; }
+    list.splice(i, 1);
+  } else if (list.length >= 200) { notify('An item can hold up to 200 regions'); return false; }
+  else list.push(loc);
+  setMembers(a, list); return true;
+}
+/** "Separately": every selected region becomes its own item (same look and timing) that can then be retimed or partly animated on its own. */
+function splitRegions(a) {
+  const list = membersOf(a); if (list.length < 2) return;
+  if (proj.actions.length + list.length - 1 > 200) { notify('A map can contain up to 200 items'); return; }
+  pause(); checkpoint();
+  const base = a.name, copies = list.slice(1).map(t => { const c = clone(a); c.id = crypto.randomUUID(); c.target = t; delete c.borderRing; c.name = `${base} · ${memberLabel(t)}`; return c; });
+  a.target = list[0]; delete a.borderRing; a.name = `${base} · ${memberLabel(list[0])}`;
+  proj.actions.splice(proj.actions.indexOf(a) + 1, 0, ...copies);
+  changed(); renderInspector(); notify(`Split into ${list.length} separate items. Undo to combine them again.`);
+}
+function regionFields(a) {
+  const list = membersOf(a), picking = pick?.key === '__members' && pick.id === a.id, border = a.type === 'border';
+  return `<div class="m-regions"><span class="mini-label">${border ? 'Countries / regions' : isDetail() ? 'Regions / countries' : 'Countries'} <b class="m-val">${list.length}</b></span>`
+    + `<div class="m-region-chips">${list.map((t, i) => `<button type="button" data-mrm="${i}" title="Remove from this item">${esc(memberLabel(t))} ×</button>`).join('')}</div>`
+    + `<div class="m-loc"><label>Add another<input data-madd data-kinds="${border ? 'border' : 'country'}" list="${border ? 'mDlBorder' : 'mDlCountry'}" placeholder="Type a ${isDetail() ? 'region or country' : 'country'}" autocomplete="off"></label><button type="button" data-mregpick class="${picking ? 'active' : ''}" title="Click regions on the map to add or remove them (Shift-click = whole country)">⌖</button></div>`
+    + (picking ? '<p class="mini-label">Click the map to add or remove regions. Shift-click picks a whole country. Press ⌖ or Esc when done.</p>' : '')
+    + (isDetail() ? '' : '<p class="mini-label">For states, districts and other local regions, add that country under <button type="button" class="link" data-mopenset>Map settings → Country details</button>.</p>')
+    + (list.length > 1 ? `<label>Several regions<select data-mcombine><option value="together" selected>Together as one region</option><option value="separate">Separately, as different regions</option></select></label><p class="mini-label">Together draws one outline around all of them. Separately makes one item per region, so each can be timed or partly animated on its own.</p>` : '')
+    + '</div>';
+}
 function buildStaticUI() {
   $('#mAddGrid').innerHTML = Object.entries(ACTION_TYPES).filter(([, a]) => !a.hidden).map(([k, a]) => `<button data-madd="${k}" title="${esc(a.hint)}"><b>${a.icon}</b>${a.label}</button>`).join('');
   $('#mPresets').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<button data-mpre="${k}" title="${esc(p.hint)}"><b>${p.icon}</b><span>${p.label}</span></button>`).join('');
@@ -251,7 +283,7 @@ function renderItems() {
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current();
   audioUI?.renderList();
 }
-function select(id) { if (pathDraw && pathDraw.id !== id) endPathDraw(true); sel = id; renderItems(); renderInspector(); renderTimeline(); }
+function select(id) { if (pathDraw && pathDraw.id !== id) endPathDraw(true); if (pick?.key === '__members' && pick.id !== id) cancelPick(); sel = id; renderItems(); renderInspector(); renderTimeline(); }
 
 // ------------------------------------------------------------------ inspector
 const F = {
@@ -285,11 +317,11 @@ function renderInspector() {
 function actionFields(a) {
   switch (a.type) {
     case 'label': return F.text('text', 'Text', a.text, 160, 'Your label');
-    case 'border': return F.loc('target', isDetail() ? 'Region' : 'Country', a.target, 'border') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%');
+    case 'border': return (regionTarget(a) ? regionFields(a) : F.loc('target', 'Country / region', a.target, 'border') + '<p class="mini-label">Type a country or region to choose specific ones. You can then add more.</p>') + F.chk('borderPartial','Animate part of the border',a.borderPartial) + (a.borderPartial ? `<div class="two">${F.num('borderFrom','From (%)',a.borderFrom ?? 0,0,100,.1)}${F.num('borderTo','To (%)',a.borderTo ?? 100,0,100,.1)}</div><div class="two"><button type="button" data-borderpoint="borderFrom">Pick start on border</button><button type="button" data-borderpoint="borderTo">Pick end on border</button></div>` + F.chk('borderReverse','Reverse direction',a.borderReverse) + '<p class="mini-label">Click near the outline to set each endpoint. Start and end follow the same outline; each island has its own outline.</p>' : '') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + (a.borderPartial ? '' : F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%'));
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
     case 'highlight': {
-      const country = ['country','region'].includes(a.target.kind);
-      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + F.loc('target', country ? (isDetail() ? 'Region' : 'Country') : 'Place', a.target, country ? 'country' : 'place') + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+      const country = ['country','region','regions'].includes(a.target.kind);
+      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) : F.loc('target', 'Place', a.target, 'place')) + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
     case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.sel('__move', 'Position', a.mode === 'path' ? 'path' : 'stay', [['stay', 'Stay in one place'], ['path', 'Move along my path']]) + (a.mode === 'path' ? pathFields(a) + F.chk('trail', 'Draw a trail behind it', a.trail !== false) : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
@@ -346,9 +378,9 @@ function shotFields(s) {
   const P = PRESETS[s.preset], has = k => P.fields.includes(k);
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
-  if (has('autoFit') && ['country','region'].includes(s.target.kind)) h += F.chk('autoFit', 'Fit the whole region in view', s.autoFit);
+  if (has('autoFit') && ['country','region','regions'].includes(s.target.kind)) h += F.chk('autoFit', 'Fit the whole region in view', s.autoFit);
   if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, `${a.name} (${a.from?.name ?? '?'} → ${a.to?.name ?? '?'})`])]);
-  if (has('zoom') && !(has('autoFit') && s.autoFit && ['country','region'].includes(s.target.kind))) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
+  if (has('zoom') && !(has('autoFit') && s.autoFit && ['country','region','regions'].includes(s.target.kind))) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
   if (has('pitch')) h += F.range('pitch', 'Tilt', s.pitch, 0, 70, 1, x => x + '°');
@@ -410,11 +442,30 @@ function bindInspector(it) {
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
-      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels') renderInspector();
+      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
   $$('#mInspector [data-mpick]').forEach(el => el.onclick = () => startPick(el.dataset.mpick, el.dataset.kinds));
+  $$('#mInspector [data-mrm]').forEach(el => el.onclick = () => { const list = membersOf(it); if (list.length < 2) { notify('Keep at least one region'); return; } checkpoint(); list.splice(+el.dataset.mrm, 1); setMembers(it, list); changed(); renderInspector(); });
+  const addBox = $('#mInspector [data-madd]');
+  if (addBox) addBox.onchange = () => {
+    const loc = parseLoc(addBox.value, addBox.dataset.kinds);
+    if (!loc || !['country', 'region', 'all'].includes(loc.kind)) { notify('Not found. Type a country or region name'); addBox.value = ''; return; }
+    checkpoint();
+    if (loc.kind === 'all') { it.target = loc; delete it.borderRing; }
+    else if (!addMember(it, loc, false)) { undoStack.pop(); updateHistory(); addBox.value = ''; return; }
+    changed(); renderInspector();
+  };
+  $$('#mInspector [data-mregpick]').forEach(el => el.onclick = () => {
+    if (pick?.key === '__members') { cancelPick(); return; }
+    pause(); endPathDraw(true); startPick('__members', 'country');
+    $('#mHint').textContent = 'Click regions to add or remove them · Shift-click for a whole country · Esc to finish';
+    notify('Click regions on the map to add or remove them'); renderInspector();
+  });
+  $$('#mInspector [data-mopenset]').forEach(el => el.onclick = () => $('#mSettingsButton').click());
+  const combine = $('#mInspector [data-mcombine]'); if (combine) combine.onchange = () => { if (combine.value === 'separate') splitRegions(it); };
+  $$('#mInspector [data-borderpoint]').forEach(el=>el.onclick=()=>startPick(el.dataset.borderpoint,'borderpoint'));
   $$('#mInspector [data-mpath]').forEach(el => el.onclick = () => pathAction(it, el.dataset.mpath));
   $$('#mInspector [data-mwdel]').forEach(el => el.onclick = () => { checkpoint(); it.path.splice(+el.dataset.mwdel, 1); syncPathEnds(it); changed(); renderInspector(); });
   if (!isShot(it) && it.labelStyle) bindLabelStyle($('#mInspector'), 'mItemLbl', () => it.labelStyle, v => { it.labelStyle = v; }, () => renderInspector());
@@ -472,9 +523,9 @@ function labelFields(a) {
 // ------------------------------------------------------------------ pick a location on the map
 function startPick(key, kinds) {
   pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click to choose a location · right-drag or middle-drag to pan · scroll to zoom · Esc to cancel';
-  notify(kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isDetail() ? 'Click a region' : 'Click a country');
+  notify(kinds === 'borderpoint' ? 'Click near the border to set its endpoint' : kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isDetail() ? 'Click a region; Shift-click for a whole country' : 'Click a country');
 }
-function cancelPick() { pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; }
+function cancelPick() { const was = pick?.key === '__members'; pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; if (was) { renderInspector(); draw(); } }
 const HINT = 'Right-drag or middle-drag to pan · scroll to zoom · scrub the timeline to preview';
 function canvasXY(e) { const b = canvas.getBoundingClientRect(); return { sx: (e.clientX - b.left) / b.width * proj.width, sy: (e.clientY - b.top) / b.height * proj.height }; }
 function finishMapPan(e) {
@@ -543,12 +594,23 @@ canvas.onpointerdown = e => {
   if (!pick || !lastView || !geo) return;
   const b = canvas.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * proj.width, sy = (e.clientY - b.top) / b.height * proj.height, ll = screenToLonLat(lastView, sx, sy);
   if (!ll) { notify('Click on the map surface'); return; }
+  if(pick.kinds==='borderpoint'){
+    const a=proj.actions.find(a=>a.id===pick.id),features=a?targetFeatures(geo,a.target):[];
+    const f=a?.target.kind==='regions'?combinedFeature(features,a.target.name):features[0];
+    if(!f){notify('Choose a border region first');return}
+    const X=lonToX(ll.lon),Y=latToY(ll.lat),ring=borderRingOf(f,a.borderRing);
+    const snapped=nearestBorderPosition(pick.key==='borderTo'?{...f,rings:[f.rings[ring]||f.rings[0]]}:f,X+Math.round(f.cx-X),Y);
+    if(!snapped)return;
+    checkpoint();a[pick.key]=snapped.position*100;if(pick.key==='borderFrom')a.borderRing=snapped.ring;
+    cancelPick();changed();renderInspector();notify('Border endpoint set');return;
+  }
   const wantCountry = pick.kinds === 'border' || pick.kinds === 'country' || (pick.kinds === 'any' && e.shiftKey);
   let loc;
   if (wantCountry) {
-    const n = isDetail() ? regionAt(proj,geo,ll.lon,ll.lat) : countryAt(geo, ll.lon, ll.lat);
+    const region = !e.shiftKey && isDetail() ? regionAt(proj,geo,ll.lon,ll.lat) : null;
+    const n = region || countryAt(geo, ll.lon, ll.lat);
     if (!n) { notify('No region there. Try again'); return; }
-    loc = isDetail() ? { kind: 'region', name: n, country: detailCountry() } : { kind: 'country', name: n };
+    loc = region ? { kind: 'region', name: n, country:geo.byName.get(n)?.country } : { kind: 'country', name: n };
   } else {
     let best = null, bd = 18 * lastView.unit;
     for (const c of localCities()) {
@@ -556,6 +618,12 @@ canvas.onpointerdown = e => {
       if (d < bd) { bd = d; best = c; }
     }
     loc = best ? { kind: 'city', name: best[0], lat: best[1], lon: best[2] } : { kind: 'point', name: `${ll.lat.toFixed(2)}, ${ll.lon.toFixed(2)}`, lat: +ll.lat.toFixed(4), lon: +ll.lon.toFixed(4) };
+  }
+  if (pick.key === '__members') { // stays active so several regions can be clicked in a row
+    const a = items().find(i => i.id === pick.id); if (!a || !regionTarget(a)) { cancelPick(); return; }
+    checkpoint();
+    if (addMember(a, loc, true)) { changed(); renderInspector(); const n = membersOf(a).length; notify(`${n} region${n === 1 ? '' : 's'} selected`); } else { undoStack.pop(); updateHistory(); }
+    return;
   }
   const it = items().find(i => i.id === pick.id);
   if (it) { checkpoint(); it[pick.key] = loc; changed(); renderInspector(); notify('Location set: ' + locText(loc)); }
@@ -591,23 +659,25 @@ function renderSettings() {
   renderLabelPanel();
 }
 function renderAreaSettings() {
-  const ar = areaOf(proj), country = ar.mode === 'country', sel = $('#mAreaCountry');
-  $('#mAreaMode').value = ar.mode; $('#mAreaBox').hidden = !country;
+  const ar = areaOf(proj), countries = detailCountriesOf(ar), sel = $('#mAreaCountry');
+  $('#mAreaMode').value = 'world'; $('#mAreaBox').hidden = false;
   if (![...sel.options].some(o => o.value === ar.country)) sel.insertAdjacentHTML('afterbegin', `<option value="${esc(ar.country)}">${esc(ar.country)}</option>`);
   sel.value = ar.country; $('#mAreaNeighbors').value = ar.neighbors;
   $('#mAreaFit').checked = ar.fit; $('#mAreaName').checked = ar.name; $('#mAreaCities').checked = ar.cities;
-  if (!$('#mDetailLevel')) $('#mAreaBox').insertAdjacentHTML('beforeend', '<label id="mDetailLabel">Boundary level<select id="mDetailLevel"></select></label><p class="muted" id="mDetailStatus"></p><button type="button" id="mDetailRetry" hidden>Retry loading detail</button>');
-  const dc = detailCountry(), loaded = !!(dc && geo?.details?.has(dc)), info = loaded ? detailInfo(geo, dc) : null, levels = info ? info.levels : [];
-  $('#mDetailLevel').innerHTML = levels.map(([id, label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join('');
-  if (loaded) $('#mDetailLevel').value = detailLevelOf(geo, dc, ar.detailLevel);
-  $('#mDetailLabel').hidden = levels.length < 2;
-  $('#mDetailStatus').textContent = !country ? '' : !dc ? `No detailed boundaries for ${ar.country} yet. To add them, put ${detailFileOf(ar.country)} in the map-data folder.` : loaded ? [info.ready, info.attribution].filter(Boolean).join(' ') : detailErrors.has(dc) ? `Could not load ${detailFileOf(dc)}: ${detailErrors.get(dc)}` : `Loading ${dc} regional boundaries…`;
-  $('#mDetailRetry').hidden = !dc || !detailErrors.has(dc);
-  $('#mDetailRetry').onclick = () => { detailLoads.delete(dc); detailErrors.delete(dc); void loadDetail(dc); renderAreaSettings(); };
-  $('#mDetailLevel').onchange = e => { pause(); checkpoint(); proj.area = {...areaOf(proj),detailLevel:e.target.value}; buildLists(); saveLocal(); renderAll(); };
+  $('#mAddDetailCountry').disabled = countries.includes(ar.country);
+  $('#mDetailCountries').innerHTML = countries.map(c => {
+    const loaded = !!geo?.details?.has(c), info = loaded ? detailInfo(geo, c) : null, levels = info ? info.levels : [];
+    const status = noDetail.has(c) ? 'Detailed boundaries are not available for this country yet.' : loaded ? '' : detailErrors.has(c) ? `Could not load: ${detailErrors.get(c)}` : 'Loading boundaries…';
+    const level = levels.length > 1 ? `<select data-dc-level="${esc(c)}" aria-label="Boundary level for ${esc(c)}">${levels.map(([id, label]) => `<option value="${esc(id)}">${esc(label)}</option>`).join('')}</select>` : '';
+    return `<div class="m-dc"><div class="m-dc-head"><b>${esc(c)}</b>${level}<button type="button" data-dc-remove="${esc(c)}" title="Remove ${esc(c)} details" aria-label="Remove ${esc(c)} details">×</button></div>${status ? `<small>${esc(status)}</small>` : ''}${detailErrors.has(c) ? `<button type="button" data-dc-retry="${esc(c)}">Retry loading</button>` : ''}${loaded && info.attribution ? `<small>${esc(info.attribution)}</small>` : ''}</div>`;
+  }).join('');
+  for (const c of countries) { const lv = $(`#mDetailCountries [data-dc-level="${CSS.escape(c)}"]`); if (lv && geo?.details?.has(c)) lv.value = detailLevelOf(geo, c, ar.detailLevels?.[c] || ar.detailLevel); }
+  $$('#mDetailCountries [data-dc-level]').forEach(el => el.onchange = () => { pause(); checkpoint(); const cur = areaOf(proj); proj.area = { ...cur, detailLevels: { ...cur.detailLevels, [el.dataset.dcLevel]: el.value } }; buildLists(); saveLocal(); renderAll(); });
+  $$('#mDetailCountries [data-dc-remove]').forEach(el => el.onclick = () => { pause(); checkpoint(); const cur = areaOf(proj); proj.area = { ...cur, mode: 'world', detailCountries: detailCountriesOf(cur).filter(c => c !== el.dataset.dcRemove) }; saveLocal(); renderAll(); });
+  $$('#mDetailCountries [data-dc-retry]').forEach(el => el.onclick = () => { const c = el.dataset.dcRetry; detailLoads.delete(c); detailErrors.delete(c); void loadDetail(c); renderAreaSettings(); });
   $('#mAreaPad').value = Math.round(ar.pad * 100); $('#mAreaPadValue').textContent = Math.round(ar.pad * 100) + '%'; $('#mAreaPad').disabled = !ar.fit;
-  const locked = country && ar.fit; $('#mRegion').disabled = $('#mStartZoom').disabled = locked;
-  $('#mAreaNote').textContent = locked ? 'The start view is framed on this country automatically. Tilt and rotation still apply.' : '';
+  $('#mRegion').disabled = $('#mStartZoom').disabled = false;
+  $('#mAreaNote').textContent = countries.length ? 'The world map stays as it is. Only the countries listed above get detailed boundaries, and each loads only when added.' : 'Pick a country and press Add country details. Nothing extra loads until you do.';
 }
 function bindSettings() {
   const edit = fn => e => { pause(); checkpoint(); fn(e.target); saveLocal(); renderAll(); };
@@ -619,7 +689,8 @@ function bindSettings() {
   $('#mImagery').onchange = edit(el => proj.imagery = el.value);
   const area = patch => { proj.area = { ...DEFAULT_AREA, ...(proj.area || {}), ...patch }; };
   $('#mAreaMode').onchange = edit(el => { area({ mode: el.value }); if (el.value === 'country' && geo && !geo.byName.has(areaOf(proj).country)) area({ country: DEFAULT_AREA.country }); });
-  $('#mAreaCountry').onchange = edit(el => area({ country: el.value, detailLevel: undefined }));
+  $('#mAreaCountry').onchange = edit(el => area({ country: el.value }));
+  $('#mAddDetailCountry').onclick=()=>{pause();checkpoint();const ar=areaOf(proj),country=$('#mAreaCountry').value;area({mode:'world',detailCountries:[...new Set([...detailCountriesOf(ar),country])]});saveLocal();renderAll()};
   $('#mAreaNeighbors').onchange = edit(el => area({ neighbors: el.value }));
   $('#mAreaFit').onchange = edit(el => area({ fit: el.checked }));
   $('#mAreaName').onchange = edit(el => area({ name: el.checked }));
@@ -794,7 +865,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('#mDelete').click(); }
 });
 
-function renderAll() { if (geo) { buildLists(); for (const c of wantedCountries()) if (!geo.details?.has(c) && !detailLoads.has(c)) void loadDetail(c); } if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
+function renderAll() { if(proj.area?.mode==='country'){proj.area={...proj.area,mode:'world',detailCountries:detailCountriesOf(proj.area)};saveLocal()} if (geo) { buildLists(); for (const c of wantedCountries()) if (!geo.details?.has(c) && !detailLoads.has(c)) void loadDetail(c); } if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
 
 // Match Motion Studio: fullscreen the preview toolbar, canvas and transport.
 const mapFullscreenRoot = document.querySelector('#mapStudio main');

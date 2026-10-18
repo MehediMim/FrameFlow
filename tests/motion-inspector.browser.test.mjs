@@ -107,7 +107,7 @@ try {
   assert.equal(valueAt(blurred,'blur',blurred.keys.blur[2].f+1),6);
   console.log('Blur: edits and transitions stay on the selected layer without extra clips');
   await evaluate(`(()=>{const p=JSON.parse(localStorage.getItem('frameflow-project-v1'));p.layers.at(-1).fxClips=[{id:'legacy-blur',kind:'blur',name:'blur',start:0,dur:30,amount:20,endBehavior:'return'}];localStorage.setItem('frameflow-project-v1',JSON.stringify(p));location.reload();})()`);
-  await waitFor(`!!document.querySelector('#ffBlurNumber')`);
+  await waitFor(`!!document.querySelector('#p-x')?.closest('details') && !!document.querySelector('#ffBlurNumber')`);
   assert.equal(await evaluate(`JSON.parse(localStorage.getItem('frameflow-project-v1')).layers.at(-1).fxClips.length`),0,'saved blur strips migrate on reload');
   assert.equal(await evaluate(`document.querySelectorAll('[data-fx-clip="legacy-blur"]').length`),0,'saved blur strip disappears');
   console.log('Saved blur: reload converts the old strip to layer keyframes');

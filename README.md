@@ -103,11 +103,13 @@ The Follow traveler camera works with moving objects too.
 
 To attach the existing labels flat to the map, choose **Label style → Start from a style → 2D · Attached to map** in Map settings or an item's custom label style. Place names, route names, pin labels and highlight labels follow the map's tilt and rotation with this preset.
 
-### Country maps (Map area)
+### Country details and region selection
 
-Open **Canvas settings → Map area** and choose **One country · detailed map**. Pick any country from the list (Bangladesh, India, United States of America…). The view is framed on that country using the detailed 50 m outlines; neighbouring countries can be dimmed, shown or hidden, and the country name and its main cities can be switched on or off. **Margin around the country** controls how tightly it is framed. Turn off **Frame the view on this country** to place the start view yourself. Switch back to **World map** at any time; nothing else in the project changes.
+The world map stays visible. In **Canvas settings → Country details**, choose a country and press **Add country details** to load its administrative boundaries. Add several countries, set each country's **Boundary level**, and pan, zoom or use camera shots to explore them. Detail packs load only when explicitly enabled or needed by saved region items. **Remove details** removes that country's background overlay; existing region animations keep their geometry. Town and regional labels appear when zoomed in enough to read them.
 
-When a country has a detail pack, a **Boundary level** list appears (for Myanmar: *States / regions* and *Districts*). Border and Highlight can then target any state, region or district, and route names use them. Countries without a pack stay plain country maps.
+Use **Region selection** in the left panel to search and check several countries or administrative regions. **Select regions on map** lets you click repeatedly to toggle selections; Shift-click selects a whole country. Choose **Together as one region** for one timeline item and shared appearance, or **Separately as different regions** for independently editable items, then press **Add border** or **Add highlight**. **Use selection on current item** replaces an existing border or highlight's target. Shared matching boundary edges are removed from a combined outline. Countries without a detail pack keep their world outline.
+
+For a border segment, enable **Animate part of the border** in its properties. Set **From (%)** and **To (%)**, or use **Pick start on border** and **Pick end on border** to snap map clicks to the same outline. **Reverse direction** draws the other way around it. Each island has its own outline; pick the start on the island you want. The item's animation duration controls how long the segment takes to draw.
 
 ### Country detail packs
 
@@ -115,7 +117,7 @@ To add detailed boundaries for a country, add **one file** to `map-data/`; no co
 
 `map-data/<country>-detail.json` where `<country>` is the country name exactly as it appears in the Map area list, in lower case with spaces and punctuation turned into `-`. Examples: `myanmar-detail.json`, `bangladesh-detail.json`, `united-states-of-america-detail.json`, `cote-d-ivoire-detail.json`.
 
-Reload the app, choose the country under **Map area**, and it loads automatically. Run `npm test` to validate it: every `*-detail.json` in `map-data/` is checked (names, keys, levels, outline, cities).
+Reload the app, choose the country under **Country details**, and press **Add country details**. Run `node tests/map-country-details.test.mjs` to validate every `*-detail.json` in `map-data/` (names, keys, levels, outline, cities).
 
 ```jsonc
 {

@@ -1,8 +1,9 @@
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
-import { easings, fontStack, cleanFont } from './engine.mjs?v=motion-media-1';
+import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
+import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
 export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -231,7 +232,8 @@ export function installCountryDetail(geo, pack) {
 }
 export function detailRegions(proj, geo) {
   const a = areaOf(proj);
-  return a.mode === 'country' ? geo.details?.get(a.country)?.levels[detailLevelOf(geo, a.country, a.detailLevel)] || [] : [];
+  const countries=detailCountriesOf(a),regions=country=>geo.details?.get(country)?.levels[detailLevelOf(geo, country, a.detailLevels?.[country] || a.detailLevel)] || [];
+  return countries.length===1?regions(countries[0]):countries.flatMap(regions);
 }
 export function regionAt(proj, geo, lon, lat) {
   return countryAt({hi:{features:detailRegions(proj,geo).map(f => ({...f,name:f.key}))}},lon,lat);
@@ -389,13 +391,14 @@ function bboxVisible(v, b, off, margin = 40) {
 /** {kind:'city'|'point'|'country', name, lat, lon}. Countries resolve through the map data. */
 export function lonLatOf(geo, loc) {
   if (!loc) return null;
+  if (loc.kind === 'regions') { const f=featureForTarget(geo,loc); return f ? {lon:xToLon(f.cx),lat:yToLat(f.cy)} : null; }
   if (['country', 'region'].includes(loc.kind)) { const f = geo.byName.get(loc.name); return f ? { lon: f.center.lon, lat: f.center.lat } : null; }
   return Number.isFinite(loc.lat) && Number.isFinite(loc.lon) ? { lon: loc.lon, lat: loc.lat } : null;
 }
 function resolveLoc(geo, loc, nearX) {
   let X, Y, bbox = null;
-  if (['country', 'region'].includes(loc?.kind)) {
-    const f = geo.byName.get(loc.name); if (!f) return null;
+  if (['country', 'region', 'regions'].includes(loc?.kind)) {
+    const f = loc.kind === 'regions' ? featureForTarget(geo,loc) : geo.byName.get(loc.name); if (!f) return null;
     X = f.cx; Y = f.cy; bbox = f.mainBox.slice();
   } else if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)) { X = lonToX(loc.lon); Y = latToY(loc.lat); } else return null;
   if (nearX != null) { const k = Math.round(nearX - X); X += k; if (bbox) { bbox[0] += k; bbox[2] += k; } }
@@ -543,7 +546,7 @@ function shotState(s, from, tr, frame, c) {
   switch (s.preset) {
     case 'flyTo': case 'swoop': {
       const r = resolveLoc(geo, s.target, from.cx); if (!r) return from;
-      const fit = s.autoFit && ['country', 'region'].includes(s.target.kind) && r.bbox;
+      const fit = s.autoFit && ['country', 'region', 'regions'].includes(s.target.kind) && r.bbox;
       return fly(from, {
         cx: fit ? (r.bbox[0] + r.bbox[2]) / 2 : r.X, cy: fit ? (r.bbox[1] + r.bbox[3]) / 2 : r.Y,
         zoom: fit ? fitZoom(r.bbox, W, H, .24) : s.zoom, pitch: s.pitch, bearing: s.bearing,
@@ -847,8 +850,8 @@ function drawBase(ctx, v, geo, th, proj) {
   if (focus) {
     const f = focus;
     if (f) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, f.bbox, k)) paint(f, k, fillOf(f, k), 1, th.bw * v.unit * 1.7, true);
-    for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
   }
+  for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
 }
 /** A spot inside the country, as far from its cities as possible, where the country name can sit without covering a city. */
 function nameAnchor(f, cities, midX) {
@@ -869,9 +872,15 @@ function nameAnchor(f, cities, midX) {
   return f._anchor;
 }
 /** Country map extras: the country's name and its main cities (labels are nudged apart so they stay readable). */
-function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames) {
+function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames, worldOverlay=false) {
+  if(areaOf(proj).mode!=='country'){
+    for(const country of detailCountriesOf(areaOf(proj)))drawAreaDetail(ctx,v,geo,th,{...proj,area:{...areaOf(proj),mode:'country',country,fit:false,detailCountries:[]}},labels,routeNames,true);
+    return;
+  }
   const f = focusFeature(proj, geo); if (!f) return;
   const ar = areaOf(proj), b = f.mainBox, mid = (b[0] + b[2]) / 2, off = Math.round(v.cx - mid), st = labelStyleOf(proj);
+  // Keep town and administrative labels readable when detailed countries share a world view.
+  if(worldOverlay && Math.max(b[2]-b[0],b[3]-b[1])*v.S<160*v.unit)return;
   const cities = ar.cities ? citiesOf(geo, f.name) : [];
   const NAME_STYLE = { shape: 'none', halo: true, weight: 800, caps: true, spacing: 14 };
   const box = (x, y, text, scale, over) => { // approximate label rectangle on screen
@@ -882,7 +891,7 @@ function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames) {
   const dots = cities.map(c => { const X0 = lonToX(c[2]), ground = { X: X0 + Math.round(mid - X0) + off, Y: latToY(c[1]) }, q = project(v, ground.X, ground.Y); return { c, q, ground }; });
   for (const { q } of dots) placed.push({ x0: q.x - 8 * v.unit, x1: q.x + 8 * v.unit, y0: q.y - 8 * v.unit, y1: q.y + 8 * v.unit });
   if (ar.name && !routeNames.has(routeLabelKey(f.name))) {
-    const a = nameAnchor(f, cities, mid), q = geo.details?.has(f.name) ? {x:v.W / 2,y:28 * v.unit} : project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
+    const a = nameAnchor(f, cities, mid), q = !worldOverlay && geo.details?.has(f.name) ? {x:v.W / 2,y:28 * v.unit} : project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
     placed.push(r);
     labels.push({ x: q.x, y: q.y, ground: { X: a.x + off, Y: a.y }, text: f.name, alpha: .96, scale: 1.6, over: NAME_STYLE });
   }
@@ -934,7 +943,8 @@ function partialRing(r, p) {
 function drawBorder(ctx, v, geo, th, a, frame) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t = actionProgress(a, frame), p = ease(a.easing, t), w = a.width * v.unit;
-  const all = a.target?.kind === 'all', list = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[detailLevelOf(geo, a.target.country, a.target.level)] || [] : geo.pick(v.cam.zoom).features) : [geo.byName.get(a.target?.name)].filter(Boolean);
+  const all = a.target?.kind === 'all', features = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[detailLevelOf(geo, a.target.country, a.target.level)] || [] : geo.pick(v.cam.zoom).features) : targetFeatures(geo,a.target);
+  const list = a.target?.kind === 'regions' ? [featureForTarget(geo,a.target)].filter(Boolean) : features;
   if (!list.length) return;
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -944,15 +954,16 @@ function drawBorder(ctx, v, geo, th, a, frame) {
     const off = Math.round(v.cx - f.cx), local = all ? clamp01((p * 1.7 - (a.target.country ? 0 : f.cx * .7)) ) : p;
     if (local <= 0 || !bboxVisible(v, f.bbox, off, 80)) continue;
     let main = null;
-    for (const r of f.rings) {
-      const pr = partialRing(r, local);
+    for (const [index,r] of f.rings.entries()) {
+      if(a.borderPartial && index !== borderRingOf(f,a.borderRing))continue;
+      const pr = a.borderPartial ? borderSection(r,(a.borderFrom ?? 0)/100,(a.borderTo ?? 100)/100,local,!!a.borderReverse) : partialRing(r, local);
       loadXY(v, pr.xy, pr.n, off); emit(ctx, v, pr.n, pr.closed);
       if (!all && !r.hole && (!main || r.area > main.r.area)) main = { r, pr: { xy: pr.xy.slice(0, pr.n * 2), n: pr.n, closed: pr.closed } };
     }
     if (main && !main.pr.closed) head = { xy: main.pr.xy, n: main.pr.n, off };
   }
   glowStroke(ctx, a.color, w, alpha, a.glow);
-  if (!all && a.fillAlpha > 0 && p > .55) {
+  if (!all && !a.borderPartial && a.fillAlpha > 0 && p > .55) {
     const f = list[0], off = Math.round(v.cx - f.cx);
     ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); }
     ctx.globalAlpha = alpha * a.fillAlpha * clamp01((p - .55) / .45); ctx.fillStyle = a.color; ctx.fill('evenodd');
@@ -964,6 +975,21 @@ function drawBorder(ctx, v, geo, th, a, frame) {
   ctx.restore();
 }
 
+export function drawRegionSelection(ctx,v,geo,selection){
+  for(const target of selection)drawBorder(ctx,v,geo,THEMES.earth,{target,start:0,dur:10,animDur:1,easing:'linear',width:3,color:'#00e5ff',glow:true,fillAlpha:.12},1);
+}
+
+export function drawBorderEndpoints(ctx,v,geo,action){
+  if(action?.type!=='border'||!action.borderPartial)return;
+  const f=featureForTarget(geo,action.target);if(!f)return;
+  const r=f.rings[borderRingOf(f,action.borderRing)];if(!r)return;
+  const off=Math.round(v.cx-f.cx);
+  for(const [t,label,color]of [[(action.borderFrom??0)/100,'Start','#00e5ff'],[(action.borderTo??100)/100,'End','#ffb703']]){
+    const point=borderSection(r,t,t),q=project(v,point.xy[0]+off,point.xy[1]);
+    ctx.save();headDot(ctx,q.x,q.y,5*v.unit,color,1);ctx.font=`600 ${12*v.unit}px Arial`;ctx.textAlign='center';ctx.fillStyle=color;ctx.fillText(label,q.x,q.y-12*v.unit);ctx.restore();
+  }
+}
+
 // ---------------------------------------------------------------- Animation: highlight
 function featureRadius(f) { // farthest ring point from the centroid, in map units (cached)
   if (f._rr) return f._rr;
@@ -973,8 +999,8 @@ function featureRadius(f) { // farthest ring point from the centroid, in map uni
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t = actionProgress(a, frame), p = ease(a.easing, t), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3));
-  if (['country', 'region'].includes(a.target?.kind)) {
-    const f = geo.byName.get(a.target.name); if (!f) return;
+  if (['country', 'region', 'regions'].includes(a.target?.kind)) {
+    const f = featureForTarget(geo,a.target); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
     const c = project(v, f.cx + off, f.cy), rad = featureRadius(f) * v.S * 1.05 * p;
     ctx.save();
@@ -1393,7 +1419,7 @@ export function demoMapProject() {
 }
 
 const ENUMS = { theme: Object.keys(THEMES), preset: Object.keys(PRESETS), easing: ['linear', 'easeIn', 'easeOut', 'easeInOut', 'backOut', 'hold'] };
-const isLoc = l => l && ['city', 'point', 'country', 'region'].includes(l.kind) && typeof l.name === 'string' && l.name.length < 200 && (['country', 'region'].includes(l.kind) || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360));
+const isLoc = l => l && typeof l.name === 'string' && l.name.length < 200 && (l.kind === 'regions' ? Array.isArray(l.members) && l.members.length > 0 && l.members.length <= 200 && l.members.every(m => ['country','region'].includes(m?.kind) && isLoc(m)) : ['city', 'point', 'country', 'region'].includes(l.kind) && (['country', 'region'].includes(l.kind) || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360)));
 const num = (v, a, b) => Number.isFinite(v) && v >= a && v <= b;
 const col = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
 function checkArea(s) {
@@ -1403,6 +1429,8 @@ function checkArea(s) {
   if (s.country !== undefined && (typeof s.country !== 'string' || !s.country || s.country.length > 100)) bad();
   if (s.neighbors !== undefined && !Object.hasOwn(NEIGHBOR_MODES, s.neighbors)) bad();
   if (s.detailLevel !== undefined && !isLevelId(s.detailLevel)) bad();
+  if (s.detailCountries !== undefined && (!Array.isArray(s.detailCountries) || s.detailCountries.length > 200 || s.detailCountries.some(c=>typeof c!=='string'||!c||c.length>100))) bad();
+  if (s.detailLevels !== undefined && (!s.detailLevels || typeof s.detailLevels!=='object' || Array.isArray(s.detailLevels) || Object.values(s.detailLevels).some(l=>!isLevelId(l)))) bad();
   if (s.pad !== undefined && !num(s.pad, .02, .45)) bad();
   for (const k of ['fit', 'name', 'cities']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
 }
@@ -1447,7 +1475,12 @@ export function validateMapProject(p) {
   for (const a of p.actions) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
     if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
-    if (a.type === 'border' && !((a.target?.kind === 'all') || (['country', 'region'].includes(a.target?.kind) && typeof a.target.name === 'string'))) throw Error('Invalid border target.');
+    if (a.type === 'border' && !(a.target?.kind === 'all' || (['country','region','regions'].includes(a.target?.kind) && isLoc(a.target)))) throw Error('Invalid border target.');
+    if (a.type === 'border') {
+      for(const k of ['borderFrom','borderTo'])if(a[k]!==undefined&&!num(a[k],0,100))throw Error('Invalid border endpoint.');
+      if(a.borderRing!==undefined&&(!Number.isSafeInteger(a.borderRing)||a.borderRing<0))throw Error('Invalid border ring.');
+      for(const k of ['borderPartial','borderReverse'])if(a[k]!==undefined&&typeof a[k]!=='boolean')throw Error('Invalid border option.');
+    }
     if (a.type === 'plane' && a.mode !== undefined && !['direct', 'path'].includes(a.mode)) throw Error('Invalid travel mode.');
     if (a.type === 'plane' && a.mode === 'path') checkPath(a);
     else if (a.type === 'plane' && !(isLoc(a.from) && isLoc(a.to))) throw Error('Invalid plane route.');

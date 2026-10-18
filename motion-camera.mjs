@@ -1,5 +1,5 @@
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
-import { poseAt } from './engine.mjs?v=motion-media-1';
+import { poseAt } from './engine.mjs?v=sparse-blur-1';
 // FrameFlow Motion Studio: layered 2.5D camera with focus tracking and depth of field.
 // Camera motion is deterministic for a given timeline frame (including export).
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));

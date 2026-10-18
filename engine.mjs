@@ -5,7 +5,7 @@ import { validateChart } from './charts.mjs';
 import { validateMotionPath } from './motion-path.mjs';
 import { validateMotionVideo } from './motion-video.mjs';
 export const PROPS=['x','y','scale','rotation','opacity','w','h','blur'];
-export const easings={linear:t=>t,easeIn:t=>t*t*t,easeOut:t=>1-(1-t)**3,easeInOut:t=>t<.5?4*t*t*t:1-(-2*t+2)**3/2,backOut:t=>1+2.70158*(t-1)**3+1.70158*(t-1)**2,hold:t=>t>=1?1:0};
+export const easings={linear:t=>t,easeIn:t=>t*t*t,easeOut:t=>1-(1-t)**3,easeSine:t=>(1-Math.cos(Math.PI*t))/2,easeInOut:t=>t<.5?4*t*t*t:1-(-2*t+2)**3/2,backOut:t=>1+2.70158*(t-1)**3+1.70158*(t-1)**2,hold:t=>t>=1?1:0};
 export function valueAt(layer,prop,frame){const keys=layer.keys[prop];if(!keys?.length)return layer[prop];const sorted=[...keys].sort((a,b)=>a.f-b.f);if(frame<=sorted[0].f)return sorted[0].v;if(frame>=sorted.at(-1).f)return sorted.at(-1).v;for(let i=1;i<sorted.length;i++){if(frame<=sorted[i].f){const a=sorted[i-1],b=sorted[i],t=(frame-a.f)/(b.f-a.f);return a.v+(b.v-a.v)*(easings[a.e]||easings.linear)(t)}}}
 // Non-destructive, playhead-relative Motion FX. Every clip modifies the *current*
 // keyframed pose, not a frozen pose sampled when the preset was inserted.

@@ -1,8 +1,9 @@
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
-import { easings, fontStack, cleanFont } from './engine.mjs';
+import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
+import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
 export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -231,7 +232,8 @@ export function installCountryDetail(geo, pack) {
 }
 export function detailRegions(proj, geo) {
   const a = areaOf(proj);
-  return a.mode === 'country' ? geo.details?.get(a.country)?.levels[detailLevelOf(geo, a.country, a.detailLevel)] || [] : [];
+  const countries=detailCountriesOf(a),regions=country=>geo.details?.get(country)?.levels[detailLevelOf(geo, country, a.detailLevels?.[country] || a.detailLevel)] || [];
+  return countries.length===1?regions(countries[0]):countries.flatMap(regions);
 }
 export function regionAt(proj, geo, lon, lat) {
   return countryAt({hi:{features:detailRegions(proj,geo).map(f => ({...f,name:f.key}))}},lon,lat);
@@ -389,13 +391,14 @@ function bboxVisible(v, b, off, margin = 40) {
 /** {kind:'city'|'point'|'country', name, lat, lon}. Countries resolve through the map data. */
 export function lonLatOf(geo, loc) {
   if (!loc) return null;
+  if (loc.kind === 'regions') { const f=featureForTarget(geo,loc); return f ? {lon:xToLon(f.cx),lat:yToLat(f.cy)} : null; }
   if (['country', 'region'].includes(loc.kind)) { const f = geo.byName.get(loc.name); return f ? { lon: f.center.lon, lat: f.center.lat } : null; }
   return Number.isFinite(loc.lat) && Number.isFinite(loc.lon) ? { lon: loc.lon, lat: loc.lat } : null;
 }
 function resolveLoc(geo, loc, nearX) {
   let X, Y, bbox = null;
-  if (['country', 'region'].includes(loc?.kind)) {
-    const f = geo.byName.get(loc.name); if (!f) return null;
+  if (['country', 'region', 'regions'].includes(loc?.kind)) {
+    const f = loc.kind === 'regions' ? featureForTarget(geo,loc) : geo.byName.get(loc.name); if (!f) return null;
     X = f.cx; Y = f.cy; bbox = f.mainBox.slice();
   } else if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)) { X = lonToX(loc.lon); Y = latToY(loc.lat); } else return null;
   if (nearX != null) { const k = Math.round(nearX - X); X += k; if (bbox) { bbox[0] += k; bbox[2] += k; } }
@@ -543,7 +546,7 @@ function shotState(s, from, tr, frame, c) {
   switch (s.preset) {
     case 'flyTo': case 'swoop': {
       const r = resolveLoc(geo, s.target, from.cx); if (!r) return from;
-      const fit = s.autoFit && ['country', 'region'].includes(s.target.kind) && r.bbox;
+      const fit = s.autoFit && ['country', 'region', 'regions'].includes(s.target.kind) && r.bbox;
       return fly(from, {
         cx: fit ? (r.bbox[0] + r.bbox[2]) / 2 : r.X, cy: fit ? (r.bbox[1] + r.bbox[3]) / 2 : r.Y,
         zoom: fit ? fitZoom(r.bbox, W, H, .24) : s.zoom, pitch: s.pitch, bearing: s.bearing,
@@ -612,6 +615,7 @@ export const LABEL_PRESETS = {
   atlas: { label: 'Atlas capitals', style: { placement: 'screen', font: 'Cinzel', weight: 700, caps: true, spacing: 14, size: 15, shape: 'none', halo: true } },
   news: { label: 'News banner', style: { placement: 'screen', font: 'Oswald', weight: 700, caps: true, spacing: 6, size: 16, shape: 'square', useTheme: false, bg: '#e63946', text: '#ffffff', bgAlpha: 1, shadow: true } },
   tag: { label: 'Yellow tag', style: { placement: 'screen', font: 'Poppins', weight: 700, size: 15, shape: 'tag', useTheme: false, bg: '#ffd166', text: '#1b1b1b', bgAlpha: 1, shadow: true } },
+  ribbon: { label: 'Black ribbon (for image badges)', style: { placement: 'screen', font: 'Cinzel', weight: 700, size: 16, spacing: 4, shape: 'rounded', useTheme: false, bg: '#111111', text: '#ffffff', bgAlpha: 1, border: '#ffffff', borderW: 1.5, shadow: true } },
   hand: { label: 'Handwritten', style: { placement: 'screen', font: 'Caveat', weight: 700, size: 24, shape: 'none', halo: true } },
   bangla: { label: 'Bangla (বাংলা)', style: { placement: 'screen', font: 'Hind Siliguri', weight: 600, size: 17 } },
 };
@@ -847,8 +851,8 @@ function drawBase(ctx, v, geo, th, proj) {
   if (focus) {
     const f = focus;
     if (f) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, f.bbox, k)) paint(f, k, fillOf(f, k), 1, th.bw * v.unit * 1.7, true);
-    for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
   }
+  for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
 }
 /** A spot inside the country, as far from its cities as possible, where the country name can sit without covering a city. */
 function nameAnchor(f, cities, midX) {
@@ -869,9 +873,15 @@ function nameAnchor(f, cities, midX) {
   return f._anchor;
 }
 /** Country map extras: the country's name and its main cities (labels are nudged apart so they stay readable). */
-function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames) {
+function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames, worldOverlay=false) {
+  if(areaOf(proj).mode!=='country'){
+    for(const country of detailCountriesOf(areaOf(proj)))drawAreaDetail(ctx,v,geo,th,{...proj,area:{...areaOf(proj),mode:'country',country,fit:false,detailCountries:[]}},labels,routeNames,true);
+    return;
+  }
   const f = focusFeature(proj, geo); if (!f) return;
   const ar = areaOf(proj), b = f.mainBox, mid = (b[0] + b[2]) / 2, off = Math.round(v.cx - mid), st = labelStyleOf(proj);
+  // Keep town and administrative labels readable when detailed countries share a world view.
+  if(worldOverlay && Math.max(b[2]-b[0],b[3]-b[1])*v.S<160*v.unit)return;
   const cities = ar.cities ? citiesOf(geo, f.name) : [];
   const NAME_STYLE = { shape: 'none', halo: true, weight: 800, caps: true, spacing: 14 };
   const box = (x, y, text, scale, over) => { // approximate label rectangle on screen
@@ -882,7 +892,7 @@ function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames) {
   const dots = cities.map(c => { const X0 = lonToX(c[2]), ground = { X: X0 + Math.round(mid - X0) + off, Y: latToY(c[1]) }, q = project(v, ground.X, ground.Y); return { c, q, ground }; });
   for (const { q } of dots) placed.push({ x0: q.x - 8 * v.unit, x1: q.x + 8 * v.unit, y0: q.y - 8 * v.unit, y1: q.y + 8 * v.unit });
   if (ar.name && !routeNames.has(routeLabelKey(f.name))) {
-    const a = nameAnchor(f, cities, mid), q = geo.details?.has(f.name) ? {x:v.W / 2,y:28 * v.unit} : project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
+    const a = nameAnchor(f, cities, mid), q = !worldOverlay && geo.details?.has(f.name) ? {x:v.W / 2,y:28 * v.unit} : project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
     placed.push(r);
     labels.push({ x: q.x, y: q.y, ground: { X: a.x + off, Y: a.y }, text: f.name, alpha: .96, scale: 1.6, over: NAME_STYLE });
   }
@@ -933,8 +943,9 @@ function partialRing(r, p) {
 
 function drawBorder(ctx, v, geo, th, a, frame) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
-  const t = actionProgress(a, frame), p = ease(a.easing, t), w = a.width * v.unit;
-  const all = a.target?.kind === 'all', list = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[detailLevelOf(geo, a.target.country, a.target.level)] || [] : geo.pick(v.cam.zoom).features) : [geo.byName.get(a.target?.name)].filter(Boolean);
+  const t0 = actionProgress(a, frame), p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), w = a.width * v.unit; // invert: the same grow played backwards
+  const all = a.target?.kind === 'all', features = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[detailLevelOf(geo, a.target.country, a.target.level)] || [] : geo.pick(v.cam.zoom).features) : targetFeatures(geo,a.target);
+  const list = a.target?.kind === 'regions' ? [featureForTarget(geo,a.target)].filter(Boolean) : features;
   if (!list.length) return;
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -944,15 +955,16 @@ function drawBorder(ctx, v, geo, th, a, frame) {
     const off = Math.round(v.cx - f.cx), local = all ? clamp01((p * 1.7 - (a.target.country ? 0 : f.cx * .7)) ) : p;
     if (local <= 0 || !bboxVisible(v, f.bbox, off, 80)) continue;
     let main = null;
-    for (const r of f.rings) {
-      const pr = partialRing(r, local);
+    for (const [index,r] of f.rings.entries()) {
+      if(a.borderPartial && index !== borderRingOf(f,a.borderRing))continue;
+      const pr = a.borderPartial ? borderSection(r,(a.borderFrom ?? 0)/100,(a.borderTo ?? 100)/100,local,!!a.borderReverse) : partialRing(r, local);
       loadXY(v, pr.xy, pr.n, off); emit(ctx, v, pr.n, pr.closed);
       if (!all && !r.hole && (!main || r.area > main.r.area)) main = { r, pr: { xy: pr.xy.slice(0, pr.n * 2), n: pr.n, closed: pr.closed } };
     }
     if (main && !main.pr.closed) head = { xy: main.pr.xy, n: main.pr.n, off };
   }
   glowStroke(ctx, a.color, w, alpha, a.glow);
-  if (!all && a.fillAlpha > 0 && p > .55) {
+  if (!all && !a.borderPartial && a.fillAlpha > 0 && p > .55) {
     const f = list[0], off = Math.round(v.cx - f.cx);
     ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); }
     ctx.globalAlpha = alpha * a.fillAlpha * clamp01((p - .55) / .45); ctx.fillStyle = a.color; ctx.fill('evenodd');
@@ -964,6 +976,21 @@ function drawBorder(ctx, v, geo, th, a, frame) {
   ctx.restore();
 }
 
+export function drawRegionSelection(ctx,v,geo,selection){
+  for(const target of selection)drawBorder(ctx,v,geo,THEMES.earth,{target,start:0,dur:10,animDur:1,easing:'linear',width:3,color:'#00e5ff',glow:true,fillAlpha:.12},1);
+}
+
+export function drawBorderEndpoints(ctx,v,geo,action){
+  if(action?.type!=='border'||!action.borderPartial)return;
+  const f=featureForTarget(geo,action.target);if(!f)return;
+  const r=f.rings[borderRingOf(f,action.borderRing)];if(!r)return;
+  const off=Math.round(v.cx-f.cx);
+  for(const [t,label,color]of [[(action.borderFrom??0)/100,'Start','#00e5ff'],[(action.borderTo??100)/100,'End','#ffb703']]){
+    const point=borderSection(r,t,t),q=project(v,point.xy[0]+off,point.xy[1]);
+    ctx.save();headDot(ctx,q.x,q.y,5*v.unit,color,1);ctx.font=`600 ${12*v.unit}px Arial`;ctx.textAlign='center';ctx.fillStyle=color;ctx.fillText(label,q.x,q.y-12*v.unit);ctx.restore();
+  }
+}
+
 // ---------------------------------------------------------------- Animation: highlight
 function featureRadius(f) { // farthest ring point from the centroid, in map units (cached)
   if (f._rr) return f._rr;
@@ -972,9 +999,9 @@ function featureRadius(f) { // farthest ring point from the centroid, in map uni
 }
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
-  const t = actionProgress(a, frame), p = ease(a.easing, t), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3));
-  if (['country', 'region'].includes(a.target?.kind)) {
-    const f = geo.byName.get(a.target.name); if (!f) return;
+  const t0 = actionProgress(a, frame), t = a.invert ? 1 - t0 : t0, p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3)); // invert: the same grow played backwards
+  if (['country', 'region', 'regions'].includes(a.target?.kind)) {
+    const f = featureForTarget(geo,a.target); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
     const c = project(v, f.cx + off, f.cy), rad = featureRadius(f) * v.S * 1.05 * p;
     ctx.save();
@@ -1240,11 +1267,116 @@ export function drawPathEditor(ctx, v, a) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- Image badge (a pin shown as a shaped picture)
+export const BADGE_SHAPES = { polygon: 'Polygon', circle: 'Circle', rounded: 'Rounded square', star: 'Star' };
+export const BADGE_STEMS = { none: 'No pointer', line: 'Line', pointer: 'Pointer (tapered)' };
+export const BADGE_EXITS = { none: 'Stay until the bar ends', fade: 'Fade out', shrink: 'Shrink away', pop: 'Pop and vanish' };
+export const BADGE_DEFAULTS = { badgeStem: 'none', badgeStemLen: 40, badgeExit: 'fade', badgeShape: 'polygon', badgeSides: 7, badgeBg: '#1b1b1b', badgeBorder: '#111111', badgeBorderW: 3, badgeShadow: true, badgeZoom: 1, badgeX: 0, badgeY: 0, badgeLabelY: 0 };
+export const badgeOf = a => ({ ...BADGE_DEFAULTS, ...Object.fromEntries(Object.keys(BADGE_DEFAULTS).filter(k => a[k] !== undefined).map(k => [k, a[k]])) });
+const badgeCache = new Map(); let badgeListener = null;
+export const onBadgeImage = fn => { badgeListener = fn; };
+function badgeEntry(src) {
+  if (typeof Image === 'undefined' || !src) return null;
+  let e = badgeCache.get(src);
+  if (!e) { e = { img: new Image(), ok: false }; e.img.onload = () => { e.ok = true; badgeListener?.(); }; e.img.src = src; badgeCache.set(src, e); }
+  return e;
+}
+/** Resolves once every badge picture in the project has loaded, so exports never miss one. */
+export function preloadBadges(proj) {
+  const srcs = [...new Set(proj.actions.filter(a => a.type === 'pin' && a.badge && a.image).map(a => a.image))];
+  return Promise.all(srcs.map(src => new Promise(done => {
+    const e = badgeEntry(src); if (!e || e.ok) { done(); return; }
+    e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
+    if (e.img.complete && e.img.naturalWidth) { e.ok = true; done(); }
+  })));
+}
+function badgePath(ctx, x, y, r, st) {
+  ctx.beginPath();
+  if (st.badgeShape === 'circle') ctx.arc(x, y, r, 0, Math.PI * 2);
+  else if (st.badgeShape === 'rounded') rrect(ctx, x - r, y - r, r * 2, r * 2, r * .3);
+  else {
+    const n = clamp(Math.round(st.badgeSides), 3, 12), star = st.badgeShape === 'star', count = star ? n * 2 : n;
+    for (let i = 0; i < count; i++) {
+      const ang = -Math.PI / 2 + i * Math.PI * 2 / count, rad = star && i % 2 ? r * .52 : r;
+      ctx[i ? 'lineTo' : 'moveTo'](x + Math.cos(ang) * rad, y + Math.sin(ang) * rad);
+    }
+    ctx.closePath();
+  }
+}
+// ---------------------------------------------------------------- Pin travel (a pin that moves from one place to another)
+export const PIN_MODES = { stay: 'Stay in one place', move: 'Move to another place', path: 'Move along my path' };
+/** The route a moving pin follows: a flight-style arc from its place to `to`, or the points the user drew. */
+function pinRoute(geo, a) {
+  if (a.mode === 'path') return planeRoute(geo, a);
+  if (a.mode === 'move' && a.to) return planeRoute(geo, { id: a.id, mode: 'direct', from: a.place, to: a.to });
+  return null;
+}
+/** Where a pin is at `frame`: its fixed place, or a point along its route (it moves for the animation duration, then stays at the end). */
+function pinSpot(v, geo, a, frame) {
+  const r = pinRoute(geo, a);
+  if (!r) { const loc = resolveLoc(geo, a.place, v.cx); return loc && { X: loc.X, Y: loc.Y, route: null, p: 0 }; }
+  const p = ease(a.easing, actionProgress(a, frame)), pt = routeAt(r, p), off = Math.round(v.cx - r.mid);
+  return { X: pt.X + off, Y: pt.Y, route: r, off, pt, p };
+}
+/** Progress of the pin's own appearance (drop / pop). A moving pin keeps the normal speed instead of stretching it over the whole journey. */
+const pinAppear = (a, spot, frame) => (spot.route ? clamp01((frame - a.start) / Math.max(1, Math.min(animationDuration(a), 45))) : actionProgress(a, frame));
+/** Without a custom label, a moving pin is named after the place it is leaving, then the one it is heading to. */
+const pinName = (a, spot) => a.label || (spot.route && spot.p >= .5 && a.to?.name) || a.place.name;
+function drawPinTrail(ctx, v, spot, a, alpha) {
+  const r = spot.route; if (!r || a.trail === false || spot.p <= 0) return;
+  ctx.save(); ctx.beginPath(); let on = false;
+  for (let i = 0; i <= spot.pt.i; i++) { const q = project(v, r.X[i] + spot.off, r.Y[i]); if (q.z < v.near) { on = false; continue; } if (on) ctx.lineTo(q.x, q.y); else { ctx.moveTo(q.x, q.y); on = true; } }
+  const e = project(v, spot.X, spot.Y); if (on && e.z >= v.near) ctx.lineTo(e.x, e.y);
+  ctx.globalAlpha = alpha * .75; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit; ctx.setLineDash([8 * v.unit, 6 * v.unit]); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
+}
+function drawBadge(ctx, v, geo, a, frame, labels) {
+  const alpha = actAlpha(a, frame), loc = pinSpot(v, geo, a, frame); if (!loc || alpha <= 0) return;
+  const st = badgeOf(a), t = pinAppear(a, loc, frame), pop = ease('backOut', clamp01(t / .4));
+  // exit: plays over the last frames of the item's bar (fewer when the bar is short)
+  const span = Math.max(1, Math.min(18, Math.round(a.dur * .4))), q = clamp01((frame - (a.start + a.dur - span)) / span);
+  let fade = 1, grow = 1;
+  if (st.badgeExit === 'fade') fade = 1 - q;
+  else if (st.badgeExit === 'shrink') grow = 1 - q * q;
+  else if (st.badgeExit === 'pop') grow = q < .25 ? 1 + .18 * (q / .25) : 1.18 * (1 - (q - .25) / .75) ** 2;
+  const k = pop * grow; if (k <= .001 || fade <= 0) return;
+  const g = project(v, loc.X, loc.Y, 0), R = a.size * v.unit * 46, r = R * k, stem = st.badgeStem !== 'none';
+  const reach = stem ? st.badgeStemLen * v.unit * a.size * k : 0, cx = g.x, cy = g.y - (stem ? r + reach : 0);
+  const baseAlpha = alpha * clamp01(pop * 1.5) * fade;
+  drawPinTrail(ctx, v, loc, a, baseAlpha);
+  ctx.save(); ctx.globalAlpha = baseAlpha; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (stem) { // pointer from the badge down to the exact location
+    const col = st.badgeBorderW > 0 ? st.badgeBorder : st.badgeBg, lw = Math.max(2, st.badgeBorderW) * v.unit;
+    ctx.save(); ctx.globalAlpha = baseAlpha * .3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(g.x, g.y, Math.max(4 * v.unit, r * .24), Math.max(1.5 * v.unit, r * .08), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    ctx.fillStyle = col; ctx.strokeStyle = col;
+    const n = clamp(Math.round(st.badgeSides), 3, 12), low = cy + r * .9 * (st.badgeShape === 'star' ? .45 : st.badgeShape === 'polygon' && n % 2 ? Math.cos(Math.PI / n) : 1); // start at the badge's lower edge so a fade shows no overlap
+    if (st.badgeStem === 'line') { ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(cx, low); ctx.lineTo(g.x, g.y); ctx.stroke(); ctx.beginPath(); ctx.arc(g.x, g.y, lw * 1.5, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.beginPath(); ctx.moveTo(cx - r * .3, low); ctx.lineTo(cx + r * .3, low); ctx.lineTo(g.x, g.y); ctx.closePath(); ctx.fill(); }
+  }
+  if (st.badgeShadow) { ctx.shadowColor = '#000a'; ctx.shadowBlur = 14 * v.unit; ctx.shadowOffsetY = 4 * v.unit; }
+  badgePath(ctx, cx, cy, r, st); ctx.fillStyle = st.badgeBg; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  const entry = a.image ? badgeEntry(a.image) : null;
+  if (entry?.ok) { // fill the shape, cropping the picture; zoom and focus move the crop
+    const img = entry.img, s = Math.max(2 * r / img.naturalWidth, 2 * r / img.naturalHeight) * st.badgeZoom, w = img.naturalWidth * s, h = img.naturalHeight * s;
+    ctx.save(); badgePath(ctx, cx, cy, r, st); ctx.clip();
+    ctx.drawImage(img, cx - w / 2 - st.badgeX / 100 * (w - 2 * r) / 2, cy - h / 2 - st.badgeY / 100 * (h - 2 * r) / 2, w, h);
+    ctx.restore();
+  }
+  if (st.badgeBorderW > 0) { badgePath(ctx, cx, cy, r, st); ctx.lineWidth = st.badgeBorderW * v.unit; ctx.strokeStyle = st.badgeBorder; ctx.stroke(); }
+  ctx.restore();
+  if (a.showLabel) {
+    const lp = ease('backOut', (t - .3) / .3);
+    if (lp > 0) { const y = cy + R * (.9 + st.badgeLabelY / 100) * grow; labels.push({ x: cx, y, ground: { X: loc.X, Y: loc.Y }, groundOffset: { y: y - g.y }, text: pinName(a, loc), alpha: alpha * clamp01(lp * 1.5) * fade, scale: (.9 + .2 * lp) * Math.max(.05, grow) }); }
+  }
+}
+
 // ---------------------------------------------------------------- Animation: pin
 function drawPin(ctx, v, geo, th, a, frame, labels) {
-  const alpha = actAlpha(a, frame), r = resolveLoc(geo, a.place, v.cx); if (!r || alpha <= 0) return;
-  const t = actionProgress(a, frame), showIcon = a.showIcon !== false;
+  if (a.badge) { drawBadge(ctx, v, geo, a, frame, labels); return; }
+  const alpha = actAlpha(a, frame), r = pinSpot(v, geo, a, frame); if (!r || alpha <= 0) return;
+  const t = pinAppear(a, r, frame), showIcon = a.showIcon !== false;
   const g = project(v, r.X, r.Y, 0), s = a.size * v.unit * 24;
+  drawPinTrail(ctx, v, r, a, alpha);
   if (showIcon) {
     const drop = clamp01(t / .45), fall = (1 - bounce(drop)) * 240 * v.unit, top = project(v, r.X, r.Y, fall);
     ctx.save(); ctx.lineJoin = 'round';
@@ -1268,7 +1400,7 @@ function drawPin(ctx, v, geo, th, a, frame, labels) {
   }
   if (a.showLabel) {
     const pop = ease('backOut', (t - .45) / .3), offset = showIcon ? -s * 2.5 - 14 * v.unit : 0;
-    if (pop > 0) labels.push({ x: g.x, y: g.y + offset, ground: { X: r.X, Y: r.Y }, groundOffset: { y: offset }, text: a.label || a.place.name, alpha: alpha * clamp01(pop * 1.5), scale: .9 + .2 * pop });
+    if (pop > 0) labels.push({ x: g.x, y: g.y + offset, ground: { X: r.X, Y: r.Y }, groundOffset: { y: offset }, text: pinName(a, r), alpha: alpha * clamp01(pop * 1.5), scale: .9 + .2 * pop });
   }
 }
 
@@ -1291,8 +1423,8 @@ const OBJ_H = { resolveLoc, project, groundCircle, actionProgress, actAlpha, pla
 
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
-export function drawMap(ctx, W, H, proj, frame, geo) {
-  const th = THEMES[proj.theme] || THEMES.earth, v = makeView(cameraAt(proj, geo, W, H, frame), W, H), labels = [];
+export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null) {
+  const th = THEMES[proj.theme] || THEMES.earth, v = makeView(previewCamera || cameraAt(proj, geo, W, H, frame), W, H), labels = [];
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
   for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
     const r = planeRoute(geo, a);
@@ -1311,10 +1443,13 @@ export function drawMap(ctx, W, H, proj, frame, geo) {
   drawTexture(ctx, W, H, proj.texture);
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
   for (const a of proj.actions) if (a.type === 'shape') tag(a, () => drawShape(OBJ_H, ctx, v, geo, a, frame, labels));
-  for (const a of proj.actions) if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
-  for (const a of proj.actions) if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
-  for (const a of proj.actions) if (a.type === 'object') tag(a, () => drawObject(OBJ_H, ctx, v, geo, a, frame, labels));
-  for (const a of proj.actions) if (a.type === 'effect') tag(a, () => drawEffect(OBJ_H, ctx, v, geo, a, frame, labels));
+  // Travelers, pins, objects and effects stack in list order (later = in front), so Up / Down in the item list really changes what covers what.
+  for (const a of proj.actions) {
+    if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
+    else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
+    else if (a.type === 'object') tag(a, () => drawObject(OBJ_H, ctx, v, geo, a, frame, labels));
+    else if (a.type === 'effect') tag(a, () => drawEffect(OBJ_H, ctx, v, geo, a, frame, labels));
+  }
   for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
@@ -1328,7 +1463,7 @@ export const ACTION_TYPES = {
   border: { label: 'Border', icon: '▱', dur: 60, hint: 'Draw a country outline, or sweep every border' },
   plane: { label: 'Travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
   highlight: { label: 'Highlight', icon: '◎', dur: 45, hint: 'Light up a country or a place' },
-  pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin icon, text, or both' },
+  pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin, text or picture, and move it from place to place' },
   object: { label: 'Object', icon: '◆', dur: 90, hint: 'Place a tank, ship, jet, soldier, base, city… and move or animate it' },
   effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Explosion, fire, smoke, shockwave, earthquake, missile strike' },
   shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Attack or retreat arrow, front line, occupied or no-fly zone' },
@@ -1352,10 +1487,10 @@ const uid = () => crypto.randomUUID();
 export function makeAction(type, start, extra = {}) {
   const base = { id: uid(), type, name: ACTION_TYPES[type].label, start, dur: ACTION_TYPES[type].dur, easing: 'easeInOut' };
   const own = {
-    border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18 },
+    border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18, invert: false },
     plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
-    highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400 },
-    pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1 },
+    highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400, invert: false },
+    pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1, mode: 'stay' },
     object: { place: city('Paris', 48.8566, 2.3522), glyph: 'tank', color: OBJECT_ICONS.tank.color, size: 1.2, enter: 'drop', idle: 'none', exit: 'none', mode: 'stay', path: [], curve: 'smooth', trail: true, showLabel: false, label: '' },
     effect: { place: city('Paris', 48.8566, 2.3522), fx: 'explosion', color: EFFECTS.explosion.color, size: 1.5, repeat: 1, from: { kind: 'point', name: 'Launch site', lat: 45.5, lon: -1.5 }, showLabel: false, label: '' },
     shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, fillAlpha: .28, showLabel: false, label: '' },
@@ -1393,7 +1528,7 @@ export function demoMapProject() {
 }
 
 const ENUMS = { theme: Object.keys(THEMES), preset: Object.keys(PRESETS), easing: ['linear', 'easeIn', 'easeOut', 'easeInOut', 'backOut', 'hold'] };
-const isLoc = l => l && ['city', 'point', 'country', 'region'].includes(l.kind) && typeof l.name === 'string' && l.name.length < 200 && (['country', 'region'].includes(l.kind) || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360));
+const isLoc = l => l && typeof l.name === 'string' && l.name.length < 200 && (l.kind === 'regions' ? Array.isArray(l.members) && l.members.length > 0 && l.members.length <= 200 && l.members.every(m => ['country','region'].includes(m?.kind) && isLoc(m)) : ['city', 'point', 'country', 'region'].includes(l.kind) && (['country', 'region'].includes(l.kind) || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360)));
 const num = (v, a, b) => Number.isFinite(v) && v >= a && v <= b;
 const col = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
 function checkArea(s) {
@@ -1403,6 +1538,8 @@ function checkArea(s) {
   if (s.country !== undefined && (typeof s.country !== 'string' || !s.country || s.country.length > 100)) bad();
   if (s.neighbors !== undefined && !Object.hasOwn(NEIGHBOR_MODES, s.neighbors)) bad();
   if (s.detailLevel !== undefined && !isLevelId(s.detailLevel)) bad();
+  if (s.detailCountries !== undefined && (!Array.isArray(s.detailCountries) || s.detailCountries.length > 200 || s.detailCountries.some(c=>typeof c!=='string'||!c||c.length>100))) bad();
+  if (s.detailLevels !== undefined && (!s.detailLevels || typeof s.detailLevels!=='object' || Array.isArray(s.detailLevels) || Object.values(s.detailLevels).some(l=>!isLevelId(l)))) bad();
   if (s.pad !== undefined && !num(s.pad, .02, .45)) bad();
   for (const k of ['fit', 'name', 'cities']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
 }
@@ -1447,15 +1584,35 @@ export function validateMapProject(p) {
   for (const a of p.actions) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
     if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
-    if (a.type === 'border' && !((a.target?.kind === 'all') || (['country', 'region'].includes(a.target?.kind) && typeof a.target.name === 'string'))) throw Error('Invalid border target.');
+    if (a.type === 'border' && !(a.target?.kind === 'all' || (['country','region','regions'].includes(a.target?.kind) && isLoc(a.target)))) throw Error('Invalid border target.');
+    if (a.type === 'border') {
+      for(const k of ['borderFrom','borderTo'])if(a[k]!==undefined&&!num(a[k],0,100))throw Error('Invalid border endpoint.');
+      if(a.borderRing!==undefined&&(!Number.isSafeInteger(a.borderRing)||a.borderRing<0))throw Error('Invalid border ring.');
+      for(const k of ['borderPartial','borderReverse'])if(a[k]!==undefined&&typeof a[k]!=='boolean')throw Error('Invalid border option.');
+    }
     if (a.type === 'plane' && a.mode !== undefined && !['direct', 'path'].includes(a.mode)) throw Error('Invalid travel mode.');
     if (a.type === 'plane' && a.mode === 'path') checkPath(a);
     else if (a.type === 'plane' && !(isLoc(a.from) && isLoc(a.to))) throw Error('Invalid plane route.');
     checkLabelStyle(a.labelStyle);
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');
+    if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
+    if (a.type === 'pin') {
+      if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
+      if (a.mode !== undefined && !Object.hasOwn(PIN_MODES, a.mode)) throw Error('Invalid pin movement.');
+      if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid pin destination.');
+      if (a.mode === 'path') checkPath(a);
+      if (a.trail !== undefined && typeof a.trail !== 'boolean') throw Error('Invalid pin trail setting.');
+      if (a.image !== undefined && (typeof a.image !== 'string' || a.image.length > 2e6 || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(a.image))) throw Error('Invalid pin image.');
+      if (a.badgeShape !== undefined && !Object.hasOwn(BADGE_SHAPES, a.badgeShape)) throw Error('Invalid badge shape.');
+      if (a.badgeStem !== undefined && !Object.hasOwn(BADGE_STEMS, a.badgeStem)) throw Error('Invalid badge pointer.');
+      if (a.badgeExit !== undefined && !Object.hasOwn(BADGE_EXITS, a.badgeExit)) throw Error('Invalid badge exit.');
+      if (a.badgeShadow !== undefined && typeof a.badgeShadow !== 'boolean') throw Error('Invalid badge shadow.');
+      for (const k of ['badgeBg', 'badgeBorder']) if (a[k] !== undefined && !/^#[0-9a-f]{6}$/i.test(a[k])) throw Error('Invalid badge color.');
+      for (const [k, lo, hi] of [['badgeSides', 3, 12], ['badgeStemLen', 0, 300], ['badgeBorderW', 0, 20], ['badgeZoom', 1, 4], ['badgeX', -100, 100], ['badgeY', -100, 100], ['badgeLabelY', -100, 300]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid badge ' + k + '.');
+    }
     if (a.type === 'label') {
       if (typeof a.text !== 'string' || a.text.length > 160) throw Error('Invalid label text.');
       if (a.labelPlacement !== undefined && !['screen', 'map'].includes(a.labelPlacement)) throw Error('Invalid label placement.');

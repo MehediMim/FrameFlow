@@ -259,7 +259,7 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 <div class="section-title">ANIMATE <span>＋</span></div><div class="add-grid" id="mAddGrid"></div>
 <div class="section-title">CAMERA PRESETS <span>▣</span></div><div class="m-presets" id="mPresets"></div>
 <div class="section-title">TIMELINE ITEMS <span id="mItemCount"></span></div><div id="mItems"></div>
-<div class="layer-actions"><button id="mMoveUp" title="Move up in the list. Items higher up draw underneath overlapping items of the same kind.">▲ Up</button><button id="mMoveDown" title="Move down in the list. Items lower down draw on top of overlapping items of the same kind.">▼ Down</button><button id="mDuplicate" title="Duplicate item">Duplicate</button><button id="mDelete" title="Delete item">Delete</button></div>
+<div class="layer-actions"><button id="mMoveUp" title="Move up in the list. Items higher up draw underneath overlapping travel, pins, objects and effects.">▲ Up</button><button id="mMoveDown" title="Move down in the list. Items lower down draw on top of overlapping travel, pins, objects and effects.">▼ Down</button><button id="mDuplicate" title="Duplicate item">Duplicate</button><button id="mDelete" title="Delete item">Delete</button></div>
 <div class="starter m-starter"><button id="mNew">＋ Empty map</button><button id="mDemo">↻ Load demo</button></div>
 <button id="mHelp" class="help">⌘ Quick guide</button>
 </aside>
@@ -337,7 +337,7 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 <input hidden type="file" id="pProjectFile" accept="application/json,.json"><input hidden type="file" id="pImageFile" accept="image/*">
 <dialog id="pModal"><div id="pModalBody"></div><button id="pCloseModal">Close</button></dialog>
 </div>
-<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=motion-media-1"></script><script type="module" src="app.js?v=layer-blur-4"></script><script type="module" src="map-ui.js?v=image-badges-1"></script><script type="module" src="paper-ui.js?v=motion-media-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
+<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=motion-media-1"></script><script type="module" src="app.js?v=layer-blur-4"></script><script type="module" src="map-ui.js?v=invert-1"></script><script type="module" src="paper-ui.js?v=motion-media-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {

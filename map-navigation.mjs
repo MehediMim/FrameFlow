@@ -1,4 +1,4 @@
-import { makeView, screenToLonLat, lonToX, latToY } from './map-engine.mjs?v=multi-regions-1';
+import { makeView, screenToLonLat, lonToX, latToY } from './map-engine.mjs?v=image-badges-1';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const wrapDelta = x => x - Math.round(x);

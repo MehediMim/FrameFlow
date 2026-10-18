@@ -615,6 +615,7 @@ export const LABEL_PRESETS = {
   atlas: { label: 'Atlas capitals', style: { placement: 'screen', font: 'Cinzel', weight: 700, caps: true, spacing: 14, size: 15, shape: 'none', halo: true } },
   news: { label: 'News banner', style: { placement: 'screen', font: 'Oswald', weight: 700, caps: true, spacing: 6, size: 16, shape: 'square', useTheme: false, bg: '#e63946', text: '#ffffff', bgAlpha: 1, shadow: true } },
   tag: { label: 'Yellow tag', style: { placement: 'screen', font: 'Poppins', weight: 700, size: 15, shape: 'tag', useTheme: false, bg: '#ffd166', text: '#1b1b1b', bgAlpha: 1, shadow: true } },
+  ribbon: { label: 'Black ribbon (for image badges)', style: { placement: 'screen', font: 'Cinzel', weight: 700, size: 16, spacing: 4, shape: 'rounded', useTheme: false, bg: '#111111', text: '#ffffff', bgAlpha: 1, border: '#ffffff', borderW: 1.5, shadow: true } },
   hand: { label: 'Handwritten', style: { placement: 'screen', font: 'Caveat', weight: 700, size: 24, shape: 'none', halo: true } },
   bangla: { label: 'Bangla (বাংলা)', style: { placement: 'screen', font: 'Hind Siliguri', weight: 600, size: 17 } },
 };
@@ -1266,8 +1267,66 @@ export function drawPathEditor(ctx, v, a) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- Image badge (a pin shown as a shaped picture)
+export const BADGE_SHAPES = { polygon: 'Polygon', circle: 'Circle', rounded: 'Rounded square', star: 'Star' };
+export const BADGE_DEFAULTS = { badgeShape: 'polygon', badgeSides: 7, badgeBg: '#1b1b1b', badgeBorder: '#111111', badgeBorderW: 3, badgeShadow: true, badgeZoom: 1, badgeX: 0, badgeY: 0, badgeLabelY: 0 };
+export const badgeOf = a => ({ ...BADGE_DEFAULTS, ...Object.fromEntries(Object.keys(BADGE_DEFAULTS).filter(k => a[k] !== undefined).map(k => [k, a[k]])) });
+const badgeCache = new Map(); let badgeListener = null;
+export const onBadgeImage = fn => { badgeListener = fn; };
+function badgeEntry(src) {
+  if (typeof Image === 'undefined' || !src) return null;
+  let e = badgeCache.get(src);
+  if (!e) { e = { img: new Image(), ok: false }; e.img.onload = () => { e.ok = true; badgeListener?.(); }; e.img.src = src; badgeCache.set(src, e); }
+  return e;
+}
+/** Resolves once every badge picture in the project has loaded, so exports never miss one. */
+export function preloadBadges(proj) {
+  const srcs = [...new Set(proj.actions.filter(a => a.type === 'pin' && a.badge && a.image).map(a => a.image))];
+  return Promise.all(srcs.map(src => new Promise(done => {
+    const e = badgeEntry(src); if (!e || e.ok) { done(); return; }
+    e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
+    if (e.img.complete && e.img.naturalWidth) { e.ok = true; done(); }
+  })));
+}
+function badgePath(ctx, x, y, r, st) {
+  ctx.beginPath();
+  if (st.badgeShape === 'circle') ctx.arc(x, y, r, 0, Math.PI * 2);
+  else if (st.badgeShape === 'rounded') rrect(ctx, x - r, y - r, r * 2, r * 2, r * .3);
+  else {
+    const n = clamp(Math.round(st.badgeSides), 3, 12), star = st.badgeShape === 'star', count = star ? n * 2 : n;
+    for (let i = 0; i < count; i++) {
+      const ang = -Math.PI / 2 + i * Math.PI * 2 / count, rad = star && i % 2 ? r * .52 : r;
+      ctx[i ? 'lineTo' : 'moveTo'](x + Math.cos(ang) * rad, y + Math.sin(ang) * rad);
+    }
+    ctx.closePath();
+  }
+}
+function drawBadge(ctx, v, geo, a, frame, labels) {
+  const alpha = actAlpha(a, frame), loc = resolveLoc(geo, a.place, v.cx); if (!loc || alpha <= 0) return;
+  const t = actionProgress(a, frame), pop = ease('backOut', clamp01(t / .4)); if (pop <= 0) return;
+  const st = badgeOf(a), g = project(v, loc.X, loc.Y, 0), R = a.size * v.unit * 46, r = R * Math.max(.001, pop);
+  ctx.save(); ctx.globalAlpha = alpha * clamp01(pop * 1.5); ctx.lineJoin = 'round';
+  if (st.badgeShadow) { ctx.shadowColor = '#000a'; ctx.shadowBlur = 14 * v.unit; ctx.shadowOffsetY = 4 * v.unit; }
+  badgePath(ctx, g.x, g.y, r, st); ctx.fillStyle = st.badgeBg; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  const entry = a.image ? badgeEntry(a.image) : null;
+  if (entry?.ok) { // fill the shape, cropping the picture; zoom and focus move the crop
+    const img = entry.img, s = Math.max(2 * r / img.naturalWidth, 2 * r / img.naturalHeight) * st.badgeZoom, w = img.naturalWidth * s, h = img.naturalHeight * s;
+    ctx.save(); badgePath(ctx, g.x, g.y, r, st); ctx.clip();
+    ctx.drawImage(img, g.x - w / 2 - st.badgeX / 100 * (w - 2 * r) / 2, g.y - h / 2 - st.badgeY / 100 * (h - 2 * r) / 2, w, h);
+    ctx.restore();
+  }
+  if (st.badgeBorderW > 0) { badgePath(ctx, g.x, g.y, r, st); ctx.lineWidth = st.badgeBorderW * v.unit; ctx.strokeStyle = st.badgeBorder; ctx.stroke(); }
+  ctx.restore();
+  if (a.showLabel) {
+    const lp = ease('backOut', (t - .3) / .3);
+    if (lp > 0) { const offset = R * (.9 + st.badgeLabelY / 100); labels.push({ x: g.x, y: g.y + offset, ground: { X: loc.X, Y: loc.Y }, groundOffset: { y: offset }, text: a.label || a.place.name, alpha: alpha * clamp01(lp * 1.5), scale: .9 + .2 * lp }); }
+  }
+}
+
 // ---------------------------------------------------------------- Animation: pin
 function drawPin(ctx, v, geo, th, a, frame, labels) {
+  if (a.badge) { drawBadge(ctx, v, geo, a, frame, labels); return; }
   const alpha = actAlpha(a, frame), r = resolveLoc(geo, a.place, v.cx); if (!r || alpha <= 0) return;
   const t = actionProgress(a, frame), showIcon = a.showIcon !== false;
   const g = project(v, r.X, r.Y, 0), s = a.size * v.unit * 24;
@@ -1489,6 +1548,14 @@ export function validateMapProject(p) {
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
+    if (a.type === 'pin') {
+      if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
+      if (a.image !== undefined && (typeof a.image !== 'string' || a.image.length > 2e6 || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(a.image))) throw Error('Invalid pin image.');
+      if (a.badgeShape !== undefined && !Object.hasOwn(BADGE_SHAPES, a.badgeShape)) throw Error('Invalid badge shape.');
+      if (a.badgeShadow !== undefined && typeof a.badgeShadow !== 'boolean') throw Error('Invalid badge shadow.');
+      for (const k of ['badgeBg', 'badgeBorder']) if (a[k] !== undefined && !/^#[0-9a-f]{6}$/i.test(a[k])) throw Error('Invalid badge color.');
+      for (const [k, lo, hi] of [['badgeSides', 3, 12], ['badgeBorderW', 0, 20], ['badgeZoom', 1, 4], ['badgeX', -100, 100], ['badgeY', -100, 100], ['badgeLabelY', -100, 300]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid badge ' + k + '.');
+    }
     if (a.type === 'label') {
       if (typeof a.text !== 'string' || a.text.length > 160) throw Error('Invalid label text.');
       if (a.labelPlacement !== undefined && !['screen', 'map'].includes(a.labelPlacement)) throw Error('Invalid label placement.');

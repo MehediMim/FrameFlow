@@ -1,4 +1,4 @@
-import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints } from './map-engine.mjs?v=multi-regions-1';
+import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=image-badges-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -7,10 +7,10 @@ import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs?v=multi-regions-1';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds } from './map-engine.mjs?v=image-badges-1';
 import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
-import { exportMapVideo } from './map-video-export.mjs?v=multi-regions-1';
+import { exportMapVideo } from './map-video-export.mjs?v=image-badges-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs';
 
@@ -18,6 +18,7 @@ const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAl
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const canvas = $('#mCanvas'), ctx = canvas.getContext('2d');
+onBadgeImage(() => { if (!exporting && typeof draw === 'function' && proj) draw(); });
 const STORE = 'frameflow-map-v1';
 const EASE_OPTS = [['easeInOut', 'Ease in & out'], ['linear', 'Linear'], ['easeIn', 'Ease in'], ['easeOut', 'Ease out'], ['backOut', 'Overshoot']];
 
@@ -314,6 +315,32 @@ function renderInspector() {
   if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
   box.innerHTML = h; bindInspector(it);
 }
+function badgeFields(a) {
+  const b = badgeOf(a);
+  return `<div class="m-badge"><span class="mini-label">Picture</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image…' : 'Choose image…'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden>${a.image ? '' : '<p class="mini-label">No picture yet. Choose a photo, logo or flag.</p>'}`
+    + F.sel('badgeShape', 'Shape', b.badgeShape, Object.entries(BADGE_SHAPES))
+    + (['polygon', 'star'].includes(b.badgeShape) ? F.range('badgeSides', b.badgeShape === 'star' ? 'Points' : 'Sides', b.badgeSides, 3, 12, 1) : '')
+    + F.color('badgeBorder', 'Border color', b.badgeBorder) + F.range('badgeBorderW', 'Border width', b.badgeBorderW, 0, 20, .5)
+    + F.color('badgeBg', 'Background (behind the picture)', b.badgeBg) + F.chk('badgeShadow', 'Shadow', b.badgeShadow)
+    + (a.image ? F.range('badgeZoom', 'Zoom picture', b.badgeZoom, 1, 4, .05, x => x + '×') + F.range('badgeX', 'Move picture left / right', b.badgeX, -100, 100, 1) + F.range('badgeY', 'Move picture up / down', b.badgeY, -100, 100, 1) : '')
+    + '</div>';
+}
+/** Shrinks a chosen picture so projects stay small enough to save. Returns a data URL. */
+async function shrinkImage(file, max = 512) {
+  if (!/^image\//.test(file.type)) throw Error('Choose an image file.');
+  if (file.size > 15e6) throw Error('That image is larger than 15 MB.');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(Error('That image could not be read.')); i.src = url; });
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    const photo = file.type === 'image/jpeg'; if (photo) { const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); }
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const out = c.toDataURL(photo ? 'image/jpeg' : 'image/png', .88);
+    if (out.length > 1.9e6) throw Error('That image is too detailed. Try a smaller one.');
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
 function actionFields(a) {
   switch (a.type) {
     case 'label': return F.text('text', 'Text', a.text, 160, 'Your label');
@@ -326,7 +353,14 @@ function actionFields(a) {
     case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.sel('__move', 'Position', a.mode === 'path' ? 'path' : 'stay', [['stay', 'Stay in one place'], ['path', 'Move along my path']]) + (a.mode === 'path' ? pathFields(a) + F.chk('trail', 'Draw a trail behind it', a.trail !== false) : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
-    case 'pin': return F.loc('place', 'Location', a.place, 'place') + F.sel('__pinDisplay', 'Display', a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon', [['both', 'Icon + text'], ['icon', 'Icon only'], ['text', 'Text only']]) + (a.showIcon !== false ? F.color('color', 'Pin color', a.color) + F.range('size', 'Pin size', a.size, .5, 3, .1, x => x + '×') : '') + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the place name') : '');
+    case 'pin': {
+      const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
+      return F.loc('place', 'Location', a.place, 'place') + F.sel('__pinDisplay', 'Display', display, [['both', 'Icon + text'], ['icon', 'Icon only'], ['text', 'Text only'], ['badge', 'Image badge']])
+        + (display === 'badge' ? badgeFields(a) : (a.showIcon !== false ? F.color('color', 'Pin color', a.color) : ''))
+        + (a.showIcon !== false || a.badge ? F.range('size', a.badge ? 'Badge size' : 'Pin size', a.size, .5, 3, .1, x => x + '×') : '')
+        + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the place name') : '')
+        + (a.badge && a.showLabel ? F.range('badgeLabelY', 'Label position', badgeOf(a).badgeLabelY, -100, 300, 5, x => x + '%') + '<p class="mini-label">Label font, shape and colors: use Custom style for this label below. Try the Black ribbon preset.</p>' : '');
+    }
   }
   return '';
 }
@@ -398,7 +432,7 @@ function bindInspector(it) {
       el.oninput = () => {
         if (!gesture) { checkpoint(); gesture = true; }
         const v = t === 'range' ? Number(el.value) : el.value; it[key] = v;
-        const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + '°' : key === 'size' ? v + '×' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
+        const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + '°' : key === 'size' || key === 'badgeZoom' ? v + '×' : key === 'badgeLabelY' ? v + '%' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
         draw();
       };
       el.onchange = () => { gesture = false; changed(); };
@@ -428,7 +462,7 @@ function bindInspector(it) {
         it[k] = v; changed(); renderInspector(); return;
       }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
-      if (key === '__pinDisplay') { it.showIcon = v !== 'text'; it.showLabel = v !== 'icon'; changed(); renderInspector(); return; }
+      if (key === '__pinDisplay') { it.badge = v === 'badge'; it.showIcon = v === 'badge' ? false : v !== 'text'; it.showLabel = v !== 'icon'; if (it.badge && !it.size) it.size = 1; changed(); renderInspector(); return; }
       if (key === '__hmode') { it.target = v === 'country' ? (isDetail() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
       if (t === 'num') {
         const lo = Number(el.min), hi = el.max === '' ? Infinity : Number(el.max);
@@ -442,7 +476,7 @@ function bindInspector(it) {
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
-      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial') renderInspector();
+      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
@@ -463,6 +497,10 @@ function bindInspector(it) {
     $('#mHint').textContent = 'Click regions to add or remove them · Shift-click for a whole country · Esc to finish';
     notify('Click regions on the map to add or remove them'); renderInspector();
   });
+  { const file = $('#mInspector [data-badgefile]'), choose = $('#mInspector [data-badgeimg]'), clear = $('#mInspector [data-badgeclear]');
+    if (choose) choose.onclick = () => file.click();
+    if (file) file.onchange = async () => { const f = file.files[0]; file.value = ''; if (!f) return; try { const url = await shrinkImage(f); pause(); checkpoint(); it.image = url; changed(); renderInspector(); notify('Image added'); } catch (err) { notify(err.message || 'That image could not be used.'); } };
+    if (clear) clear.onclick = () => { pause(); checkpoint(); delete it.image; changed(); renderInspector(); }; }
   $$('#mInspector [data-mopenset]').forEach(el => el.onclick = () => $('#mSettingsButton').click());
   const combine = $('#mInspector [data-mcombine]'); if (combine) combine.onchange = () => { if (combine.value === 'separate') splitRegions(it); };
   $$('#mInspector [data-borderpoint]').forEach(el=>el.onclick=()=>startPick(el.dataset.borderpoint,'borderpoint'));
@@ -769,6 +807,7 @@ async function exportVideo() {
   pause();
   if (!geo) { notify('Map data is still loading'); return; }
   if (!await ensureDetail() && requiresDetail()) return;
+  await preloadBadges(proj);
   const snapshot = clone(proj), exportName = fileBase();
   modal(exportMarkup({...snapshot, progressId:'mProgress', statusId:'mExportStatus'}));
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
@@ -807,7 +846,7 @@ function bindToolbar() {
     e.target.value = '';
   };
   $('#mExport').onclick = exportVideo;
-  $('#mSnapshot').onclick = async () => { if (!geo || (!await ensureDetail() && requiresDetail())) return; const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
+  $('#mSnapshot').onclick = async () => { if (!geo || (!await ensureDetail() && requiresDetail())) return; await preloadBadges(proj); const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
   $('#mPlay').onclick = play; $('#mStart').onclick = () => { pause(); setFrame(0); }; $('#mEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
   $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };

@@ -94,3 +94,4 @@ body.mode-map #mapStudio{display:flex}
 .m-dc-head select{width:auto;max-width:55%}
 .m-dc-head button{padding:2px 8px;font-size:14px;line-height:1.2}
 .m-dc small{font-size:10px;line-height:1.5;color:#98a1a8}
+.m-badge{margin:0 0 12px}.m-badge .two{margin:4px 0 10px}.m-badge button:disabled{opacity:.4;cursor:default}

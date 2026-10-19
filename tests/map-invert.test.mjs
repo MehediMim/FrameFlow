@@ -27,10 +27,31 @@ const fillAlphas = (log, color) => log.filter(l => l.op === 'fill' && l.fill ===
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const cases = {
+  'highlight (custom origin)': () => mk('highlight', { target: { kind: 'country', name: 'Testland' }, highlightOrigin: { kind: 'point', name: 'Corner', lat: 40, lon: 0 }, dim: .5, pulse: false, showLabel: true }),
+  'border (custom start)': () => mk('border', { target: { kind: 'country', name: 'Testland' }, borderFrom: 33.3, borderReverse: true }),
   'highlight (country)': () => mk('highlight', { target: { kind: 'country', name: 'Testland' }, dim: .5, pulse: false, showLabel: true, color: '#ffb703' }),
   'highlight (place)': () => mk('highlight', { target: { kind: 'city', name: 'Paris', lat: 48.8, lon: 2.3 }, dim: .5, pulse: false, showLabel: true, color: '#ffb703' }),
   'border': () => mk('border', { target: { kind: 'country', name: 'Testland' }, fillAlpha: .3, color: '#e4572e' }),
 };
+
+// Start points change the reveal geometry, while a completed border remains complete.
+{
+  const a = cases.border(), shifted = { ...a, borderFrom: 33.3 };
+  assert.ok(!same(render(a, START + 10), render(shifted, START + 10)), 'border starts at the selected outline point');
+  const { borderSection } = await import('../map-regions.mjs');
+  const ring = geo.byName.get('Testland').rings[0];
+  for (const from of [.333, .567, 1]) for (const reverse of [false, true]) {
+    const section = borderSection(ring, from, from + (reverse ? -1 : 1), 1, reverse);
+    assert.equal(section.closed, true, 'full border wraps around and closes from any start');
+  }
+  const h = cases['highlight (country)'](), origin = cases['highlight (custom origin)']().highlightOrigin;
+  assert.ok(!same(render(h, START + 10), render({ ...h, highlightOrigin: origin }, START + 10)), 'highlight grows from its chosen point');
+  const project = { ...E.newMapProject(), actions: [{ ...h, highlightOrigin: origin }] };
+  E.validateMapProject(JSON.parse(JSON.stringify(project)));
+  for (const invalid of [null, { ...origin, lat: 91 }, { ...origin, lon: NaN }]) {
+    assert.throws(() => E.validateMapProject({ ...project, actions: [{ ...h, highlightOrigin: invalid }] }), /highlight fill start/i);
+  }
+}
 
 for (const [name, make] of Object.entries(cases)) {
   const normal = make(), inverted = { ...make(), invert: true };

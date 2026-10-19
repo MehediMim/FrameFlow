@@ -988,7 +988,8 @@ function drawBorder(ctx, v, geo, th, a, frame) {
     let main = null;
     for (const [index,r] of f.rings.entries()) {
       if(a.borderPartial && index !== borderRingOf(f,a.borderRing))continue;
-      const pr = a.borderPartial ? borderSection(r,(a.borderFrom ?? 0)/100,(a.borderTo ?? 100)/100,local,!!a.borderReverse) : partialRing(r, local);
+      const from = (a.borderFrom ?? 0) / 100;
+      const pr = a.borderPartial ? borderSection(r,from,(a.borderTo ?? 100)/100,local,!!a.borderReverse) : (from || a.borderReverse) ? borderSection(r,from,from + (a.borderReverse ? -1 : 1),Math.min(1,local),!!a.borderReverse) : partialRing(r, local);
       loadXY(v, pr.xy, pr.n, off); emit(ctx, v, pr.n, pr.closed);
       if (!all && !r.hole && (!main || r.area > main.r.area)) main = { r, pr: { xy: pr.xy.slice(0, pr.n * 2), n: pr.n, closed: pr.closed } };
     }
@@ -1012,21 +1013,23 @@ export function drawRegionSelection(ctx,v,geo,selection){
 }
 
 export function drawBorderEndpoints(ctx,v,geo,action){
-  if(action?.type!=='border'||!action.borderPartial)return;
+  if(action?.type!=='border'||action.target?.kind==='all')return;
   const f=featureForTarget(geo,action.target);if(!f)return;
   const r=f.rings[borderRingOf(f,action.borderRing)];if(!r)return;
   const off=Math.round(v.cx-f.cx);
   for(const [t,label,color]of [[(action.borderFrom??0)/100,'Start','#00e5ff'],[(action.borderTo??100)/100,'End','#ffb703']]){
+    if(label==='End'&&!action.borderPartial)continue;
     const point=borderSection(r,t,t),q=project(v,point.xy[0]+off,point.xy[1]);
     ctx.save();headDot(ctx,q.x,q.y,5*v.unit,color,1);ctx.font=`600 ${12*v.unit}px Arial`;ctx.textAlign='center';ctx.fillStyle=color;ctx.fillText(label,q.x,q.y-12*v.unit);ctx.restore();
   }
 }
 
 // ---------------------------------------------------------------- Animation: highlight
-function featureRadius(f) { // farthest ring point from the centroid, in map units (cached)
-  if (f._rr) return f._rr;
-  let m = 0; for (const r of f.rings) for (let i = 0; i < r.n; i++) m = Math.max(m, Math.hypot(r.xy[2 * i] - f.cx, r.xy[2 * i + 1] - f.cy));
-  return (f._rr = m || .01);
+function featureRadius(f, x = f.cx, y = f.cy) { // cache the radius for the current reveal origin
+  if (f._revealRadius?.x === x && f._revealRadius.y === y) return f._revealRadius.radius;
+  let m = 0; for (const r of f.rings) for (let i = 0; i < r.n; i++) m = Math.max(m, Math.hypot(r.xy[2 * i] - x, r.xy[2 * i + 1] - y));
+  f._revealRadius = { x, y, radius: m || .01 };
+  return f._revealRadius.radius;
 }
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
@@ -1034,11 +1037,13 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   if (['country', 'region', 'regions'].includes(a.target?.kind)) {
     const f = featureForTarget(geo,a.target); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
-    const c = project(v, f.cx + off, f.cy), rad = featureRadius(f) * v.S * 1.05 * p;
+    const originX = a.highlightOrigin ? lonToX(a.highlightOrigin.lon) : f.cx;
+    const x = originX + Math.round(f.cx - originX), y = a.highlightOrigin ? latToY(a.highlightOrigin.lat) : f.cy;
+    const c = project(v, f.cx + off, f.cy), rad = featureRadius(f, x, y) * v.S * 1.05 * p;
     ctx.save();
     if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
     if (rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
-      ctx.save(); ctx.beginPath(); groundCircle(ctx, v, f.cx, f.cy, rad, off); ctx.clip();
+      ctx.save(); ctx.beginPath(); groundCircle(ctx, v, x, y, rad, off); ctx.clip();
       path(); ctx.globalAlpha = alpha * .78; ctx.fillStyle = a.color; ctx.fill('evenodd');
       ctx.lineJoin = 'round'; glowStroke(ctx, a.color, 2.6 * v.unit, alpha, true);
       if (a.pulse) { const q = (age % 54) / 54; ctx.globalAlpha = alpha * (1 - q) * .35; ctx.fillStyle = '#fff'; path(); ctx.fill('evenodd'); }
@@ -1644,6 +1649,7 @@ export function validateMapProject(p) {
     checkLabelStyle(a.labelStyle);
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');
+    if (a.type === 'highlight' && a.highlightOrigin !== undefined && !(a.highlightOrigin?.kind === 'point' && isLoc(a.highlightOrigin))) throw Error('Invalid highlight fill start.');
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');

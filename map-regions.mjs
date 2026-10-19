@@ -41,7 +41,7 @@ export function combinedFeature(features, name='Selected regions') {
   if(coords.length>=6){let area=0;for(let i=0;i<coords.length-2;i+=2)area+=coords[i]*coords[i+3]-coords[i+2]*coords[i+1];rings.push({xy:new Float64Array(coords),n:coords.length/2,area:Math.abs(area/2),hole:false})}
  }
  const bbox=[Math.min(...features.map(f=>f.bbox[0])),Math.min(...features.map(f=>f.bbox[1])),Math.max(...features.map(f=>f.bbox[2])),Math.max(...features.map(f=>f.bbox[3]))];
- const {_rr,_anchor,...base}=features[0];
+ const {_rr,_anchor,_revealRadius,...base}=features[0];
  return {...base,name,rings,bbox,mainBox:bbox,cx:(bbox[0]+bbox[2])/2,cy:(bbox[1]+bbox[3])/2};
 }
 
@@ -53,7 +53,7 @@ export function borderRingOf(feature,index){
 export function borderSection(r,from,to,progress=1,reverse=false){
  const points=[];let total=0;const cum=[0];
  for(let i=1;i<r.n;i++){total+=Math.hypot(r.xy[2*i]-r.xy[2*i-2],r.xy[2*i+1]-r.xy[2*i-1]);cum.push(total)}
- const distance=reverse?from-to:to-from,span=(Math.abs(distance)===1?1:distance<0?distance+1:distance)*progress,dir=reverse?-1:1;
+ const distance=reverse?from-to:to-from,span=(Math.abs(Math.abs(distance)-1)<1e-12?1:distance<0?distance+1:distance)*progress,dir=reverse?-1:1;
  const sample=t=>{const d=((t%1)+1)%1*total;let i=1;while(i<r.n-1&&cum[i]<d)i++;const u=(d-cum[i-1])/(cum[i]-cum[i-1]||1);return [r.xy[2*i-2]+(r.xy[2*i]-r.xy[2*i-2])*u,r.xy[2*i-1]+(r.xy[2*i+1]-r.xy[2*i-1])*u]};
  if(!total)return {xy:r.xy,n:0,closed:false};
  points.push(...sample(from));

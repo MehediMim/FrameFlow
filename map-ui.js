@@ -326,6 +326,7 @@ function renderInspector() {
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
   let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>`;
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
+  if (!shot && ['border', 'highlight'].includes(it.type)) h += `<div class="section-title m-sep">TIMING</div><div class="two">${F.num('__startSeconds', 'Start (seconds)', it.start / proj.fps, 0, undefined, 'any')}${F.num('__finishSeconds', 'Finish (seconds)', (it.start + it.dur) / proj.fps, 0, undefined, 'any')}</div><p class="mini-label">Appears at Start and disappears at Finish. Times snap to the nearest frame.</p>`;
   h += `<div class="two">${F.num('start', 'Start frame', it.start, 0)}${F.num('dur', shot ? 'Length (frames)' : 'Visible for (frames)', it.dur, 1)}</div>` + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   if (!shot) h += F.num('animDur', 'Animation duration (frames)', it.animDur, 1) + '<p class="mini-label">The timeline bar controls when this is visible. Animation duration controls how long it takes to draw or move. It disappears when the bar ends.</p>';
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
@@ -497,6 +498,15 @@ function bindInspector(it) {
       if (key === '__pinDisplay') { it.badge = v === 'badge'; it.showIcon = v === 'badge' ? false : v !== 'text'; it.showLabel = v !== 'icon'; if (it.badge && !it.size) it.size = 1; changed(); renderInspector(); return; }
       if (key === '__hmode') { it.target = v === 'country' ? (isDetail() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
       if (t === 'num') {
+        if (key === '__startSeconds' || key === '__finishSeconds') {
+          const target = Math.round(v * proj.fps), finish = it.start + it.dur;
+          if (!Number.isFinite(v) || v < 0 || !Number.isSafeInteger(target) || (key === '__startSeconds' ? target >= finish : target <= it.start)) {
+            notify('Enter a valid time, with Finish after Start.'); renderInspector(); return;
+          }
+          if (key === '__startSeconds') { it.start = target; it.dur = finish - target; }
+          else it.dur = target - it.start;
+          ensureLength(it.start + it.dur); changed(); renderInspector(); return;
+        }
         const lo = Number(el.min), hi = el.max === '' ? Infinity : Number(el.max);
         if (key === 'start' || key === 'dur' || key === 'animDur') {
           if (!Number.isFinite(v)) { el.value = it[key]; notify('Enter a valid frame number.'); return; }
@@ -505,7 +515,7 @@ function bindInspector(it) {
           if (!Number.isSafeInteger(v) || !Number.isSafeInteger(end)) { el.value = it[key]; notify('Enter a valid frame number.'); return; }
           if (it.moveStart !== undefined && key === 'start') { const shift = v - it.start; it.moveStart += shift; it.moveEnd += shift; }
           if (it.moveStart !== undefined && key === 'dur') { it.moveEnd = Math.min(it.moveEnd, it.start + v); it.moveStart = Math.min(it.moveStart, it.moveEnd - 1); }
-          it[key] = v; if (key !== 'animDur') ensureLength(end); el.value = v; changed(); return;
+          it[key] = v; if (key !== 'animDur') ensureLength(end); el.value = v; changed(); if (['border', 'highlight'].includes(it.type)) renderInspector(); return;
         }
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;

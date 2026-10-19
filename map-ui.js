@@ -14,9 +14,10 @@ import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mj
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
-import { cameraAt, xToLon, yToLat } from './map-engine.mjs?v=invert-1';
+import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=invert-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey } from './map-timing.mjs';
 import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
+import { trimMapHistory } from './map-history.mjs';
 let cameraProperty = 'all';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -45,7 +46,7 @@ function notify(s) {
   const t = $('#toast'); t.textContent = s; t.classList.add('show');
   clearTimeout(notify.timer); notify.timer = setTimeout(() => t.classList.remove('show'), 2600); $('#mStatus').textContent = s;
 }
-function checkpoint() { undoStack.push(JSON.stringify(proj)); if (undoStack.length > 80) undoStack.shift(); redoStack = []; updateHistory(); }
+function checkpoint() { undoStack.push(JSON.stringify(proj)); redoStack = []; trimMapHistory(undoStack, redoStack); updateHistory(); }
 function updateHistory() { const a=audioUI?.historyState(); $('#mUndo').disabled = a?!a.undo:!undoStack.length; $('#mRedo').disabled = a?!a.redo:!redoStack.length; }
 function saveLocal() { try { localStorage.setItem(STORE, JSON.stringify(proj)); $('#mSaveState').textContent = 'Saved locally'; } catch { $('#mSaveState').textContent = 'Save project to keep changes'; } }
 function changed() { saveLocal(); renderItems(); renderTimeline(); draw(); }
@@ -55,6 +56,7 @@ function history(dir) {
   const from = dir === 'undo' ? undoStack : redoStack, to = dir === 'undo' ? redoStack : undoStack;
   if (!from.length) return;
   to.push(JSON.stringify(proj)); proj = JSON.parse(from.pop());
+  trimMapHistory(undoStack, redoStack);
   if (!items().some(i => i.id === sel)) sel = null;
   frame = Math.min(frame, proj.frames - 1); saveLocal(); renderAll(); updateHistory();
 }
@@ -159,6 +161,7 @@ function parseLoc(text, kinds) {
 const seenFonts = new Set();
 function syncFonts() { for (const n of mapFontsUsed(proj)) { if (seenFonts.has(n)) continue; seenFonts.add(n); loadFont(n).then(() => draw()); } }
 function draw() {
+  if (!document.body.classList.contains('mode-map')) return;
   syncFonts();
   if (canvas.width !== proj.width || canvas.height !== proj.height) { canvas.width = proj.width; canvas.height = proj.height; }
   const ratio = `${proj.width} / ${proj.height}`; if (canvas.style.aspectRatio !== ratio) canvas.style.aspectRatio = ratio;
@@ -170,7 +173,7 @@ function draw() {
     if (geoState === 'error') { ctx.font = `${Math.round(canvas.height / 44)}px Arial, sans-serif`; ctx.fillText('Serve this folder over http (for example: python -m http.server 8000) and reload.', canvas.width / 2, canvas.height / 2 + canvas.height / 20); }
     return;
   }
-  lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera);
+  lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera, { cacheBase: true });
   if (pick?.key === '__members') { const a = current(); if (a && regionTarget(a)) drawRegionSelection(ctx, lastView, geo, targetMembers(a.target)); }
   if(!playing&&current()?.visible!==false)drawBorderEndpoints(ctx,lastView,geo,current());
   $('#mResetView').hidden = !previewCamera;
@@ -184,7 +187,7 @@ function setFrame(n) {
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
-  if (current()?.preset === 'keyframed' && !playing) { renderInspector(); renderTimeline(); }
+  if (current()?.preset === 'keyframed') { if (!playing) updateCameraInspector(current()); updateCameraKeySelection(); }
   window.dispatchEvent(new CustomEvent("ff-frame",{detail:{studio:"map",frame,fps:proj.fps,playing}}));
 }
 function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
@@ -446,6 +449,19 @@ function pathAction(a, what) {
 }
 const cameraEditFrame = s => clamp(frame, s.start, s.start + s.dur);
 const cameraTrackFields = () => CAMERA_PROPERTIES[cameraProperty]?.fields || Object.keys(CAMERA_FIELDS);
+function updateCameraInspector(s) {
+  const at = cameraEditFrame(s), pose = cameraPoseAt(s, at), key = cameraKeysOf(s).find(k => k.frame === at), disabled = frame < s.start || frame > s.start + s.dur;
+  $$('#mInspector [data-camera-field]').forEach(el => { el.disabled = disabled; if (el !== document.activeElement) el.value = +pose[el.dataset.cameraField].toFixed(3); });
+  $$('#mInspector [data-camera-toggle]').forEach(el => {
+    const fields = CAMERA_PROPERTIES[el.dataset.cameraToggle]?.fields || Object.keys(CAMERA_FIELDS), keyed = fields.every(f => key?.values[f] !== undefined);
+    el.disabled = disabled; el.classList.toggle('current', keyed);
+    const text = (keyed ? '\u25c6' : '\u25c7') + (el.dataset.cameraToggle === 'all' ? ' Camera keyframe' : '');
+    if (el.textContent !== text) el.textContent = text;
+  });
+  $$('#mInspector [data-camera-view], #mInspector [data-camera-center-pick], #mInspector [data-camera-center-view]').forEach(el => el.disabled = disabled);
+  const label = $('#mInspector [data-camera-playhead]'), text = disabled ? 'Move the playhead inside this camera bar to edit.' : 'At playhead - frame ' + at;
+  if (label && label.textContent !== text) label.textContent = text;
+}
 function bindCameraInspector(s) {
   if (s.preset !== 'keyframed') return;
   $$('#mInspector [data-camera-field]').forEach(el => el.onchange = () => {
@@ -492,7 +508,7 @@ function cameraPositionFields(s, pose, disabled) {
 function shotFields(s) {
   if (s.preset === 'keyframed') {
     const at = cameraEditFrame(s), pose = cameraPoseAt(s, at), key = cameraKeysOf(s).find(k => k.frame === at), disabled = frame < s.start || frame > s.start + s.dur;
-    return `<div class="m-camera-keybar"><button type="button" data-camera-nav="-1" title="Previous keyframe">&lsaquo;</button><button type="button" data-camera-toggle="all" ${disabled ? 'disabled' : ''} title="Add or remove all camera properties at playhead">${key && Object.keys(CAMERA_FIELDS).every(f => key.values[f] !== undefined) ? '&#9670;' : '&#9671;'} Camera keyframe</button><button type="button" data-camera-nav="1" title="Next keyframe">&rsaquo;</button></div><p class="mini-label">${disabled ? 'Move the playhead inside this camera bar to edit.' : 'At playhead - frame ' + at}</p>` +
+    return `<div class="m-camera-keybar"><button type="button" data-camera-nav="-1" title="Previous keyframe">&lsaquo;</button><button type="button" data-camera-toggle="all" ${disabled ? 'disabled' : ''} title="Add or remove all camera properties at playhead">${key && Object.keys(CAMERA_FIELDS).every(f => key.values[f] !== undefined) ? '&#9670;' : '&#9671;'} Camera keyframe</button><button type="button" data-camera-nav="1" title="Next keyframe">&rsaquo;</button></div><p class="mini-label" data-camera-playhead>${disabled ? 'Move the playhead inside this camera bar to edit.' : 'At playhead - frame ' + at}</p>` +
       Object.entries(CAMERA_PROPERTIES).map(([property, spec]) => `<div class="m-camera-property"><div class="m-camera-property-title"><span>${spec.label}</span><button type="button" class="key ${spec.fields.every(f => key?.values[f] !== undefined) ? 'current' : ''}" data-camera-toggle="${property}" ${disabled ? 'disabled' : ''} title="Toggle ${spec.label} keyframe at playhead">${spec.fields.every(f => key?.values[f] !== undefined) ? '&#9670;' : '&#9671;'}</button></div><div>${property === 'position' ? cameraPositionFields(s, pose, disabled) : spec.fields.map(field => `<label>${field === 'lon' ? 'Longitude' : field === 'lat' ? 'Latitude' : ''}<input type="number" data-camera-field="${field}" min="${CAMERA_FIELDS[field][0]}" max="${CAMERA_FIELDS[field][1]}" step="${['lon','lat'].includes(field) ? '.01' : '.1'}" value="${+pose[field].toFixed(3)}" ${disabled ? 'disabled' : ''}></label>`).join('')}</div></div>`).join('') + `<button type="button" data-camera-view ${disabled ? 'disabled' : ''}>Use current map view at playhead</button>`;
   }
   const P = PRESETS[s.preset], has = k => P.fields.includes(k);
@@ -878,13 +894,24 @@ function bindSettings() {
 
 // ------------------------------------------------------------------ timeline
 function frameFromEvent(e) { const b = $('#mTracks').getBoundingClientRect(); return clamp(Math.round((e.clientX - b.left) / b.width * (proj.frames - 1)), 0, proj.frames - 1); }
+function updateCameraKeySelection() {
+  $$('#mTrackRows [data-map-key]').forEach(el => el.classList.toggle('current', el.dataset.keyItem === sel && el.dataset.mapKey === `camera:${frame}`));
+}
+function updateTimelineItem(it) {
+  const row = $$('#mTrackRows [data-mrow]').find(el => el.dataset.mrow === it.id); if (!row) return;
+  const clip = row.querySelector('[data-mclip]'), last = proj.frames - 1;
+  clip.style.left = `${it.start / last * 100}%`; clip.style.width = `${Math.max(.6, it.dur / last * 100)}%`;
+  clip.title = `${it.name} · frame ${it.start}–${it.start + it.dur}`;
+  row.querySelectorAll(':scope > [data-map-key]').forEach(el => el.remove());
+  row.insertAdjacentHTML('beforeend', timelineKeys(it, last)); bindTimelineKeys(row);
+}
 function timelineKeys(it, last) {
   if (it.preset === 'keyframed') return cameraKeysOf(it).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).map(k => `<button type="button" class="m-key ${k.frame === frame && it.id === sel ? 'current' : ''}" data-map-key="camera:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Camera keyframe - frame ${k.frame}. Drag to retime." aria-label="Camera keyframe, frame ${k.frame}"></button>`).join('');
   const keys = animationKeysOf(it);
   return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('');
 }
-function bindTimelineKeys() {
-  $$('[data-map-key]').forEach(el => {
+function bindTimelineKeys(root = document) {
+  [...root.querySelectorAll('[data-map-key]')].forEach(el => {
     el.onpointerdown = e => {
       if (e.button !== 0) return;
       e.preventDefault(); e.stopPropagation(); pause();
@@ -933,17 +960,18 @@ function renderTimeline() {
 function scrub(e) { pause(); setFrame(frameFromEvent(e)); drag = { kind: 'scrub' }; }
 window.addEventListener('pointermove', e => {
   if (!drag) return;
-  if (drag.kind === 'scrub') { setFrame(frameFromEvent(e)); return; }
+  if (drag.kind === 'scrub') { const next = frameFromEvent(e); if (next !== frame) setFrame(next); return; }
   const it = items().find(i => i.id === drag.id); if (!it) return;
   const d = frameFromEvent(e) - drag.x0; if (d !== 0) drag.moved = true;
   if (drag.mode.startsWith('camera:')) {
     const from = +drag.mode.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur);
-    it.cameraKeys = clone(drag.cameraKeys); moveCameraKey(it, from, to, cameraTrackFields()); setFrame(to); renderTimeline(); draw(); return;
+    if (drag.lastTo === to) return; drag.lastTo = to;
+    it.cameraKeys = clone(drag.cameraKeys); moveCameraKey(it, from, to, cameraTrackFields()); setFrame(to); updateTimelineItem(it); return;
   }
   if (drag.mode === 'animationStart' || drag.mode === 'animationEnd') {
     const keys = animationKeysOf({ start: drag.start, dur: drag.dur, animStart: drag.animStart, animEnd: drag.animEnd, animDur: drag.animDur, moveStart: drag.moveStart, moveEnd: drag.moveEnd });
     setAnimationKey(it, drag.mode, keys[drag.mode === 'animationStart' ? 'start' : 'end'] + d);
-    renderTimeline(); draw(); return;
+    updateTimelineItem(it); draw(); return;
   }
   let start = drag.start, dur = drag.dur;
   if (drag.mode === 'move') start = clamp(drag.start + d, 0, proj.frames - 1);
@@ -955,8 +983,9 @@ window.addEventListener('pointermove', e => {
   if (drag.moveStart !== undefined) { it.moveStart = drag.moveStart; it.moveEnd = drag.moveEnd; }
   if (drag.cameraKeys) it.cameraKeys = clone(drag.cameraKeys);
   retimeMapItem(it, start, dur, drag.mode === 'move');
-  ensureLength(it.start + it.dur);
-  renderTimeline(); draw(); const s = $('#mInspector [data-mf="start"]'), l = $('#mInspector [data-mf="dur"]'); if (s) s.value = it.start; if (l) l.value = it.dur;
+  const oldFrames = proj.frames; ensureLength(it.start + it.dur);
+  if (proj.frames !== oldFrames) renderTimeline(); else updateTimelineItem(it);
+  draw(); const s = $('#mInspector [data-mf="start"]'), l = $('#mInspector [data-mf="dur"]'); if (s) s.value = it.start; if (l) l.value = it.dur;
 });
 window.addEventListener('pointerup', () => { if (drag?.kind === 'clip') { if (!drag.moved) undoStack.pop(); changed(); renderInspector(); updateHistory(); } drag = null; });
 $('#mRuler').onpointerdown = scrub;
@@ -1142,7 +1171,7 @@ setMode(startMode)
 installTimelineControls({
  name:'map',timeline:'#mapStudio .timeline',scroll:'#mScroll',zoom:'#mZoomT',containers:['#mTrackLabels','#mItems'],
  rows:'[data-mtl],[data-mid],[data-audio-label],[data-audio-layer]',id:r=>r.dataset.mtl||r.dataset.mid||r.dataset.audioLabel||r.dataset.audioLayer,
- item:id=>audioUI?.item(id)||items().find(it=>it.id===id),oldButtons:['#mMoveUp','#mMoveDown','#mDuplicate','#mDelete'],
+ item:id=>audioUI?.item(id)||proj.actions.find(it=>it.id===id)||proj.shots.find(it=>it.id===id),oldButtons:['#mMoveUp','#mMoveDown','#mDuplicate','#mDelete'],
  enabled(id,action){if(audioUI?.item(id))return audioUI.rowEnabled(id,action);const i=proj.actions.findIndex(a=>a.id===id);return action==='up'?i>0:action==='down'?i>=0&&i<proj.actions.length-1:true;},
  action(id,action){if(audioUI?.item(id)){audioUI.rowAction(id,action);return;}pause();select(id);if(action==='visibility'){checkpoint();current().visible=current().visible===false;changed();renderInspector();}else if(action==='up'||action==='down')moveItem(action==='up'?-1:1);else document.querySelector(action==='duplicate'?'#mDuplicate':'#mDelete').click();}
 });

@@ -100,7 +100,7 @@ function editor(p) {
     return elements.get(id);
   };
   const context = vm.createContext({
-    OBJECT_ICONS, EFFECTS, SHAPES, retimeMapItem, bindCameraInspector() {},
+    OBJECT_ICONS, EFFECTS, SHAPES, retimeMapItem, bindCameraInspector() {}, updateTimelineItem() {},
     proj: p, frame: p.frames - 1,
     $: selector => selector.startsWith('#mInspector') ? null : element(selector),
     $$: selector => selector === '#mInspector [data-mf]' ? fields : [],

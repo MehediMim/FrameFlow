@@ -45,6 +45,7 @@ export function installTimelineControls(spec) {
 
   const containers = spec.containers.map(s => document.querySelector(s)).filter(Boolean);
   function refresh() {
+    observer.disconnect();
     for (const container of containers) for (const row of container.querySelectorAll(spec.rows)) {
       const id = spec.id(row), item = spec.item(id); if (!item) continue;
       row.classList.toggle('ff-layer-hidden', item.visible === false || item.muted === true);
@@ -62,6 +63,7 @@ export function installTimelineControls(spec) {
         if (action === 'visibility') { const hidden = item.visible === false || item.muted === true; const label = item.muted !== undefined ? (hidden ? 'Unmute audio' : 'Mute audio') : (hidden ? 'Show layer' : 'Hide layer'); button.title = label; button.setAttribute('aria-label', label); button.setAttribute('aria-pressed', String(hidden)); }
       }
     }
+    for (const container of containers) observer.observe(container, { childList: true, subtree: true });
   }
   const observer = new MutationObserver(refresh);
   for (const container of containers) {

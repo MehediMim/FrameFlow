@@ -230,6 +230,7 @@ export function installCountryDetail(geo, pack) {
   const cities = Array.isArray(pack.cities) ? pack.cities.filter(c => Array.isArray(c) && typeof c[0] === 'string' && Number.isFinite(c[1]) && Number.isFinite(c[2])).map(c => [c[0], c[1], c[2], c[3] || pack.country]) : undefined;
   geo.details ||= new Map();
   geo.details.set(pack.country, {...set, levels, cities, defaultLevel:pack.defaultLevel, sources:pack.sources, defaultRegion:pack.defaultRegion, levelLabels:pack.levelLabels, ready:pack.ready, attribution:pack.attribution});
+  geo.detailRevision = (geo.detailRevision || 0) + 1;
   return geo.details.get(pack.country);
 }
 export function detailRegions(proj, geo) {
@@ -824,6 +825,29 @@ function drawAttribution(ctx, v, text) {
   ctx.strokeText(text, v.W - 8 * v.unit, v.H - 6 * v.unit); ctx.fillText(text, v.W - 8 * v.unit, v.H - 6 * v.unit); ctx.restore();
 }
 // ---------------------------------------------------------------- Base map
+const baseMapCache = new WeakMap();
+function drawPreviewBase(ctx, v, geo, th, proj) {
+  // One bounded raster per preview context. Animated overlays and exports keep
+  // their normal rendering path; satellite tiles must refresh as they arrive.
+  if (v.img || v.W * v.H > 4_000_000 || (typeof OffscreenCanvas === 'undefined' && typeof document === 'undefined')) { drawBase(ctx, v, geo, th, proj); return; }
+  const key = JSON.stringify([v.W, v.H, v.cx, v.cy, v.cam.zoom, v.cam.pitch, v.cam.bearing, proj.theme, proj.graticule, proj.area, geo.detailRevision || 0]);
+  let cached = baseMapCache.get(ctx);
+  if (!cached || cached.geo !== geo || cached.key !== key) {
+    baseMapCache.set(ctx, { geo, key, surface: cached?.surface, ready: false });
+    drawBase(ctx, v, geo, th, proj); return;
+  }
+  if (!cached.ready) {
+    const surface = cached?.surface || (typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(v.W, v.H) : document.createElement('canvas'));
+    if (surface.width !== v.W) surface.width = v.W;
+    if (surface.height !== v.H) surface.height = v.H;
+    const base = surface.getContext('2d'); base.lineJoin = 'round'; base.lineCap = 'round';
+    drawBase(base, v, geo, th, proj);
+    cached = { geo, key, surface, ready: true, fillStyle: base.fillStyle, strokeStyle: base.strokeStyle, lineWidth: base.lineWidth };
+    baseMapCache.set(ctx, cached);
+  }
+  ctx.drawImage(cached.surface, 0, 0);
+  ctx.fillStyle = cached.fillStyle; ctx.strokeStyle = cached.strokeStyle; ctx.lineWidth = cached.lineWidth;
+}
 function drawBase(ctx, v, geo, th, proj) {
   ctx.fillStyle = th.void; ctx.fillRect(0, 0, v.W, v.H);
   const k0 = Math.round(v.cx);
@@ -1430,7 +1454,7 @@ const OBJ_H = { drawBadge, resolveLoc, project, groundCircle, actionProgress: ob
 
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
-export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null) {
+export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
   const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
   proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false) };
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(camera, W, H), labels = [];
@@ -1443,7 +1467,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null) {
   }
   if (th.imagery && geo.imagery) v.img = { im: geo.imagery, id: proj.imagery || 'gibs' };
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  drawBase(ctx, v, geo, th, proj);
+  if (cacheBase) drawPreviewBase(ctx, v, geo, th, proj); else drawBase(ctx, v, geo, th, proj);
   // Route names belong to their travel clip, including before and after it.
   drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)

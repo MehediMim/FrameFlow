@@ -68,7 +68,7 @@ const neutralCamera=()=>({zoom:1,x:0,y:0,rotation:0,yaw:0,pitch:0,dolly:0,
 const blend=(a,b,t)=>a+(b-a)*t;
 export function cameraAt(p,f){
  const state=neutralCamera();
- const shots=[...cameraShots(p)].sort((a,b)=>a.start-b.start);
+ const shots=cameraShots(p).filter(s=>s.visible!==false).sort((a,b)=>a.start-b.start);
  for(const s of shots){
   if(f<s.start)break;
   const dur=Math.max(1,finite(s.dur,1)),end=s.start+dur,hold=s.endBehavior==='hold';
@@ -262,5 +262,5 @@ export function attachMotionCamera(host){
  function timelineRefresh(){document.querySelectorAll('.ff-camera-clip').forEach(el=>el.classList.toggle('selected',el.dataset.cameraClip===active));}
  window.addEventListener('pointermove',e=>{if(!drag)return;const p=host.project(),s=cameraShots(p).find(x=>x.id===drag.id),width=$('#tracks')?.getBoundingClientRect().width||1;if(!s)return;const d=Math.round((e.clientX-drag.startX)/width*(p.frames-1));if(drag.mode==='move')rebaseCameraShot(p,s,clamp(drag.start+d,0,p.frames-s.dur));else if(drag.mode==='left'){const end=drag.start+drag.dur;rebaseCameraShot(p,s,clamp(drag.start+d,0,end-1));s.dur=end-s.start;}else s.dur=clamp(drag.dur+d,1,p.frames-s.start);host.draw();host.renderTimeline();});
  window.addEventListener('pointerup',()=>{if(drag){drag=null;host.changed();}});
- return {inspect,timeline,clear:()=>{active=null},isActive:()=>!!find(),removeSelected:()=>{const s=find();if(!s)return false;host.pause();host.checkpoint();const p=host.project();p.cameraShots=p.cameraShots.filter(x=>x.id!==s.id);active=null;host.changed();return true;}};
+ return {inspect,timeline,clear:()=>{active=null},select:id=>{active=id;host.selectLayer(null)},isActive:()=>!!find(),removeSelected:()=>{const s=find();if(!s)return false;host.pause();host.checkpoint();const p=host.project();p.cameraShots=p.cameraShots.filter(x=>x.id!==s.id);active=null;host.changed();return true;}};
 }

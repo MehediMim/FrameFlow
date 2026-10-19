@@ -126,6 +126,9 @@ export function registerAudioStudio(studio, host) {
   for(const type of ['ff-play','ff-frame'])window.addEventListener(type,e=>{if(e.detail.studio!==studio)return;playing=e.detail.playing;sync(type==='ff-play');});
   window.addEventListener('blur',()=>{if(drag){drag=null;refresh();}});
   return {renderList,renderTimeline,renderInspector,remove,duplicate,move,canMove,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
+    item: id => state.layers.find(l => l.id === id),
+    rowEnabled(id, action) { const i = state.layers.findIndex(l => l.id === id); return i >= 0 && (action === 'up' ? i > 0 : action === 'down' ? i < state.layers.length - 1 : true); },
+    rowAction(id, action) { host.pause(); host.select(id); if(action === 'visibility') { checkpoint(); const l=current(); l.muted=!l.muted; refresh(id); } else if(action === 'up' || action === 'down') move(action === 'up' ? -1 : 1); else if(action === 'duplicate') duplicate(); else if(action === 'delete') remove(); },
     handlesHistory:()=>!!current()||(!host.getSelected()&&!!(state.history.length||state.future.length)),
     historyState:()=>current()||(!host.getSelected()&&(state.history.length||state.future.length))?{undo:!!state.history.length,redo:!!state.future.length}:null,
     reset(){++state.generation;state.loading=false;state.layers=[];state.history=[];state.future=[];stop();},count:()=>state.layers.length};

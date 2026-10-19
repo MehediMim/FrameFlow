@@ -1,3 +1,4 @@
+import { installTimelineControls } from './timeline-controls.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, alertStudio, sceneExportDialog, CANVAS_SIZES, settingsSection } from './studio-ui.mjs?v=preview-controls-1';
 // FrameFlow Scene Studio UI. Layout follows Map Studio: add-grids + item list on the left, inspector on the right,
@@ -141,7 +142,7 @@ function renderTimeline() {
   const clipEl = (c, cls, label, attr, tip, isSel = selClip === c.id) => c.start >= p.duration ? '' : `<div class="sc-clip ${cls} ${isSel ? 'selected' : ''}" ${attr}="${esc(c.id)}" style="left:${pct(c.start)}%;width:${Math.max(.4, pct(Math.min(c.dur ?? c.duration, p.duration - c.start)))}%" title="${esc(tip)}"><i class="sc-h l" data-h="l"></i><span>${esc(label)}</span><i class="sc-h r" data-h="r"></i></div>`;
   const ticks = Array.from({ length: Math.ceil(10 * timelineZoom) + 1 }, (_, i) => `<span style="left:${i / (10 * timelineZoom) * 100}%">${(i * p.duration / (10 * timelineZoom)).toFixed(1)}</span>`).join('');
   const camSel = findClip(selClip)?.kind === 'camera';
-  const camRow = `<div class="sc-track ${camSel ? 'selected' : ''}"><span class="sc-track-name"><i>◉</i>Camera</span><div class="sc-lane" data-lane="camera">${p.cameraClips.map(c => clipEl(c, 'cam', `${CAMERA_MODES[c.mode]} · ${CAMERA_MOVES[c.move].split(' ')[0]}`, 'data-clip', `${CAMERA_MODES[c.mode]} · ${c.start.toFixed(2)}–${(c.start + c.dur).toFixed(2)}s`)).join('')}<b></b></div></div>`;
+  const camRow = `<div class="sc-track ${camSel ? 'selected' : ''}"><span class="sc-track-name" data-camera-track="true"><i>◉</i>Camera</span><div class="sc-lane" data-lane="camera">${p.cameraClips.map(c => clipEl(c, 'cam', `${CAMERA_MODES[c.mode]} · ${CAMERA_MOVES[c.move].split(' ')[0]}`, 'data-clip', `${CAMERA_MODES[c.mode]} · ${c.start.toFixed(2)}–${(c.start + c.dur).toFixed(2)}s`)).join('')}<b></b></div></div>`;
   const rows = p.objects.map(o => {
     const human = o.type === 'human', mobile = ['car', 'bus'].includes(o.type);
     const content = human ? `<u class="sc-life" style="left:${pct(o.start)}%;width:${pct(Math.max(0, Math.min(o.duration, p.duration - o.start)))}%"></u>` + (o.clips || []).map(c => clipEl(c, 'g-' + c.gesture, GESTURES[c.gesture], 'data-clip', `${GESTURES[c.gesture]} · ${c.start.toFixed(2)}–${(c.start + c.dur).toFixed(2)}s`)).join('')
@@ -357,7 +358,7 @@ function drawPlan(){
  for(const side of [-1,1])for(let i=0;i<16;i++){const style=side<0?p.left:p.right;if(style==='none')continue;const q=screenPoint(side*(p.roadWidth/2+5),i*9-30);g.fillStyle=style==='city'?'#586572':'#395b48';g.fillRect(q[0]-2*Z,q[1]-3*Z,4*Z,6*Z);}
  // Surfaces first, then props. Sorting does not modify the saved item order.
  const rank=o=>['road','junction','park'].includes(o.type)?0:o.type==='crossing'?1:2;
- for(const o of [...p.objects].sort((a,b)=>rank(a)-rank(b))){
+ for(const o of p.objects.filter(o=>o.visible!==false).sort((a,b)=>rank(a)-rank(b))){
   const sel=o.id===selected&&!selClip,col=o.visible?o.color:'#69727a',q=screenPoint(o.x,o.z),sz=itemSize(o),w=sz[0]*Z*o.scale,d=sz[1]*Z*o.scale;
   g.save();g.translate(...q);g.rotate(actorYaw(o,0));g.globalAlpha=o.visible?1:.35;g.fillStyle=col;g.strokeStyle=sel?'#b6f36e':'#a0acb4';g.lineWidth=sel?3:1;
   if(o.type==='crossing'){for(let xx=-w/2;xx<w/2;xx+=Z*o.scale)g.fillRect(xx,-d/2,.5*Z*o.scale,d);}
@@ -369,13 +370,13 @@ function drawPlan(){
   g.restore();g.fillStyle='#e4ecf1';g.font='14px sans-serif';g.textAlign='left';if(sel||rank(o)===2)g.fillText(o.name,q[0]+17,q[1]-15);
  }
  // Routes and handles are overlays so they remain selectable above large road pieces.
- for(const o of p.objects.filter(isMobile)){
+ for(const o of p.objects.filter(o=>o.visible!==false&&isMobile(o))){
   const sel=o.id===selected&&!selClip,pts=routePoints(o);for(let i=1;i<pts.length;i++)line(screenPoint(...pts[i-1]),screenPoint(...pts[i]),sel?'#b6f36e':'#68808d',sel?3:1,sel?[]:[6,4]);
   circle(o.endX,o.endZ,sel?12:4,sel?'#b6f36e':'#75828a',sel?'B':'');
   if(sel){circle(o.x,o.z,12,'#6ecbea','A');for(const [i,v] of (o.waypoints||[]).entries())circle(v.x,v.z,11,'#f3cc74',String(i+1));}
   const pos=actorPosition(o,time);circle(pos[0],pos[2],5,'#ffffff');const y=actorYaw(o,time);line(screenPoint(pos[0],pos[2]),screenPoint(pos[0]+Math.sin(y)*1.5,pos[2]+Math.cos(y)*1.5),'#ffffff',2);
  }
- const sel=currentObject();if(sel&&!selClip){const rp=rotationPoint(sel);line(screenPoint(sel.x,sel.z),screenPoint(...rp),'#f5ad66',2);circle(...rp,11,'#f5ad66','↻');}
+ const sel=currentObject();if(sel&&sel.visible!==false&&!selClip){const rp=rotationPoint(sel);line(screenPoint(sel.x,sel.z),screenPoint(...rp),'#f5ad66',2);circle(...rp,11,'#f5ad66','↻');}
  const cam=cameraAt(p,time),cp=screenPoint(cam.pos[0],cam.pos[2]),aim=screenPoint(cam.look[0],cam.look[2]);line(cp,aim,'#71cfff',2,[6,4]);circle(cam.pos[0],cam.pos[2],13,'#71cfff','C');circle(cam.look[0],cam.look[2],7,'#71cfff','');
  g.fillStyle='#c7d5df';g.font='15px sans-serif';g.textAlign='left';g.fillText('TOP VIEW  ·  X ↔  Z ↑  ·  grid '+step+' m',22,30);
  root.querySelector('.sc-hint').textContent=placement?'Click to place '+ITEM_TYPES[placement]+' · Escape cancels':planTool==='route'?'Click to add turn points before B · Drag points after pressing Escape · Right-click a point to remove':planTool==='camera'?'Click to place the fixed camera':planTool==='aim'?'Click where the fixed camera should look':'Drag to move · Orange handle rotates (Shift: 15° steps) · Shift-drag A moves its route · Right-drag or middle-drag pans · Scroll zooms';
@@ -388,11 +389,11 @@ function planDown(e){
  if(planTool==='route'){const o=currentObject();if(!o||!isMobile(o)){planTool='select';draw();return;}if((o.waypoints||[]).length>=60){alertStudio('Maximum 60 route points.');return;}checkpoint();(o.waypoints||=[]).push({x:Math.round(q.x*2)/2,z:Math.round(q.z*2)/2});sync();return;}
  if(planTool==='camera'||planTool==='aim'){checkpoint();const c=activeCamSpec(),cam=cameraAt(p,time);c.move='static';c.mode='third';c.fixedX??=clamp(cam.pos[0],-100,150);c.fixedZ??=clamp(cam.pos[2],-100,150);c.aimX??=clamp(cam.look[0],-100,150);c.aimZ??=clamp(cam.look[2],-100,150);if(planTool==='camera'){c.fixedX=q.x;c.fixedZ=q.z;}else{c.aimX=q.x;c.aimZ=q.z;}planTool='select';sync();return;}
  const hit=(x,z,r=17)=>{const a=screenPoint(x,z);return Math.hypot(a[0]-q.sx,a[1]-q.sy)<r;},sel=currentObject();
- if(sel&&!selClip){const rp=rotationPoint(sel);if(hit(...rp,14)){planDrag={kind:'rotate',o:sel,base:actorYaw(sel,0)-(sel.rotation??0)*Math.PI/180};return;}
+ if(sel&&sel.visible!==false&&!selClip){const rp=rotationPoint(sel);if(hit(...rp,14)){planDrag={kind:'rotate',o:sel,base:actorYaw(sel,0)-(sel.rotation??0)*Math.PI/180};return;}
  if(isMobile(sel)){const i=(sel.waypoints||[]).findIndex(v=>hit(v.x,v.z,13));if(i>=0){planDrag={kind:'waypoint',o:sel,index:i};return;}if(hit(sel.endX,sel.endZ,14)){planDrag={kind:'end',o:sel};return;}if(hit(sel.x,sel.z,14)){planDrag={kind:'object',o:sel,dx:q.x-sel.x,dz:q.z-sel.z};return;}}}
  const c=activeCamSpec();if(c.move==='static'&&Number.isFinite(c.fixedX)&&hit(c.fixedX,c.fixedZ)){planDrag={kind:'camera',o:c};return;}
  const rank=o=>['road','junction','crossing','park'].includes(o.type)?0:1;
- const candidates=[...p.objects].reverse().sort((a,b)=>rank(b)-rank(a));
+ const candidates=p.objects.filter(o=>o.visible!==false).reverse().sort((a,b)=>rank(b)-rank(a));
  const o=candidates.find(o=>{const y=actorYaw(o,0),dx=q.x-o.x,dz=q.z-o.z,x=dx*Math.cos(y)-dz*Math.sin(y),z=dx*Math.sin(y)+dz*Math.cos(y),[w,d]=itemSize(o);return Math.abs(x)<=Math.max(w*o.scale/2,10/planView.zoom)&&Math.abs(z)<=Math.max(d*o.scale/2,10/planView.zoom);});
  if(o){selected=o.id;selClip=null;planDrag={kind:'object',o,dx:q.x-o.x,dz:q.z-o.z};refreshSide();}
 }
@@ -410,3 +411,15 @@ canvas.oncontextmenu=e=>e.preventDefault();
 
 fitPlan();
 sync();
+
+installTimelineControls({
+ name:'scene',timeline:'#sceneStudio .sc-timeline',scroll:'#scTimelineScroll',zoom:'#scTimelineZoom',fixedWidth:215,containers:['#scTracks','#scLeft'],
+ rows:'.sc-track-name[data-object],[data-item],[data-cam-item],[data-camera-track]',id:r=>r.dataset.object||r.dataset.item||r.dataset.camItem||(r.dataset.cameraTrack?'@scene-camera':null),
+ item:id=>id==='@scene-camera'?{visible:p.cameraTrackVisible!==false}:p.objects.find(o=>o.id===id)||p.cameraClips.find(c=>c.id===id),
+ enabled(id,action){if(id==='@scene-camera')return action==='visibility';const i=p.objects.findIndex(o=>o.id===id);return action==='up'?i>0:action==='down'?i>=0&&i<p.objects.length-1:true;},
+ action(id,action){if(busy)return;pause();if(id==='@scene-camera'){checkpoint();p.cameraTrackVisible=p.cameraTrackVisible===false;sync();return;}const o=p.objects.find(o=>o.id===id);selected=o?id:null;selClip=o?null:id;
+ if(action==='visibility'){checkpoint();const it=o||p.cameraClips.find(c=>c.id===id);it.visible=it.visible===false;sync();}
+ else if(action==='up'||action==='down'){const i=p.objects.indexOf(o),j=i+(action==='up'?-1:1);if(i>=0&&j>=0&&j<p.objects.length){checkpoint();[p.objects[i],p.objects[j]]=[p.objects[j],p.objects[i]];sync();}}
+ else actions[action]?.();
+ }
+});

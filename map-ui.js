@@ -1,3 +1,4 @@
+import { installTimelineControls } from './timeline-controls.mjs';
 import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=invert-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
@@ -13,6 +14,10 @@ import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mj
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
+import { cameraAt, xToLon, yToLat } from './map-engine.mjs?v=invert-1';
+import { retimeMapItem, animationKeysOf, setAnimationKey } from './map-timing.mjs';
+import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
+let cameraProperty = 'all';
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -167,17 +172,19 @@ function draw() {
   }
   lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera);
   if (pick?.key === '__members') { const a = current(); if (a && regionTarget(a)) drawRegionSelection(ctx, lastView, geo, targetMembers(a.target)); }
-  if(!playing)drawBorderEndpoints(ctx,lastView,geo,current());
+  if(!playing&&current()?.visible!==false)drawBorderEndpoints(ctx,lastView,geo,current());
   $('#mResetView').hidden = !previewCamera;
   if (pathDraw) { const a = proj.actions.find(x => x.id === pathDraw.id); if (a) drawPathEditor(ctx, lastView, a); }
 }
 function setFrame(n) {
+  if (pick?.kinds === 'cameraCenter' && Math.round(n) !== frame) cancelPick();
   if (!pathDraw && !pick) previewCamera = null;
   frame = clamp(Math.round(n) || 0, 0, proj.frames - 1);
   $('#mFrame').value = +(frame / proj.fps).toFixed(3); $('#mFrame').max = +((proj.frames - 1) / proj.fps).toFixed(3); $('#mFrame').step = '0.001';
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
+  if (current()?.preset === 'keyframed' && !playing) { renderInspector(); renderTimeline(); }
   window.dispatchEvent(new CustomEvent("ff-frame",{detail:{studio:"map",frame,fps:proj.fps,playing}}));
 }
 function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
@@ -272,9 +279,14 @@ function addShot(preset) {
   pause(); checkpoint();
   const c = current(), extra = {};
   const t = suggestTarget(); if (t) extra.target = t;
+  if (preset === 'keyframed') { extra.cameraFrom = captureCamera(); extra.cameraTo = { ...extra.cameraFrom }; }
   if (needsPlane) extra.planeId = (c && c.type === 'plane' ? c : planes()[0]).id;
   const s = makeShot(preset, frame, extra); if (!ensureLength(s.start + s.dur)) { notify('Choose an earlier start frame for this camera shot.'); return; }
   proj.shots.push(s); sel = s.id; saveLocal(); renderAll(); notify(`${PRESETS[preset].label} camera added at frame ${frame}`);
+}
+function captureCamera() {
+  const c = previewCamera || cameraAt(proj, geo, proj.width, proj.height, frame);
+  return { lon: clamp(xToLon(c.cx), -540, 540), lat: clamp(yToLat(c.cy), -85, 85), zoom: c.zoom, pitch: c.pitch, bearing: clamp(c.bearing, -3600, 3600) };
 }
 function renderItems() {
   const its = items();
@@ -301,7 +313,7 @@ function updateMoveButtons() {
   else { const it = current(), i = it && !isShot(it) ? proj.actions.indexOf(it) : -1; up = i > 0; down = i >= 0 && i < proj.actions.length - 1; }
   $('#mMoveUp').disabled = !up; $('#mMoveDown').disabled = !down;
 }
-function select(id) { if (pathDraw && pathDraw.id !== id) endPathDraw(true); if (pick?.key === '__members' && pick.id !== id) cancelPick(); sel = id; renderItems(); renderInspector(); renderTimeline(); }
+function select(id) { if (pathDraw && pathDraw.id !== id) endPathDraw(true); if (pick && pick.id !== id) cancelPick(); sel = id; renderItems(); renderInspector(); renderTimeline(); }
 
 // ------------------------------------------------------------------ inspector
 const F = {
@@ -326,9 +338,8 @@ function renderInspector() {
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
   let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>`;
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
-  if (!shot && ['border', 'highlight'].includes(it.type)) h += `<div class="section-title m-sep">TIMING</div><div class="two">${F.num('__startSeconds', 'Start (seconds)', it.start / proj.fps, 0, undefined, 'any')}${F.num('__finishSeconds', 'Finish (seconds)', (it.start + it.dur) / proj.fps, 0, undefined, 'any')}</div><p class="mini-label">Appears at Start and disappears at Finish. Times snap to the nearest frame.</p>`;
-  h += `<div class="two">${F.num('start', 'Start frame', it.start, 0)}${F.num('dur', shot ? 'Length (frames)' : 'Visible for (frames)', it.dur, 1)}</div>` + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
-  if (!shot) h += F.num('animDur', 'Animation duration (frames)', it.animDur, 1) + '<p class="mini-label">The timeline bar controls when this is visible. Animation duration controls how long it takes to draw or move. It disappears when the bar ends.</p>';
+  h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
+  h += '<p class="mini-label">' + (shot && it.preset === 'keyframed' ? 'Edit the camera at the playhead. Changes create keyframes automatically. Choose a property to see and retime its diamonds.' : 'The bar controls when this item appears and disappears. Drag the two centered diamonds to set when its animation starts and finishes.') + '</p>' + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
   if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
   box.innerHTML = h; bindInspector(it);
@@ -372,7 +383,7 @@ function actionFields(a) {
       const country = ['country','region','regions'].includes(a.target.kind);
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) : F.loc('target', 'Place', a.target, 'place')) + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
-    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) + F.chk('__moveKeys', 'Set movement start / end keyframes', a.moveStart !== undefined) + (a.moveStart !== undefined ? F.num('moveStart', 'Start keyframe (frame)', a.moveStart, a.start, a.start + a.dur - 1) + F.num('moveEnd', 'End keyframe (frame)', a.moveEnd, a.moveStart + 1, a.start + a.dur) + '<div class="two"><button type="button" data-movekey="moveStart">Set start at playhead</button><button type="button" data-movekey="moveEnd">Set end at playhead</button></div>' : '') : '') + (a.glyph === 'image' ? badgeFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) : '') + (a.glyph === 'image' ? badgeFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
     case 'pin': {
@@ -433,7 +444,57 @@ function pathAction(a, what) {
   if (what === 'undo') a.path.pop(); else if (what === 'clear') a.path = []; else if (what === 'reverse') a.path.reverse();
   syncPathEnds(a); changed(); renderInspector();
 }
+const cameraEditFrame = s => clamp(frame, s.start, s.start + s.dur);
+const cameraTrackFields = () => CAMERA_PROPERTIES[cameraProperty]?.fields || Object.keys(CAMERA_FIELDS);
+function bindCameraInspector(s) {
+  if (s.preset !== 'keyframed') return;
+  $$('#mInspector [data-camera-field]').forEach(el => el.onchange = () => {
+    const field = el.dataset.cameraField, value = Number(el.value);
+    if (!Number.isFinite(value)) { renderInspector(); return; }
+    pause(); checkpoint();
+    const at = cameraEditFrame(s), pose = cameraPoseAt(s, at);
+    const fields = field === 'lon' || field === 'lat' ? ['lon', 'lat'] : [field];
+    const values = Object.fromEntries(fields.map(f => [f, pose[f]]));
+    values[field] = clamp(value, ...CAMERA_FIELDS[field]);
+    putCameraKey(s, at, values); previewCamera = null; changed(); renderInspector();
+  });
+  $$('#mInspector [data-camera-toggle]').forEach(el => el.onclick = () => {
+    pause(); checkpoint();
+    const fields = CAMERA_PROPERTIES[el.dataset.cameraToggle]?.fields || Object.keys(CAMERA_FIELDS), at = cameraEditFrame(s);
+    const pose = cameraPoseAt(s, at), key = cameraKeysOf(s).find(k => k.frame === at);
+    if (fields.every(f => key?.values[f] !== undefined)) removeCameraKey(s, at, fields);
+    else putCameraKey(s, at, Object.fromEntries(fields.map(f => [f, pose[f]])));
+    previewCamera = null; changed(); renderInspector();
+  });
+  $$('#mInspector [data-camera-nav]').forEach(el => el.onclick = () => {
+    const keys = cameraKeysOf(s).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).sort((a,b) => a.frame - b.frame);
+    const key = +el.dataset.cameraNav < 0 ? keys.filter(k => k.frame < frame).at(-1) : keys.find(k => k.frame > frame);
+    if (key) { pause(); setFrame(key.frame); }
+  });
+  const centerPick = $('#mInspector [data-camera-center-pick]');
+  if (centerPick) centerPick.onclick = () => {
+    if (pick?.kinds === 'cameraCenter' && pick.id === s.id) { cancelPick(); return; }
+    pause(); endPathDraw(true); startPick('__cameraCenter', 'cameraCenter'); pick.frame = cameraEditFrame(s); renderInspector();
+  };
+  const centerView = $('#mInspector [data-camera-center-view]');
+  if (centerView) centerView.onclick = () => {
+    pause(); checkpoint(); const [lon, lat] = centerLonLat();
+    putCameraKey(s, cameraEditFrame(s), { lon: clamp(lon, ...CAMERA_FIELDS.lon), lat: clamp(lat, ...CAMERA_FIELDS.lat) });
+    cancelPick(); previewCamera = null; changed(); renderInspector();
+  };
+  const capture = $('#mInspector [data-camera-view]');
+  if (capture) capture.onclick = () => { pause(); checkpoint(); putCameraKey(s, cameraEditFrame(s), captureCamera()); previewCamera = null; changed(); renderInspector(); };
+}
+function cameraPositionFields(s, pose, disabled) {
+  const picking = pick?.kinds === 'cameraCenter' && pick.id === s.id;
+  return `<div class="m-camera-position-actions"><button type="button" data-camera-center-pick ${disabled ? 'disabled' : ''}>${picking ? 'Cancel picking' : '&#8982; Pick camera center'}</button><button type="button" data-camera-center-view ${disabled ? 'disabled' : ''}>Use map center</button></div><p class="mini-label">Click a point to center the camera there. Or pan the map, then use its center.</p><details class="m-camera-coordinates"><summary>Coordinates (optional)</summary><div class="two">${['lon','lat'].map(field => `<label>${field === 'lon' ? 'Longitude' : 'Latitude'}<input type="number" data-camera-field="${field}" min="${CAMERA_FIELDS[field][0]}" max="${CAMERA_FIELDS[field][1]}" step=".01" value="${+pose[field].toFixed(3)}" ${disabled ? 'disabled' : ''}></label>`).join('')}</div></details>`;
+}
 function shotFields(s) {
+  if (s.preset === 'keyframed') {
+    const at = cameraEditFrame(s), pose = cameraPoseAt(s, at), key = cameraKeysOf(s).find(k => k.frame === at), disabled = frame < s.start || frame > s.start + s.dur;
+    return `<div class="m-camera-keybar"><button type="button" data-camera-nav="-1" title="Previous keyframe">&lsaquo;</button><button type="button" data-camera-toggle="all" ${disabled ? 'disabled' : ''} title="Add or remove all camera properties at playhead">${key && Object.keys(CAMERA_FIELDS).every(f => key.values[f] !== undefined) ? '&#9670;' : '&#9671;'} Camera keyframe</button><button type="button" data-camera-nav="1" title="Next keyframe">&rsaquo;</button></div><p class="mini-label">${disabled ? 'Move the playhead inside this camera bar to edit.' : 'At playhead - frame ' + at}</p>` +
+      Object.entries(CAMERA_PROPERTIES).map(([property, spec]) => `<div class="m-camera-property"><div class="m-camera-property-title"><span>${spec.label}</span><button type="button" class="key ${spec.fields.every(f => key?.values[f] !== undefined) ? 'current' : ''}" data-camera-toggle="${property}" ${disabled ? 'disabled' : ''} title="Toggle ${spec.label} keyframe at playhead">${spec.fields.every(f => key?.values[f] !== undefined) ? '&#9670;' : '&#9671;'}</button></div><div>${property === 'position' ? cameraPositionFields(s, pose, disabled) : spec.fields.map(field => `<label>${field === 'lon' ? 'Longitude' : field === 'lat' ? 'Latitude' : ''}<input type="number" data-camera-field="${field}" min="${CAMERA_FIELDS[field][0]}" max="${CAMERA_FIELDS[field][1]}" step="${['lon','lat'].includes(field) ? '.01' : '.1'}" value="${+pose[field].toFixed(3)}" ${disabled ? 'disabled' : ''}></label>`).join('')}</div></div>`).join('') + `<button type="button" data-camera-view ${disabled ? 'disabled' : ''}>Use current map view at playhead</button>`;
+  }
   const P = PRESETS[s.preset], has = k => P.fields.includes(k);
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
@@ -449,6 +510,7 @@ function shotFields(s) {
 }
 
 function bindInspector(it) {
+  bindCameraInspector(it);
   let gesture = false;
   $$('#mInspector [data-mf]').forEach(el => {
     const key = el.dataset.mf, t = el.dataset.t;
@@ -471,8 +533,11 @@ function bindInspector(it) {
       }
       let v = read();
       checkpoint();
+      if (key === '__cameraTrack') { cameraProperty = v; renderTimeline(); renderInspector(); return; }
+      if (key === '__keyProperty') return;
+      if (key.includes('.')) { const [endpoint, property] = key.split('.'); if (!Number.isFinite(v)) { renderInspector(); return; } it[endpoint][property] = clamp(v, +el.min, +el.max); previewCamera = null; changed(); renderInspector(); return; }
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }
-      if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
+      if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; if (v === 'keyframed' && !it.cameraFrom) { it.cameraFrom = captureCamera(); it.cameraTo = { ...it.cameraFrom }; } if (v === 'keyframed') it.cameraKeys ??= []; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
       if (key === 'mode') {
         const def = (TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane).lift;
         it.mode = v === 'path' ? 'path' : 'direct';
@@ -503,8 +568,8 @@ function bindInspector(it) {
           if (!Number.isFinite(v) || v < 0 || !Number.isSafeInteger(target) || (key === '__startSeconds' ? target >= finish : target <= it.start)) {
             notify('Enter a valid time, with Finish after Start.'); renderInspector(); return;
           }
-          if (key === '__startSeconds') { it.start = target; it.dur = finish - target; }
-          else it.dur = target - it.start;
+          if (key === '__startSeconds') retimeMapItem(it, target, finish - target, false);
+          else retimeMapItem(it, it.start, target - it.start, false);
           ensureLength(it.start + it.dur); changed(); renderInspector(); return;
         }
         const lo = Number(el.min), hi = el.max === '' ? Infinity : Number(el.max);
@@ -513,9 +578,8 @@ function bindInspector(it) {
           v = Math.max(lo, Math.round(v));
           const end = key === 'start' ? v + it.dur : key === 'dur' ? it.start + v : it.start + it.dur;
           if (!Number.isSafeInteger(v) || !Number.isSafeInteger(end)) { el.value = it[key]; notify('Enter a valid frame number.'); return; }
-          if (it.moveStart !== undefined && key === 'start') { const shift = v - it.start; it.moveStart += shift; it.moveEnd += shift; }
-          if (it.moveStart !== undefined && key === 'dur') { it.moveEnd = Math.min(it.moveEnd, it.start + v); it.moveStart = Math.min(it.moveStart, it.moveEnd - 1); }
-          it[key] = v; if (key !== 'animDur') ensureLength(end); el.value = v; changed(); if (['border', 'highlight'].includes(it.type)) renderInspector(); return;
+          if (key === 'start' || key === 'dur') retimeMapItem(it, key === 'start' ? v : it.start, key === 'dur' ? v : it.dur);
+          it[key] = v; if (key !== 'animDur') ensureLength(end); el.value = v; changed(); renderInspector(); return;
         }
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
@@ -610,9 +674,9 @@ function labelFields(a) {
 // ------------------------------------------------------------------ pick a location on the map
 function startPick(key, kinds) {
   pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click to choose a location · right-drag or middle-drag to pan · scroll to zoom · Esc to cancel';
-  notify(kinds === 'borderpoint' ? 'Click near the border to set its endpoint' : kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isDetail() ? 'Click a region; Shift-click for a whole country' : 'Click a country');
+  notify(kinds === 'cameraCenter' ? 'Click the map to choose the camera center' : kinds === 'borderpoint' ? 'Click near the border to set its endpoint' : kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isDetail() ? 'Click a region; Shift-click for a whole country' : 'Click a country');
 }
-function cancelPick() { const was = pick?.key === '__members'; pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; if (was) { renderInspector(); draw(); } }
+function cancelPick() { const camera = pick?.kinds === 'cameraCenter'; const was = pick?.key === '__members'; pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; if (was || camera) { renderInspector(); draw(); } }
 const HINT = 'Right-drag or middle-drag to pan · scroll to zoom · scrub the timeline to preview';
 function canvasXY(e) { const b = canvas.getBoundingClientRect(); return { sx: (e.clientX - b.left) / b.width * proj.width, sy: (e.clientY - b.top) / b.height * proj.height }; }
 function finishMapPan(e) {
@@ -681,6 +745,14 @@ canvas.onpointerdown = e => {
   if (!pick || !lastView || !geo) return;
   const b = canvas.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * proj.width, sy = (e.clientY - b.top) / b.height * proj.height, ll = screenToLonLat(lastView, sx, sy);
   if (!ll) { notify('Click on the map surface'); return; }
+  if (pick.kinds === 'cameraCenter') {
+    e.preventDefault();
+    const shot = proj.shots.find(s => s.id === pick.id && s.preset === 'keyframed');
+    if (!shot) { cancelPick(); return; }
+    checkpoint();
+    putCameraKey(shot, pick.frame, { lon: clamp(ll.lon, ...CAMERA_FIELDS.lon), lat: clamp(ll.lat, ...CAMERA_FIELDS.lat) });
+    previewCamera = null; cancelPick(); changed(); renderInspector(); notify('Camera center keyframe set'); return;
+  }
   if(pick.kinds==='borderpoint'){
     const a=proj.actions.find(a=>a.id===pick.id),features=a?targetFeatures(geo,a.target):[];
     const f=a?.target.kind==='regions'?combinedFeature(features,a.target.name):features[0];
@@ -806,6 +878,36 @@ function bindSettings() {
 
 // ------------------------------------------------------------------ timeline
 function frameFromEvent(e) { const b = $('#mTracks').getBoundingClientRect(); return clamp(Math.round((e.clientX - b.left) / b.width * (proj.frames - 1)), 0, proj.frames - 1); }
+function timelineKeys(it, last) {
+  if (it.preset === 'keyframed') return cameraKeysOf(it).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).map(k => `<button type="button" class="m-key ${k.frame === frame && it.id === sel ? 'current' : ''}" data-map-key="camera:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Camera keyframe - frame ${k.frame}. Drag to retime." aria-label="Camera keyframe, frame ${k.frame}"></button>`).join('');
+  const keys = animationKeysOf(it);
+  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('');
+}
+function bindTimelineKeys() {
+  $$('[data-map-key]').forEach(el => {
+    el.onpointerdown = e => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation(); pause();
+      const it = items().find(i => i.id === el.dataset.keyItem); if (!it) return;
+      sel = it.id; renderItems(); renderInspector();
+      if (el.dataset.mapKey.startsWith('camera:')) setFrame(+el.dataset.mapKey.split(':')[1]);
+      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, moved: false };
+      renderTimeline();
+    };
+    el.onkeydown = e => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault(); e.stopPropagation(); pause();
+      const it = items().find(i => i.id === el.dataset.keyItem), key = el.dataset.mapKey;
+      const d = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1);
+      checkpoint();
+      let focusKey = key;
+      if (key.startsWith('camera:')) { const from = +key.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur); moveCameraKey(it, from, to, cameraTrackFields()); setFrame(to); focusKey = `camera:${to}`; }
+      else setAnimationKey(it, key, animationKeysOf(it)[key === 'animationStart' ? 'start' : 'end'] + d);
+      ensureLength(it.start + it.dur); changed(); renderInspector();
+      $$('[data-map-key]').find(b => b.dataset.keyItem === it.id && b.dataset.mapKey === focusKey)?.focus();
+    };
+  });
+}
 bindTimelineRename($('#mTrackLabels'), { attribute: 'data-mtl', getItem: id => items().find(it => it.id === id), checkpoint, changed: () => { changed(); renderInspector(); }, pause });
 function renderTimeline() {
   const zoom = +$('#mZoomT').value, its = items(), last = proj.frames - 1;
@@ -814,17 +916,18 @@ function renderTimeline() {
   let ticks = ''; for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${f}</span>`;
   $('#mRuler').innerHTML = ticks;
   $('#mTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-mtl="${esc(it.id)}"><span>${iconOf(it)}</span><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(it.name)}</span></div>`).join('');
-  $('#mTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-mrow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-mclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div></div>`).join('');
+  $('#mTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-mrow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-mclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div>${timelineKeys(it, last)}</div>`).join('');
   $('#mTrackLabels').style.transform = `translateY(-${$('#mScroll').scrollTop}px)`;
   $$('[data-mtl]').forEach(el => el.onclick = () => select(el.dataset.mtl));
   $$('[data-mclip]').forEach(el => el.onpointerdown = e => {
     e.preventDefault(); e.stopPropagation(); pause();
     const id = el.dataset.mclip, it = items().find(i => i.id === id); if (!it) return;
     if (sel !== id) { sel = id; renderItems(); renderInspector(); }
-    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moved: false };
+    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, moved: false };
     renderTimeline();
   });
-  $$('[data-mrow]').forEach(el => el.onpointerdown = e => { if (e.target.closest('[data-mclip]')) return; select(el.dataset.mrow); scrub(e); });
+  bindTimelineKeys();
+  $$('[data-mrow]').forEach(el => el.onpointerdown = e => { if (e.target.closest('[data-mclip], [data-map-key]')) return; select(el.dataset.mrow); scrub(e); });
   audioUI?.renderTimeline();
 }
 function scrub(e) { pause(); setFrame(frameFromEvent(e)); drag = { kind: 'scrub' }; }
@@ -833,16 +936,29 @@ window.addEventListener('pointermove', e => {
   if (drag.kind === 'scrub') { setFrame(frameFromEvent(e)); return; }
   const it = items().find(i => i.id === drag.id); if (!it) return;
   const d = frameFromEvent(e) - drag.x0; if (d !== 0) drag.moved = true;
+  if (drag.mode.startsWith('camera:')) {
+    const from = +drag.mode.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur);
+    it.cameraKeys = clone(drag.cameraKeys); moveCameraKey(it, from, to, cameraTrackFields()); setFrame(to); renderTimeline(); draw(); return;
+  }
+  if (drag.mode === 'animationStart' || drag.mode === 'animationEnd') {
+    const keys = animationKeysOf({ start: drag.start, dur: drag.dur, animStart: drag.animStart, animEnd: drag.animEnd, animDur: drag.animDur, moveStart: drag.moveStart, moveEnd: drag.moveEnd });
+    setAnimationKey(it, drag.mode, keys[drag.mode === 'animationStart' ? 'start' : 'end'] + d);
+    renderTimeline(); draw(); return;
+  }
   let start = drag.start, dur = drag.dur;
   if (drag.mode === 'move') start = clamp(drag.start + d, 0, proj.frames - 1);
   else if (drag.mode === 'r') dur = Math.max(1, drag.dur + d);
   else { start = clamp(drag.start + d, 0, drag.start + drag.dur - 1); dur = drag.start + drag.dur - start; }
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(dur) || !Number.isSafeInteger(start + dur)) return;
-  it.start = start; it.dur = dur;
+  it.start = drag.start; it.dur = drag.dur;
+  if (drag.animStart !== undefined) { it.animStart = drag.animStart; it.animEnd = drag.animEnd; }
+  if (drag.moveStart !== undefined) { it.moveStart = drag.moveStart; it.moveEnd = drag.moveEnd; }
+  if (drag.cameraKeys) it.cameraKeys = clone(drag.cameraKeys);
+  retimeMapItem(it, start, dur, drag.mode === 'move');
   ensureLength(it.start + it.dur);
   renderTimeline(); draw(); const s = $('#mInspector [data-mf="start"]'), l = $('#mInspector [data-mf="dur"]'); if (s) s.value = it.start; if (l) l.value = it.dur;
 });
-window.addEventListener('pointerup', () => { if (drag?.kind === 'clip') { if (!drag.moved) undoStack.pop(); changed(); updateHistory(); } drag = null; });
+window.addEventListener('pointerup', () => { if (drag?.kind === 'clip') { if (!drag.moved) undoStack.pop(); changed(); renderInspector(); updateHistory(); } drag = null; });
 $('#mRuler').onpointerdown = scrub;
 $('#mScroll').onscroll = () => $('#mTrackLabels').style.transform = `translateY(-${$('#mScroll').scrollTop}px)`;
 
@@ -905,7 +1021,7 @@ function bindToolbar() {
   $('#mDuplicate').onclick = () => {
     if (audioUI?.duplicate()) return;
     const it = current(); if (!it) return; checkpoint();
-    const c = clone(it); c.id = crypto.randomUUID(); c.name += ' copy'; c.start = Math.min(proj.frames - 1, it.start + 10);
+    const c = clone(it); c.id = crypto.randomUUID(); c.name += ' copy'; retimeMapItem(c, Math.min(proj.frames - 1, it.start + 10), c.dur);
     if (!ensureLength(c.start + c.dur)) { notify('Choose an earlier start frame before duplicating this item.'); return; }
     (isShot(it) ? proj.shots : proj.actions).push(c); sel = c.id; saveLocal(); renderAll();
   };
@@ -918,7 +1034,7 @@ function bindToolbar() {
   };
   $('#mNew').onclick = async () => { if (!await confirmStudio('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
   $('#mDemo').onclick = async () => { if (!await confirmStudio('Load the demo map? Your current edit can be restored with Undo.', 'Load demo', 'Load demo')) return; pause(); checkpoint(); proj = demoMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
-  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Drag a bar's edges to change how long an item is visible. Set <b>Animation duration (frames)</b> in Properties to control how long an item takes to animate. It disappears when its bar ends. Travel properties can also show the regions or countries crossed by a route.</li><li>In <b>Label style → Start from a style</b>, choose <b>2D · Attached to map</b> to lay existing labels flat on the map so they follow its tilt and rotation.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
+  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. The bar controls visibility. Choose Animation in the keyframe property list and drag its two centered diamonds to set animation start and finish. Use arrow keys on a focused diamond for one frame, or Shift + arrows for ten frames. Moving objects can also enable movement start / end keyframes in Properties. Set <b>Animation duration (frames)</b> in Properties to control how long an item takes to animate. It disappears when its bar ends. Travel properties can also show the regions or countries crossed by a route.</li><li>In <b>Label style → Start from a style</b>, choose <b>2D · Attached to map</b> to lay existing labels flat on the map so they follow its tilt and rotation.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
   $('#mCloseModal').onclick = () => { if (exporting) { exporting = false; $('#mCloseModal').disabled = true; } else $('#mModal').close(); };
   $('#mModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });
 }
@@ -1022,3 +1138,11 @@ setMode(startMode)
     });
   }
 }
+
+installTimelineControls({
+ name:'map',timeline:'#mapStudio .timeline',scroll:'#mScroll',zoom:'#mZoomT',containers:['#mTrackLabels','#mItems'],
+ rows:'[data-mtl],[data-mid],[data-audio-label],[data-audio-layer]',id:r=>r.dataset.mtl||r.dataset.mid||r.dataset.audioLabel||r.dataset.audioLayer,
+ item:id=>audioUI?.item(id)||items().find(it=>it.id===id),oldButtons:['#mMoveUp','#mMoveDown','#mDuplicate','#mDelete'],
+ enabled(id,action){if(audioUI?.item(id))return audioUI.rowEnabled(id,action);const i=proj.actions.findIndex(a=>a.id===id);return action==='up'?i>0:action==='down'?i>=0&&i<proj.actions.length-1:true;},
+ action(id,action){if(audioUI?.item(id)){audioUI.rowAction(id,action);return;}pause();select(id);if(action==='visibility'){checkpoint();current().visible=current().visible===false;changed();renderInspector();}else if(action==='up'||action==='down')moveItem(action==='up'?-1:1);else document.querySelector(action==='duplicate'?'#mDuplicate':'#mDelete').click();}
+});

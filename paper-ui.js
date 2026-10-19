@@ -1,3 +1,4 @@
+import { installTimelineControls } from './timeline-controls.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
 // FrameFlow Paper Studio: editor UI (parts, camera, timeline, playback, templates, export).
@@ -76,7 +77,7 @@ function draw() {
   if (!playing && !exporting) overlay();
 }
 function overlay() {
-  const it = current(); if (!it || isShot(it) || !lastView) return;
+  const it = current(); if (!it || isShot(it) || !lastView || it.visible===false || (isSheet(it)&&proj.paper.visible===false)) return;
   const M = lastView.M, ap = (x, y) => PE.mapply(M, x, y);
   const r = isSheet(it) ? { x: 0, y: 0, w: proj.paper.w, h: proj.paper.h } : lastView.rects.get(it.id) || { x: it.x, y: it.y, w: it.w, h: it.h };
   const pts = [ap(r.x, r.y), ap(r.x + r.w, r.y), ap(r.x + r.w, r.y + r.h), ap(r.x, r.y + r.h)];
@@ -521,3 +522,11 @@ audioUI = registerAudioStudio('paper', {
 });
 PE.preloadImages(proj).then(() => draw());
 renderAll(); onMode();
+
+installTimelineControls({
+ name:'paper',timeline:'#paperStudio .timeline',scroll:'#pScroll',zoom:'#pZoomT',containers:['#pTrackLabels','#pItems'],
+ rows:'[data-ptl],[data-pid],[data-audio-label],[data-audio-layer]',id:r=>r.dataset.ptl||r.dataset.pid||r.dataset.audioLabel||r.dataset.audioLayer,
+ item:id=>audioUI?.item(id)||(id==='sheet'?proj.paper:items().find(it=>it.id===id)),oldButtons:['#pUp','#pDown','#pDuplicate','#pDelete'],
+ enabled(id,action){if(audioUI?.item(id))return audioUI.rowEnabled(id,action);if(id==='sheet')return action==='visibility';const i=proj.parts.findIndex(p=>p.id===id);return action==='up'?i>=0&&i<proj.parts.length-1:action==='down'?i>0:true;},
+ action(id,action){if(audioUI?.item(id)){audioUI.rowAction(id,action);return;}pause();select(id);if(action==='visibility'){checkpoint();const it=id==='sheet'?proj.paper:current();it.visible=it.visible===false;changed();renderInspector();}else document.querySelector({up:'#pUp',down:'#pDown',duplicate:'#pDuplicate',delete:'#pDelete'}[action]).click();}
+});

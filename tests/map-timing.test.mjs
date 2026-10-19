@@ -22,7 +22,7 @@ function recordingCanvas() {
   const commands = [], stack = [];
   let state = { globalAlpha: 1, letterSpacing: '0px' }, gradientId = 0;
   const methods = {};
-  for (const name of ['beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke', 'fillRect', 'clip', 'arc', 'arcTo', 'ellipse', 'bezierCurveTo', 'setLineDash', 'translate', 'rotate', 'scale', 'fillText', 'strokeText']) {
+  for (const name of ['beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke', 'fillRect', 'clip', 'arc', 'arcTo', 'roundRect', 'ellipse', 'bezierCurveTo', 'setLineDash', 'translate', 'rotate', 'scale', 'fillText', 'strokeText']) {
     methods[name] = (...args) => commands.push([name, ...args]);
   }
   methods.save = () => { stack.push({ ...state }); commands.push(['save']); };
@@ -65,6 +65,7 @@ for (const type of Object.keys(E.ACTION_TYPES)) {
       dur: 80, animDur: 20, keep, easing: 'linear',
       target: { kind: 'country', name: 'Testland' },
       from: place('Start', -10), to: place('End', 10), place: place('Pin', 0),
+      path: [place('Start', -10), place('End', 10)],
       pulse: false,
     });
     p.actions = [a];
@@ -72,6 +73,9 @@ for (const type of Object.keys(E.ACTION_TYPES)) {
     for (const frame of [0, 19, 100, 101, 150]) {
       assert.deepEqual(render(p, frame), base, `${type} leaves no drawing outside its timeline interval (frame ${frame}, keep:${keep})`);
     }
+    a.visible = false;
+    assert.deepEqual(render(p, 25), base, `${type} hidden layer renders no pixels or labels`);
+    a.visible = true;
     const moving = render(p, 25), held = render(p, 60);
     assert.notDeepEqual(moving, base, `${type} appears while animating`);
     assert.notDeepEqual(held, base, `${type} stays visible after its animation finishes inside the clip`);

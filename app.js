@@ -1,3 +1,4 @@
+import { installTimelineControls } from './timeline-controls.mjs';
 import { installLineDrawing } from './motion-lines.mjs?v=inspector-order-1';
 import { migrateBlurClips } from './motion-blur.mjs?v=sparse-blur-1';
 import { createMotionVideoStore } from './motion-video.mjs';
@@ -839,3 +840,18 @@ try{const saved=localStorage.getItem('frameflow-project-v1');project=saved?valid
 
 window.addEventListener('frameflow:mode',()=>{if(playing)pause()});
 window.addEventListener('ff-structured-loaded',()=>{if(project)draw()});
+
+installTimelineControls({
+ name:'motion',timeline:'.timeline.motion-only',scroll:'#scroll',zoom:'#zoom',containers:['#trackLabels','#layers'],
+ rows:'[data-track-label],.layer[data-id],[data-audio-label],[data-audio-layer],.track-label[data-cam-select]',
+ id:r=>r.dataset.trackLabel||r.dataset.id||r.dataset.audioLabel||r.dataset.audioLayer||r.dataset.camSelect,
+ item:id=>audioUI?.item(id)||project.layers.find(l=>l.id===id)||project.cameraShots?.find(s=>s.id===id),
+ oldButtons:['#up','#down','#duplicate','#delete'],
+ enabled(id,action){if(audioUI?.item(id))return audioUI.rowEnabled(id,action);const i=project.layers.findIndex(l=>l.id===id);if(action==='up')return i>=0&&i<project.layers.length-1;if(action==='down')return i>0;return true;},
+ action(id,action){
+  if(audioUI?.item(id)){audioUI.rowAction(id,action);return;}
+  pause();const camera=project.cameraShots?.find(s=>s.id===id);
+  if(camera){checkpoint();if(action==='visibility')camera.visible=camera.visible===false;else if(action==='delete'){project.cameraShots=project.cameraShots.filter(s=>s.id!==id);cameraUI.clear();}else if(action==='duplicate'){const copy=JSON.parse(JSON.stringify(camera));copy.id=uid();copy.name+=' copy';project.cameraShots.push(copy);cameraUI.select(copy.id);}changed();return;}
+  select(id);if(action==='visibility'){checkpoint();current().visible=current().visible===false;changed();}else document.getElementById(action==='up'?'up':action==='down'?'down':action).click();
+ }
+});

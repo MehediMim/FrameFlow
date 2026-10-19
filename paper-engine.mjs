@@ -165,6 +165,7 @@ export function validatePaperProject(p) {
     edge: Object.hasOwn(EDGES, pa.edge) ? pa.edge : 'clean', fold: Object.hasOwn(FOLDS, pa.fold) ? pa.fold : 'none', wear: clamp(num(pa.wear, .25), 0, 1), grain: clamp(num(pa.grain, .5), 0, 1), shadow: pa.shadow !== false,
     tilt: clamp(num(pa.tilt, 0), -45, 45), enter: Object.hasOwn(SHEET_ENTRANCES, pa.enter) ? pa.enter : 'none', start: timingFrame(pa.start, 0, 0), dur: timingFrame(pa.dur, 24, 1), easing: Object.hasOwn(easings, pa.easing) ? pa.easing : 'easeOut' };
   validateTiming(out.paper);
+  out.paper.visible = pa.visible !== false;
   const cam = p.camera || {}; out.camera = { x: num(cam.x, out.paper.w / 2), y: num(cam.y, out.paper.h / 2), zoom: clamp(num(cam.zoom, 1), .05, 12), rot: clamp(num(cam.rot, 0), -720, 720) };
   const assets = {}; let total = 0;
   for (const [id, src] of Object.entries(p.assets || {})) {
@@ -184,6 +185,7 @@ export function validatePaperProject(p) {
       else if (typeof dv === 'boolean') part[key] = !!v;
       else if (typeof dv === 'string') part[key] = str(v, dv, key === 'text' ? 20000 : 400);
     }
+    part.visible = raw.visible !== false;
     part.name = str(raw.name, k.label, 100) || k.label; part.start = timingFrame(raw.start, 0, 0); part.dur = timingFrame(raw.dur, k.def.dur, 1);
     validateTiming(part);
     part.keep = raw.keep !== false; part.opacity = clamp(num(raw.opacity, 1), 0, 1); part.w = Math.max(4, part.w); part.h = Math.max(2, part.h);
@@ -206,6 +208,7 @@ export function validatePaperProject(p) {
   out.shots = p.shots.map(raw => {
     if (!SHOT_TYPES[raw?.type]) throw Error('Unknown camera move in project.');
     const s = makeShot(raw.type, 0), keys = ['fill', 'amount', 'dx', 'dy', 'degrees', 'amp'];
+    s.visible = raw.visible !== false;
     for (const k of keys) if (k in s) s[k] = clamp(num(raw[k], s[k]), -20000, 20000);
     s.id = fresh(raw.id); s.name = str(raw.name, s.name, 100) || s.name; s.start = timingFrame(raw.start, 0, 0); s.dur = timingFrame(raw.dur, s.dur, 1);
     validateTiming(s);
@@ -528,7 +531,7 @@ const DRAW = { headline: drawTextPart, text: drawTextPart, masthead: drawMasthea
 
 /** Draws one part; returns its rectangle in paper coordinates when visible. */
 function drawPart(ctx, p, f, env) {
-  const prog = partProgress(p, f); if (prog < 0) return null;
+  const prog = partProgress(p, f); if (p.visible === false || prog < 0) return null;
   const r = { x: p.x, y: p.y, w: p.w, h: p.h };
   ctx.save(); ctx.globalAlpha *= clamp(p.opacity ?? 1, 0, 1); entrance(ctx, p, prog, r);
   env.fadeP = prog;
@@ -558,7 +561,7 @@ const mix = (a, b, t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), zoom: a.
 /** Camera at a frame: chains camera moves in time order; a later move interrupts an unfinished one. */
 export function cameraAt(proj, f, W = proj.width, H = proj.height) {
   let st = { ...proj.camera };
-  const shots = proj.shots.filter(s => s.type !== 'shake').sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+  const shots = proj.shots.filter(s => s.visible !== false && s.type !== 'shake').sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
   for (let i = 0; i < shots.length; i++) {
     const s = shots[i]; if (f < s.start) break;
     const nxt = shots[i + 1], lim = Math.min(s.start + s.dur, nxt ? nxt.start : Infinity), tgt = shotTarget(s, st, proj, W, H);
@@ -566,7 +569,7 @@ export function cameraAt(proj, f, W = proj.width, H = proj.height) {
     st = ns; if (f < lim) break;
   }
   let sx = 0, sy = 0, sr = 0;
-  for (const s of proj.shots) if (s.type === 'shake' && f >= s.start && f < s.start + s.dur) { const k = 1 - (f - s.start) / Math.max(1, s.dur), a = (s.amp || 0) * k; sx += (hash(f, 1, 7) - .5) * 2 * a; sy += (hash(f, 2, 7) - .5) * 2 * a; sr += (hash(f, 3, 7) - .5) * a * .06; }
+  for (const s of proj.shots) if (s.visible !== false && s.type === 'shake' && f >= s.start && f < s.start + s.dur) { const k = 1 - (f - s.start) / Math.max(1, s.dur), a = (s.amp || 0) * k; sx += (hash(f, 1, 7) - .5) * 2 * a; sy += (hash(f, 2, 7) - .5) * 2 * a; sr += (hash(f, 3, 7) - .5) * a * .06; }
   return { ...st, sx, sy, sr };
 }
 export function sheetAnim(proj, f, H = proj.height) {
@@ -649,7 +652,7 @@ export function drawPaper(ctx, W, H, proj, f, opts = {}) {
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, W, H);
   drawScene(ctx, W, H, proj.scene, Cam);
   const rects = new Map(), scale = Math.hypot(M[0], M[1]);
-  if (sa.alpha > 0) {
+  if (pa.visible !== false && sa.alpha > 0) {
     const color = paperColorOf(proj), pts = outline(pa.w, pa.h, pa.edge), wear = pa.wear ?? .25;
     ctx.setTransform(...M); ctx.globalAlpha = sa.alpha;
     if (pa.shadow) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = clamp(34 * scale, 6, 80); ctx.shadowOffsetY = clamp(14 * scale, 3, 40); ctx.fillStyle = color; sheetPath(ctx, pts); ctx.fill(); ctx.restore(); }

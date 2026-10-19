@@ -2,6 +2,8 @@
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
 import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
+import { animationKeysOf } from './map-timing.mjs';
+import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
@@ -544,6 +546,9 @@ function fly(from, to, k, W, H) {
 function shotState(s, from, tr, frame, c) {
   const t = ease(s.easing, tr), { geo, W, H, project: pr } = c;
   switch (s.preset) {
+    case 'keyframed': {
+      return camFrom(cameraPoseAt(s, frame));
+    }
     case 'flyTo': case 'swoop': {
       const r = resolveLoc(geo, s.target, from.cx); if (!r) return from;
       const fit = s.autoFit && ['country', 'region', 'regions'].includes(s.target.kind) && r.bbox;
@@ -584,12 +589,13 @@ function shotState(s, from, tr, frame, c) {
 
 function evalShot(s, from, frame, c) {
   const end = s.start + s.dur;
-  return shotState(s, from, clamp01((frame - s.start) / Math.max(1, s.dur)), Math.min(frame, end), c);
+  const keys = animationKeysOf(s);
+  return shotState(s, from, clamp01((frame - keys.start) / Math.max(1, keys.end - keys.start)), Math.min(frame, end), c);
 }
 
 /** Camera state at a frame: start view followed by each preset shot in order. */
 export function cameraAt(proj, geo, W, H, frame) {
-  const init = startCam(proj, geo, W, H), shots = [...proj.shots].sort((a, b) => a.start - b.start), c = { geo, W, H, project: proj };
+  const init = startCam(proj, geo, W, H), shots = proj.shots.filter(s => s.visible !== false).sort((a, b) => a.start - b.start), c = { geo, W, H, project: proj };
   let prev = null;
   for (const s of shots) {
     if (frame < s.start) break;
@@ -678,7 +684,7 @@ function drawLabel(ctx, v, th, l, st) {
 const bounce = t => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * t; if (t < 2 / d) return n * (t -= 1.5 / d) * t + .75; if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + .9375; return n * (t -= 2.625 / d) * t + .984375; };
 // Timeline length controls visibility; animation duration controls the reveal/movement.
 const animationDuration = a => a.animDur ?? a.dur;
-export const actionProgress = (a, frame) => clamp01((frame - a.start) / Math.max(1, animationDuration(a)));
+export const actionProgress = (a, frame) => { const keys = animationKeysOf(a); return clamp01((frame - keys.start) / Math.max(1, keys.end - keys.start)); };
 export const objectMoveProgress = (a, frame) => a.moveStart === undefined ? actionProgress(a, frame) : clamp01((frame - a.moveStart) / Math.max(1, a.moveEnd - a.moveStart));
 const actAlpha = (a, frame) => frame >= a.start && frame < a.start + a.dur ? 1 : 0;
 
@@ -1425,7 +1431,9 @@ const OBJ_H = { drawBadge, resolveLoc, project, groundCircle, actionProgress: ob
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null) {
-  const th = THEMES[proj.theme] || THEMES.earth, v = makeView(previewCamera || cameraAt(proj, geo, W, H, frame), W, H), labels = [];
+  const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
+  proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false) };
+  const th = THEMES[proj.theme] || THEMES.earth, v = makeView(camera, W, H), labels = [];
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
   for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
     const r = planeRoute(geo, a);
@@ -1483,6 +1491,7 @@ export const ACTION_TYPES = {
 };
 const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });
 export const PRESETS = {
+  keyframed: { label: 'Keyframed camera', icon: '◇', hint: 'Key position, zoom, tilt and rotation anywhere on the timeline', def: { dur: 60 }, fields: [] },
   flyTo: { label: 'Fly to', icon: '↘', hint: 'Smooth zoom-and-glide to a place', def: { dur: 60, zoom: 5, pitch: 0, bearing: 0, autoFit: false }, fields: ['target', 'zoom', 'pitch', 'bearing', 'autoFit'] },
   swoop: { label: 'Cinematic swoop', icon: '↺', hint: 'Fly in while tilting and turning', def: { dur: 80, zoom: 5.5, pitch: 58, bearing: 35, autoFit: false }, fields: ['target', 'zoom', 'pitch', 'bearing', 'autoFit'] },
   worldView: { label: 'Back to start view', icon: '◍', hint: 'Pull out to the start view', def: { dur: 60 }, fields: [] },
@@ -1514,7 +1523,7 @@ export function makeAction(type, start, extra = {}) {
 }
 export function makeShot(preset, start, extra = {}) {
   const P = PRESETS[preset];
-  return { id: uid(), kind: 'shot', preset, name: P.label, start, dur: 60, easing: 'easeInOut', target: city('Paris', 48.8566, 2.3522), zoom: 5, pitch: 0, bearing: 0, amount: .9, degrees: 90, planeId: '', autoFit: false, lockHeading: false, ...P.def, ...extra };
+  return { id: uid(), kind: 'shot', preset, name: P.label, start, dur: 60, easing: 'easeInOut', target: city('Paris', 48.8566, 2.3522), zoom: 5, pitch: 0, bearing: 0, amount: .9, degrees: 90, planeId: '', autoFit: false, lockHeading: false, ...P.def, ...(preset === 'keyframed' ? { cameraKeys: [], cameraFrom: { ...DEFAULT_CAM }, cameraTo: { ...DEFAULT_CAM, zoom: 5 } } : {}), ...extra };
 }
 
 export function newMapProject() {
@@ -1589,6 +1598,9 @@ export function validateMapProject(p) {
   if (p.area !== undefined) checkArea(p.area);
   const ids = new Set();
   for (const it of [...p.actions, ...p.shots]) {
+    if (it.visible !== undefined && typeof it.visible !== 'boolean') throw Error('Invalid layer visibility.');
+    if ((it.animStart !== undefined || it.animEnd !== undefined) && (!Number.isSafeInteger(it.animStart) || !Number.isSafeInteger(it.animEnd) || it.animStart < it.start || it.animEnd <= it.animStart || it.animEnd > it.start + it.dur)) throw Error('Animation keyframes must be inside the timeline bar.');
+    if (it.timingKeys !== undefined && (!Array.isArray(it.timingKeys) || it.timingKeys.length > 2 || new Set(it.timingKeys).size !== it.timingKeys.length || it.timingKeys.some(k => !['start', 'dur'].includes(k)))) throw Error('Invalid timing keyframes.');
     if (typeof it.id !== 'string' || ids.has(it.id) || typeof it.name !== 'string') throw Error('Invalid item.');
     ids.add(it.id);
     if (!Number.isSafeInteger(it.start) || it.start < 0 || !Number.isSafeInteger(it.dur) || it.dur < 1 || !Number.isSafeInteger(it.start + it.dur) || !ENUMS.easing.includes(it.easing)) throw Error('Invalid item timing.');
@@ -1648,7 +1660,20 @@ export function validateMapProject(p) {
     for (const [k, lo, hi] of [['width', .5, 20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
   }
   for (const s of p.shots) {
+    if (s.cameraKeys !== undefined) {
+      if (!Array.isArray(s.cameraKeys) || s.cameraKeys.length > 1000) throw Error('Invalid camera keyframes.');
+      const frames = new Set();
+      for (const key of s.cameraKeys) {
+        if (!Number.isSafeInteger(key.frame) || key.frame < s.start || key.frame > s.start + s.dur || frames.has(key.frame) || !key.values || Array.isArray(key.values) || !Object.keys(key.values).length) throw Error('Invalid camera keyframe.');
+        frames.add(key.frame);
+        for (const [field, value] of Object.entries(key.values)) if (!CAMERA_FIELDS[field] || !num(value, ...CAMERA_FIELDS[field])) throw Error('Invalid camera keyframe property.');
+      }
+    }
+    if (s.animDur !== undefined && (!Number.isSafeInteger(s.animDur) || s.animDur < 1)) throw Error('Invalid camera animation duration.');
     if (!ENUMS.preset.includes(s.preset)) throw Error('Unknown camera preset.');
+    if (s.preset === 'keyframed') for (const cam of [s.cameraFrom, s.cameraTo]) {
+      if (!cam || !num(cam.lon, -540, 540) || !num(cam.lat, -85, 85) || !num(cam.zoom, 0, 14) || !num(cam.pitch, 0, 75) || !num(cam.bearing, -3600, 3600)) throw Error('Invalid camera keyframe.');
+    }
     if (!isLoc(s.target)) throw Error('Invalid camera target.');
     for (const [k, lo, hi] of [['zoom', 0, 14], ['pitch', 0, 75], ['bearing', -3600, 3600], ['amount', -10, 10], ['degrees', -3600, 3600]]) if (!num(s[k], lo, hi)) throw Error('Invalid camera ' + k + '.');
   }

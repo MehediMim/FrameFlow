@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { newMapProject, makeAction, makeShot, validateMapProject, actionProgress } from '../map-engine.mjs';
+import { OBJECT_ICONS, EFFECTS, SHAPES } from '../map-objects.mjs';
+import { retimeMapItem } from '../map-timing.mjs';
 
 // Project length, item visibility and animation duration all exceed the old
 // limits, at every supported frame rate, and survive saving and reopening.
@@ -98,11 +100,12 @@ function editor(p) {
     return elements.get(id);
   };
   const context = vm.createContext({
+    OBJECT_ICONS, EFFECTS, SHAPES, retimeMapItem, bindCameraInspector() {},
     proj: p, frame: p.frames - 1,
     $: selector => selector.startsWith('#mInspector') ? null : element(selector),
     $$: selector => selector === '#mInspector [data-mf]' ? fields : [],
     window: { addEventListener: (event, callback) => listeners.set(event, callback) },
-    pause() {}, checkpoint() {}, saveLocal() {}, renderAll() {}, changed() {}, notify() {}, renderTimeline() {}, draw() {},
+    pause() {}, checkpoint() {}, saveLocal() {}, renderAll() {}, changed() {}, notify() {}, renderTimeline() {}, renderInspector() {}, draw() {},
     items: () => [...p.shots, ...p.actions],
     isShot: it => it.kind === 'shot',
     frameFromEvent: e => e.testFrame,

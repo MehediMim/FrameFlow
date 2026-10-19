@@ -84,7 +84,7 @@ export function sceneFrameCount(p) {
 }
 // Overlapping clips: the clip that starts later wins, earlier ones are cut off where the next one begins.
 export function resolveClips(clips = []) {
-  const s = [...clips].sort((a, b) => a.start - b.start);
+  const s = clips.filter(c => c.visible !== false).sort((a, b) => a.start - b.start);
   return s.map((c, i) => ({ ...c, end: Math.min(c.start + c.dur, s[i + 1] ? s[i + 1].start : Infinity) })).filter(c => c.end > c.start);
 }
 export const activeClip = (clips, t) => resolveClips(clips).find(c => t >= c.start && t < c.end) || null;
@@ -171,7 +171,7 @@ function rawCamera(p, c, t, t0) {
 }
 const mixCam = (a, b, k) => ({ pos: a.pos.map((v, i) => lerp(v, b.pos[i], k)), look: a.look.map((v, i) => lerp(v, b.look[i], k)), fov: lerp(a.fov, b.fov, k), hide: k >= .5 ? b.hide : a.hide });
 export function cameraAt(p, t) {
-  const clips = resolveClips(p.cameraClips), base = () => rawCamera(p, p.camera, t, 0), act = clips.find(c => t >= c.start && t < c.end);
+  const clips = resolveClips(p.cameraTrackVisible === false ? [] : p.cameraClips), base = () => rawCamera(p, p.camera, t, 0), act = clips.find(c => t >= c.start && t < c.end);
   if (act) {
     const cur = rawCamera(p, act, t, act.start), bl = act.blend ?? .5;
     if (bl > 0 && t < act.start + bl) { const prev = [...clips].reverse().find(c => c.end <= act.start + 1e-6), from = prev && act.start - prev.end < .02 ? rawCamera(p, prev, t, prev.start) : base(); return mixCam(from, cur, ease((t - act.start) / bl)); }

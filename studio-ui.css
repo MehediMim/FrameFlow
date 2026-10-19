@@ -21,6 +21,25 @@
 .ff-unified .timeline-head{height:49px;flex:0 0 49px}
 .ff-unified .timeline-body{height:auto;flex:1;min-height:0}
 .ff-unified .timeline footer{flex:0 0 30px}
+.ff-unified .ff-timeline-resize{height:12px;flex:0 0 12px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;touch-action:none;user-select:none;border-bottom:1px solid var(--line);background:#20262a;color:#99a4ac;font-size:13px;line-height:10px}
+.ff-unified .ff-timeline-resize:hover,.ff-unified .ff-timeline-resize:focus-visible{color:var(--accent);background:#2a3328}
+.ff-timeline-resizing,.ff-timeline-resizing *{cursor:ns-resize!important;user-select:none!important}
+.ff-unified .ff-obsolete-layer-action{display:none!important}
+.ff-unified :is(.track-label,.sc-track-name):has(>.ff-row-actions){gap:5px;padding-left:7px;padding-right:5px;min-width:0}
+.ff-unified :is(.layer,.m-item,.sc-item):has(>.ff-row-actions){gap:5px;padding-left:5px;padding-right:3px;min-width:0}
+.ff-unified .ff-row-actions{display:inline-flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto;width:auto;overflow:visible}
+.ff-unified .ff-row-actions>button{display:flex;align-items:center;justify-content:center;width:19px;height:24px;min-width:19px;min-height:0;flex:0 0 19px;margin:0;padding:2px;border:0;border-radius:3px;background:transparent;color:#939fa8;cursor:pointer}
+.ff-unified .ff-row-actions>button:hover{background:#343e43;color:#fff}
+.ff-unified .ff-row-actions>button[data-row-action=delete]:hover{color:#ff8d8d}
+.ff-unified .ff-row-actions>button[aria-pressed=true]{color:var(--accent)}
+.ff-unified .ff-row-actions>button:disabled{opacity:.25;cursor:default}
+.ff-unified .ff-row-actions svg{width:14px;height:14px;flex:none;pointer-events:none}
+.ff-unified .ff-layer-hidden :is(.ff-layer-name,.name){opacity:.45}
+.ff-unified :is(.layer,.m-item,.sc-item):has(>.ff-row-actions)>.when,
+.ff-unified .layer:has(>.ff-row-actions)>[data-visibility],
+.ff-unified :is([data-audio-layer]):has(>.ff-row-actions)>button,
+.ff-unified #scLeft .sc-actions:has(>[data-action=duplicate]),
+.ff-unified #scLeft .sc-actions:has(>[data-action=delete]){display:none}
 .ff-unified :is(.layer,.m-item,.sc-item){padding:9px 8px;border-radius:var(--ff-radius);min-height:36px}
 .ff-unified :is(.layer,.m-item,.sc-item).selected{border-color:#4f6140;background:#2c3729}
 .ff-unified .starter{display:block;margin:8px 0 0;padding:0}

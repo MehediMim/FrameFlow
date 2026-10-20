@@ -130,6 +130,23 @@ try {
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   p=await saved(); const E=await import('../map-engine.mjs');E.validateMapProject(p);
   assert.equal(p.shots.at(-1).cameraKeys.find(k=>k.frame===20).values.zoom,5,'camera keys persist after reload');
+  await evaluate(`document.querySelector('[data-mid="${object.id}"]').click()`);
+  await evaluate(`document.querySelector('[data-mpre="followPlane"]').click()`);
+  p=await saved(); assert.equal(p.shots.at(-1).planeId,object.id,'Follow traveler selects the current moving object');
+  await evaluate(`document.querySelector('[data-mid="${object.id}"]').click()`);
+  await change('#mFrame','2');
+  await evaluate(`document.querySelector('#mSplit').click()`);
+  p=await saved();
+  assert.equal(p.actions.length,2,'Split creates a second clip');
+  assert.equal(p.actions[0].start+p.actions[0].dur,60);
+  assert.equal(p.actions[1].start,60);
+  assert.equal(p.actions[1].sourceStart,object.start,'split preserves original animation clock');
+  await evaluate(`document.querySelector('#mUndo').click()`);
+  assert.equal((await saved()).actions.length,1,'split can be undone');
+  await evaluate(`document.querySelector('#mRedo').click()`);
+  await evaluate(`location.reload()`);
+  await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  p=await saved(); E.validateMapProject(p); assert.equal(p.actions.length,2,'split survives reload');
   assert.deepEqual(errors,[]);
   console.log('Camera properties, draggable timing keys, movement keys and project reload passed');
 } finally {

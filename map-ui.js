@@ -23,7 +23,7 @@ import { ARMY_PRESETS } from './map-armies.mjs';
 import { resolveLoc } from './map-engine.mjs?v=invert-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
 import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=invert-1';
-import { retimeMapItem, animationKeysOf, setAnimationKey } from './map-timing.mjs';
+import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs';
 import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
 import { trimMapHistory } from './map-history.mjs';
 let cameraProperty = 'all', objectProperty = 'all';
@@ -49,7 +49,7 @@ const current = () => items().find(i => i.id === sel);
 const isShot = it => it.kind === 'shot';
 const iconOf = it => (isShot(it) ? PRESETS[it.preset].icon : ACTION_TYPES[it.type].icon);
 const clsOf = it => (isShot(it) ? 'shot' : it.type);
-const planes = () => proj.actions.filter(a => a.type === 'plane' || (a.type === 'object' && a.mode === 'path'));
+const planes = () => proj.actions.filter(a => a.type === 'plane' || (a.type === 'object' && ['path', 'move'].includes(a.mode)));
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function notify(s) {
@@ -290,12 +290,12 @@ function addAction(type) {
 }
 function addShot(preset) {
   const needsPlane = PRESETS[preset].fields.includes('planeId');
-  if (needsPlane && !planes().length) { notify('Add a Travel animation first'); return; }
+  if (needsPlane && !planes().length) { notify('Add a Travel animation or a moving object path first'); return; }
   pause(); checkpoint();
   const c = current(), extra = {};
   const t = suggestTarget(); if (t) extra.target = t;
   if (preset === 'keyframed') { extra.cameraFrom = captureCamera(); extra.cameraTo = { ...extra.cameraFrom }; }
-  if (needsPlane) extra.planeId = (c && c.type === 'plane' ? c : planes()[0]).id;
+  if (needsPlane) extra.planeId = (planes().find(a => a.id === c?.id) || planes()[0]).id;
   const s = makeShot(preset, frame, extra); if (!ensureLength(s.start + s.dur)) { notify('Choose an earlier start frame for this camera shot.'); return; }
   proj.shots.push(s); sel = s.id; saveLocal(); renderAll(); notify(`${PRESETS[preset].label} camera added at frame ${frame}`);
 }
@@ -685,7 +685,7 @@ function shotFields(s) {
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
   if (has('autoFit') && ['country','region','regions'].includes(s.target.kind)) h += F.chk('autoFit', 'Fit the whole region in view', s.autoFit);
-  if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, `${a.name} (${a.from?.name ?? '?'} → ${a.to?.name ?? '?'})`])]);
+  if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, a.mode === 'path' ? `${a.name} (drawn path)` : `${a.name} (${(a.from || a.place)?.name ?? '?'} → ${a.to?.name ?? '?'})`])]);
   if (has('zoom') && !(has('autoFit') && s.autoFit && ['country','region','regions'].includes(s.target.kind))) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
@@ -1137,12 +1137,12 @@ function updateTimelineItem(it) {
   row.insertAdjacentHTML('beforeend', timelineKeys(it, last)); bindTimelineKeys(row);
 }
 function timelineKeys(it, last) {
-  if (it.preset === 'keyframed') return cameraKeysOf(it).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).map(k => `<button type="button" class="m-key ${k.frame === frame && it.id === sel ? 'current' : ''}" data-map-key="camera:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Camera keyframe - frame ${k.frame}. Drag to retime." aria-label="Camera keyframe, frame ${k.frame}"></button>`).join('');
+  if (it.preset === 'keyframed') return cameraKeysOf(it).filter(k => k.frame >= it.start && k.frame <= it.start + it.dur).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).map(k => `<button type="button" class="m-key ${k.frame === frame && it.id === sel ? 'current' : ''}" data-map-key="camera:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Camera keyframe - frame ${k.frame}. Drag to retime." aria-label="Camera keyframe, frame ${k.frame}"></button>`).join('');
   const fields=objectProperty==='all'?['size','objectAngle','damageState']:[objectProperty];
-  const objectMarkers=it.type==='object'&&objectProperty!=='animation'?(it.objectKeys||[]).filter(k=>fields.some(field=>k.values[field]!==undefined)).map(k=>`<button type="button" class="m-key m-object-key" data-map-key="object:${objectProperty}:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Object ${esc(objectProperty)} keyframe at frame ${k.frame}" aria-label="Object keyframe at frame ${k.frame}"></button>`).join(''):'';
+  const objectMarkers=it.type==='object'&&objectProperty!=='animation'?(it.objectKeys||[]).filter(k=>k.frame>=it.start&&k.frame<=it.start+it.dur).filter(k=>fields.some(field=>k.values[field]!==undefined)).map(k=>`<button type="button" class="m-key m-object-key" data-map-key="object:${objectProperty}:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Object ${esc(objectProperty)} keyframe at frame ${k.frame}" aria-label="Object keyframe at frame ${k.frame}"></button>`).join(''):'';
   if(it.type==='object'&&!['all','animation'].includes(objectProperty))return objectMarkers;
   const keys = animationKeysOf(it);
-  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('')+objectMarkers;
+  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].filter(([, time]) => time >= it.start && time <= it.start + it.dur).map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('')+objectMarkers;
 }
 function bindTimelineKeys(root = document) {
   [...root.querySelectorAll('[data-map-key]')].forEach(el => {
@@ -1153,7 +1153,7 @@ function bindTimelineKeys(root = document) {
       sel = it.id; renderItems(); renderInspector();
       if (el.dataset.mapKey.startsWith('camera:')) setFrame(+el.dataset.mapKey.split(':')[1]);
       if (el.dataset.mapKey.startsWith('object:')) setFrame(+el.dataset.mapKey.split(':')[2]);
-      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
+      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
       renderTimeline();
     };
     el.onkeydown = e => {
@@ -1186,7 +1186,7 @@ function renderTimeline() {
     e.preventDefault(); e.stopPropagation(); pause();
     const id = el.dataset.mclip, it = items().find(i => i.id === id); if (!it) return;
     if (sel !== id) { sel = id; renderItems(); renderInspector(); }
-    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
+    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
     renderTimeline();
   });
   bindTimelineKeys();
@@ -1215,7 +1215,7 @@ window.addEventListener('pointermove', e => {
   else if (drag.mode === 'r') dur = Math.max(1, drag.dur + d);
   else { start = clamp(drag.start + d, 0, drag.start + drag.dur - 1); dur = drag.start + drag.dur - start; }
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(dur) || !Number.isSafeInteger(start + dur)) return;
-  it.start = drag.start; it.dur = drag.dur;
+  it.start = drag.start; it.dur = drag.dur; if (drag.sourceStart !== undefined) it.sourceStart = drag.sourceStart;
   if (drag.animStart !== undefined) { it.animStart = drag.animStart; it.animEnd = drag.animEnd; }
   if (drag.moveStart !== undefined) { it.moveStart = drag.moveStart; it.moveEnd = drag.moveEnd; }
   if (drag.cameraKeys) it.cameraKeys = clone(drag.cameraKeys);
@@ -1270,6 +1270,16 @@ async function exportVideo() {
 }
 
 function bindToolbar() {
+  $('#mSplit').onclick = () => {
+    const it = current();
+    if (!it || frame <= it.start || frame >= it.start + it.dur) { notify('Move the playhead inside the item you want to split.'); return; }
+    pause(); checkpoint();
+    if (isShot(it) && !it.sourceFrom) it.sourceFrom = cameraAt(proj, geo, proj.width, proj.height, it.start);
+    const right = splitMapItem(it, frame, crypto.randomUUID());
+    const list = isShot(it) ? proj.shots : proj.actions;
+    list.splice(list.indexOf(it) + 1, 0, right);
+    sel = right.id; saveLocal(); renderAll(); notify('Item split at playhead');
+  };
   $('#mUndo').onclick = () => history('undo'); $('#mRedo').onclick = () => history('redo');
   $('#mSave').onclick = () => { download(new Blob([JSON.stringify(proj, null, 2)], { type: 'application/json' }), fileBase() + '.framemap.json'); notify('Project downloaded'); };
   $('#mOpen').onclick = () => $('#mProjectFile').click();
@@ -1302,7 +1312,7 @@ function bindToolbar() {
   };
   $('#mNew').onclick = async () => { if (!await confirmStudio('Start an empty map? Your current edit can be restored with Undo.')) return; pause(); checkpoint(); proj = newMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
   $('#mDemo').onclick = async () => { if (!await confirmStudio('Load the demo map? Your current edit can be restored with Undo.', 'Load demo', 'Load demo')) return; pause(); checkpoint(); proj = demoMapProject(); audioUI?.reset(); sel = null; frame = 0; saveLocal(); renderAll(); };
-  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. The bar controls visibility. Choose Animation in the keyframe property list and drag its two centered diamonds to set animation start and finish. Use arrow keys on a focused diamond for one frame, or Shift + arrows for ten frames. Moving objects can also enable movement start / end keyframes in Properties. Set <b>Animation duration (frames)</b> in Properties to control how long an item takes to animate. It disappears when its bar ends. Travel properties can also show the regions or countries crossed by a route.</li><li>In <b>Label style → Start from a style</b>, choose <b>2D · Attached to map</b> to lay existing labels flat on the map so they follow its tilt and rotation.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
+  $('#mHelp').onclick = () => modal(`<h2>Make a map animation.</h2><ol><li>Press <b>Border</b>, <b>Travel</b>, <b>Highlight</b> or <b>Pin</b>. It is added at the playhead.</li><li>Choose the place in the right panel. Type a city or country, enter <i>lat, lon</i>, or press <b>⌖</b> and click the map.</li><li>Pick a <b>camera preset</b> (Fly to, Cinematic swoop, Orbit, Follow plane…). It moves the camera for you.</li><li>Drag bars on the timeline to retime them. Select an item, place the playhead inside its bar, and press Split or S to cut it into two clips. The bar controls visibility. Choose Animation in the keyframe property list and drag its two centered diamonds to set animation start and finish. Use arrow keys on a focused diamond for one frame, or Shift + arrows for ten frames. Moving objects can also enable movement start / end keyframes in Properties. Set <b>Animation duration (frames)</b> in Properties to control how long an item takes to animate. It disappears when its bar ends. Travel properties can also show the regions or countries crossed by a route.</li><li>In <b>Label style → Start from a style</b>, choose <b>2D · Attached to map</b> to lay existing labels flat on the map so they follow its tilt and rotation.</li><li>Press Space to preview, then <b>Export video</b>.</li></ol><p><b>Shortcuts:</b> Space play/pause · ← → one frame · Shift + arrows ten frames · Delete remove item · Ctrl/Cmd Z undo · Esc cancel map picking.</p>`);
   $('#mCloseModal').onclick = () => { if (exporting) { exporting = false; $('#mCloseModal').disabled = true; } else $('#mModal').close(); };
   $('#mModal').addEventListener('cancel', e => { if (exporting) { e.preventDefault(); exporting = false; } });
 }
@@ -1334,6 +1344,7 @@ window.addEventListener('keydown', e => {
   if ($('#mModal').open || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); history(e.shiftKey ? 'redo' : 'undo'); return; }
   if (e.code === 'Space') { e.preventDefault(); play(); }
+  else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('#mSplit').click(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); pause(); setFrame(frame + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1)); }
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('#mDelete').click(); }
 });

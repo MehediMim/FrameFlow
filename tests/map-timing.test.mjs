@@ -1,6 +1,7 @@
 // Run with: node tests/map-timing.test.mjs
 import assert from 'node:assert/strict';
 import * as E from '../map-engine.mjs';
+import { splitMapItem, retimeMapItem } from '../map-timing.mjs';
 
 // A small country makes recorded canvas commands easy to compare without a DOM.
 const topo = {
@@ -173,4 +174,44 @@ for (const easing of ['linear', 'easeIn']) {
   }
 }
 
+// Cuts preserve the source animation on both sides, including fades and keys.
+for (const type of Object.keys(E.ACTION_TYPES)) {
+  const p = project(), a = E.makeAction(type, 20, {
+    dur: 100, animDur: 90, easing: 'easeInOut',
+    target: { kind: 'country', name: 'Testland' },
+    from: place('Start', -10), to: place('End', 10), place: place('Pin', 0),
+    path: [place('Start', -10), place('End', 10)], pulse: false,
+  });
+  p.actions = [a];
+  const frames = [19, 20, 40, 69, 70, 71, 100, 119, 120];
+  const before = frames.map(f => render(p, f));
+  assert.equal(splitMapItem(a, 20, 'invalid'), null);
+  const right = splitMapItem(a, 70, `${a.id}-right`);
+  p.actions.push(right);
+  frames.forEach((f, i) => assert.deepEqual(render(p, f), before[i], `${type} split preserves frame ${f}`));
+  E.validateMapProject(JSON.parse(JSON.stringify(p)));
+  const sample = render({ ...p, actions: [right] }, 100);
+  retimeMapItem(right, 90, right.dur);
+  assert.deepEqual(render({ ...p, actions: [right] }, 120), sample, `${type} split clip moves with its source clock`);
+}
+for (const preset of ['pushIn', 'flyTo', 'orbit', 'keyframed']) {
+  const p = project(), s = E.makeShot(preset, 20, { dur: 100 });
+  p.shots = [s];
+  const frames = [20, 50, 69, 70, 71, 100, 120, 150];
+  const before = frames.map(f => E.cameraAt(p, geo, W, H, f));
+  s.sourceFrom = E.cameraAt(p, geo, W, H, s.start);
+  p.shots.push(splitMapItem(s, 70, `${s.id}-right`));
+  frames.forEach((f, i) => assert.deepEqual(E.cameraAt(p, geo, W, H, f), before[i], `${preset} camera cut preserves frame ${f}`));
+  E.validateMapProject(JSON.parse(JSON.stringify(p)));
+}
+// Follow the object's movement clock, including its stationary endpoint holds.
+for (const mode of ['path', 'move']) {
+  const p = project(), a = E.makeAction('object', 0, { mode, dur: 200, moveStart: 60, moveEnd: 120, easing: 'linear', place: place('Start', -10), to: place('End', 10), path: [place('Start', -10), place('End', 10)] });
+  p.actions = [a]; p.shots = [E.makeShot('followPlane', 0, { dur: 200, planeId: a.id })];
+  for (const f of [70, 90, 120, 150]) {
+    const camera = E.cameraAt(p, geo, W, H, f), position = E.objectLocationAt({ cx: .5 }, geo, a, f);
+    assert.ok(Math.abs(camera.cx - position.X) < 1e-10, `${mode} camera follows actual object position at ${f}`);
+    assert.ok(Math.abs(camera.cy - position.Y) < 1e-10);
+  }
+}
 console.log('map action timing tests passed');

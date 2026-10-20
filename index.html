@@ -316,7 +316,7 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 </aside>
 </div>
 <section class="timeline">
-<div class="timeline-head"><div><b>Map timeline</b><span class="pill" id="mFpsLabel">30 FPS</span></div><div class="timeline-tools"><label>Zoom <input id="mZoomT" type="range" min="1" max="4" step=".25" value="1"></label></div></div>
+<div class="timeline-head"><div><b>Map timeline</b><span class="pill" id="mFpsLabel">30 FPS</span></div><div class="timeline-tools"><button type="button" id="mSplit" title="Split selected item at playhead (S)">✂ Split</button><label>Zoom <input id="mZoomT" type="range" min="1" max="4" step=".25" value="1"></label></div></div>
 <div class="timeline-body"><div class="timeline-labels"><div class="ruler-label">ITEM <span>SECONDS →</span></div><div id="mTrackLabels"></div></div><div class="tracks-scroll" id="mScroll"><div class="m-tracks" id="mTracks"><div class="m-ruler" id="mRuler"></div><div id="mTrackRows"></div><div class="m-playhead" id="mPlayhead"><span></span></div></div></div></div>
 <footer><span><i class="dot"></i> <span id="mStatus">Ready to map</span></span><span>Space Play / pause <em>·</em> ← → Step frame <em>·</em> Drag bars to retime</span></footer>
 </section>

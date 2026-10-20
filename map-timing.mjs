@@ -1,6 +1,13 @@
 // Move absolute movement keys with their clip; clamp them when trimming it.
 export function retimeMapItem(item, start, duration, moveKeys = true) {
   const shift = moveKeys ? start - item.start : 0;
+  if (item.sourceStart !== undefined) {
+    item.sourceStart += shift;
+    for (const field of ['animStart', 'animEnd', 'moveStart', 'moveEnd']) if (item[field] !== undefined) item[field] += shift;
+    for (const field of ['cameraKeys', 'objectKeys']) for (const key of item[field] || []) key.frame += shift;
+    item.start = start; item.dur = duration;
+    return;
+  }
   for (const keyName of ['cameraKeys','objectKeys']) if (item[keyName]) {
     const merged = new Map();
     for (const key of item[keyName]) {
@@ -22,7 +29,23 @@ export function retimeMapItem(item, start, duration, moveKeys = true) {
   item.dur = duration;
 }
 export function animationKeysOf(item) {
-  return { start: item.animStart ?? item.moveStart ?? item.start, end: item.animEnd ?? item.moveEnd ?? item.start + (item.animDur ?? item.dur) };
+  const start = item.sourceStart ?? item.start;
+  return { start: item.animStart ?? item.moveStart ?? start, end: item.animEnd ?? item.moveEnd ?? start + (item.animDur ?? item.sourceDur ?? item.dur) };
+}
+
+// Retain the source clock so cutting a clip never restarts its animation.
+export function splitMapItem(item, frame, id) {
+  if (!Number.isSafeInteger(frame) || frame <= item.start || frame >= item.start + item.dur) return null;
+  const right = structuredClone(item), end = item.start + item.dur;
+  item.sourceStart ??= item.start; item.sourceDur ??= item.dur;
+  right.sourceStart = item.sourceStart; right.sourceDur = item.sourceDur;
+  item.dur = frame - item.start;
+  right.start = frame; right.dur = end - frame; right.id = id;
+  return right;
+}
+
+export function mapSourceItem(item) {
+  return item.sourceStart === undefined ? item : { ...item, clipStart: item.start, clipEnd: item.start + item.dur, start: item.sourceStart, dur: item.sourceDur };
 }
 
 export function setAnimationKey(item, key, frame) {

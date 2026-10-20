@@ -4,7 +4,7 @@ import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
 import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
-import { animationKeysOf } from './map-timing.mjs';
+import { animationKeysOf, mapSourceItem } from './map-timing.mjs';
 import { objectOffsets, FORMATIONS } from './map-formations.mjs';
 import { objectPoseAt, objectSizeAt, validateObjectKeys } from './map-object-keys.mjs';
 import { armyCopies, validateArmyUnits } from './map-armies.mjs';
@@ -479,7 +479,7 @@ function pathRoute(a) {
 
 export function planeRoute(geo, a) {
   if (a.mode === 'path') return pathRoute(a);
-  const A = lonLatOf(geo, a.from), B = lonLatOf(geo, a.to);
+  const A = lonLatOf(geo, a.type === 'object' ? a.place : a.from), B = lonLatOf(geo, a.to);
   if (!A || !B) return null;
   const key = `${A.lat},${A.lon},${B.lat},${B.lon}`, hit = routeCache.get(a.id);
   if (hit && hit.key === key) return hit;
@@ -586,7 +586,7 @@ function shotState(s, from, tr, frame, c) {
     }
     case 'followPlane': {
       const a = pr.actions.find(x => x.id === s.planeId && (x.type === 'plane' || x.type === 'object')), r = a && planeRoute(geo, a); if (!r) return from;
-      const q = ease(a.easing, actionProgress(a, frame)), p = routeAt(r, q);
+      const q = ease(a.easing, a.type === 'object' ? objectMoveProgress(a, frame) : actionProgress(a, frame)), p = routeAt(r, q);
       const X = p.X + Math.round(from.cx - p.X), blend = ease('easeOut', tr * 3.2), settle = ease('easeInOut', tr * 2);
       return {
         cx: lerp(from.cx, X, blend), cy: lerp(from.cy, p.Y, blend), zoom: lerp(from.zoom, s.zoom, settle), pitch: lerp(from.pitch, s.pitch, settle),
@@ -599,13 +599,16 @@ function shotState(s, from, tr, frame, c) {
 
 function evalShot(s, from, frame, c) {
   const end = s.start + s.dur;
+  frame = Math.min(frame, end);
+  from = s.sourceFrom || from;
+  s = mapSourceItem(s);
   const keys = animationKeysOf(s);
   return shotState(s, from, clamp01((frame - keys.start) / Math.max(1, keys.end - keys.start)), Math.min(frame, end), c);
 }
 
 /** Camera state at a frame: start view followed by each preset shot in order. */
 export function cameraAt(proj, geo, W, H, frame) {
-  const init = startCam(proj, geo, W, H), shots = proj.shots.filter(s => s.visible !== false).sort((a, b) => a.start - b.start), c = { geo, W, H, project: proj };
+  const init = startCam(proj, geo, W, H), shots = proj.shots.filter(s => s.visible !== false).sort((a, b) => a.start - b.start), c = { geo, W, H, project: { ...proj, actions: proj.actions.map(mapSourceItem) } };
   let prev = null;
   for (const s of shots) {
     if (frame < s.start) break;
@@ -719,7 +722,7 @@ const bounce = t => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * 
 const animationDuration = a => a.animDur ?? a.dur;
 export const actionProgress = (a, frame) => { const keys = animationKeysOf(a); return clamp01((frame - keys.start) / Math.max(1, keys.end - keys.start)); };
 export const objectMoveProgress = (a, frame) => a.moveStart === undefined ? actionProgress(a, frame) : clamp01((frame - a.moveStart) / Math.max(1, a.moveEnd - a.moveStart));
-const actAlpha = (a, frame) => frame >= a.start && frame < a.start + a.dur ? 1 : 0;
+const actAlpha = (a, frame) => frame >= (a.clipStart ?? a.start) && frame < (a.clipEnd ?? a.start + a.dur) ? 1 : 0;
 
 function groundCircle(ctx, v, X, Y, rPx, off = 0) { // circle of radius rPx screen-pixels (at the map's scale) lying on the map
   const r = rPx / v.S, xy = new Float64Array(2 * 49);
@@ -1598,7 +1601,7 @@ const OBJ_H = { drawBadge, objectLocationAt, objectImage: src => { const e = bad
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
   const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
-  proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false) };
+  proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false && (a.sourceStart === undefined || (frame >= a.start && frame < a.start + a.dur))).map(mapSourceItem) };
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(camera, W, H), labels = [];
   v.fps = proj.fps; v.objects = new Map(proj.actions.filter(a=>a.type==='object').map(a=>[a.id,a]));
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
@@ -1800,15 +1803,19 @@ export function validateMapProject(p) {
     const ids=new Set();for(const preset of p.armyPresets){if(!preset||typeof preset.id!=='string'||preset.id.length>100||ids.has(preset.id)||typeof preset.name!=='string'||!preset.name||preset.name.length>60)throw Error('Invalid saved army.');ids.add(preset.id);validateArmyUnits(preset.units,OBJECT_ICONS);}
   }
   const ids = new Set();
-  for (const it of [...p.actions, ...p.shots]) {
+  for (const raw of [...p.actions, ...p.shots]) {
+    if ((raw.sourceStart !== undefined || raw.sourceDur !== undefined) && (!Number.isSafeInteger(raw.sourceStart) || !Number.isSafeInteger(raw.sourceDur) || raw.sourceDur < 1 || !Number.isSafeInteger(raw.sourceStart + raw.sourceDur))) throw Error('Invalid split source timing.');
+    if (raw.sourceFrom !== undefined && (!raw.preset || !raw.sourceFrom || ['cx','cy','zoom','pitch','bearing'].some(k => !Number.isFinite(raw.sourceFrom[k])))) throw Error('Invalid split camera origin.');
+    if (!Number.isSafeInteger(raw.start) || raw.start < 0 || !Number.isSafeInteger(raw.dur) || raw.dur < 1 || !Number.isSafeInteger(raw.start + raw.dur)) throw Error('Invalid item timing.');
+    const it = mapSourceItem(raw);
     if (it.visible !== undefined && typeof it.visible !== 'boolean') throw Error('Invalid layer visibility.');
     if ((it.animStart !== undefined || it.animEnd !== undefined) && (!Number.isSafeInteger(it.animStart) || !Number.isSafeInteger(it.animEnd) || it.animStart < it.start || it.animEnd <= it.animStart || it.animEnd > it.start + it.dur)) throw Error('Animation keyframes must be inside the timeline bar.');
     if (it.timingKeys !== undefined && (!Array.isArray(it.timingKeys) || it.timingKeys.length > 2 || new Set(it.timingKeys).size !== it.timingKeys.length || it.timingKeys.some(k => !['start', 'dur'].includes(k)))) throw Error('Invalid timing keyframes.');
     if (typeof it.id !== 'string' || ids.has(it.id) || typeof it.name !== 'string') throw Error('Invalid item.');
     ids.add(it.id);
-    if (!Number.isSafeInteger(it.start) || it.start < 0 || !Number.isSafeInteger(it.dur) || it.dur < 1 || !Number.isSafeInteger(it.start + it.dur) || !ENUMS.easing.includes(it.easing)) throw Error('Invalid item timing.');
+    if (!Number.isSafeInteger(it.start) || !Number.isSafeInteger(it.dur) || it.dur < 1 || !Number.isSafeInteger(it.start + it.dur) || !ENUMS.easing.includes(it.easing)) throw Error('Invalid item timing.');
   }
-  for (const a of p.actions) {
+  for (const a of p.actions.map(mapSourceItem)) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
     if(a.type === 'scene')validateScenePanel(a);
     if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
@@ -1896,7 +1903,7 @@ export function validateMapProject(p) {
     if (a.reliefColor !== undefined && !col(a.reliefColor)) throw Error('Invalid highlight color.');
     for (const [k, lo, hi] of [['width', .5, 20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
   }
-  for (const s of p.shots) {
+  for (const s of p.shots.map(mapSourceItem)) {
     if (s.cameraKeys !== undefined) {
       if (!Array.isArray(s.cameraKeys) || s.cameraKeys.length > 1000) throw Error('Invalid camera keyframes.');
       const frames = new Set();
@@ -1916,7 +1923,7 @@ export function validateMapProject(p) {
   }
   // Freeze the original animation speed when opening projects saved before animDur.
   for (const a of p.actions) {
-    a.animDur ??= a.dur;
+    a.animDur ??= a.sourceDur ?? a.dur;
     // Older route-name settings must also reveal names on entry.
     if (a.type === 'plane') a.routeLabelTiming = 'visited';
   }

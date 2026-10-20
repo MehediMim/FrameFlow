@@ -67,7 +67,7 @@ try {
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);
   const {HISTORIC_OBJECTS}=await import('../map-historic-objects.mjs'),E=await import('../map-engine.mjs');
-  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup').length`),4);
+  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup').length`),5);
   for(const [glyph,icon] of Object.entries(HISTORIC_OBJECTS)){
     await change('#mInspector [data-mf="glyph"]',glyph);
     const p=await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);E.validateMapProject(p);

@@ -1,13 +1,13 @@
 // Move absolute movement keys with their clip; clamp them when trimming it.
 export function retimeMapItem(item, start, duration, moveKeys = true) {
   const shift = moveKeys ? start - item.start : 0;
-  if (item.cameraKeys) {
+  for (const keyName of ['cameraKeys','objectKeys']) if (item[keyName]) {
     const merged = new Map();
-    for (const key of item.cameraKeys) {
+    for (const key of item[keyName]) {
       const frame = Math.max(start, Math.min(start + duration, key.frame + shift));
       merged.set(frame, { frame, values: { ...merged.get(frame)?.values, ...key.values } });
     }
-    item.cameraKeys = [...merged.values()].sort((a, b) => a.frame - b.frame);
+    item[keyName] = [...merged.values()].sort((a, b) => a.frame - b.frame);
   }
   if (item.animStart !== undefined) {
     item.animStart = Math.max(start, Math.min(start + duration - 1, item.animStart + shift));

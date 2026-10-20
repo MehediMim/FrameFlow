@@ -4,6 +4,9 @@ import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { animationKeysOf } from './map-timing.mjs';
 import { objectOffsets, FORMATIONS } from './map-formations.mjs';
+import { objectPoseAt, validateObjectKeys } from './map-object-keys.mjs';
+import { armyCopies, validateArmyUnits } from './map-armies.mjs';
+import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
 import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
@@ -1456,6 +1459,7 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
   const baseAlpha = alpha * clamp01(pop * 1.5) * fade;
   drawPinTrail(ctx, v, loc, a, baseAlpha);
   ctx.save(); ctx.globalAlpha = baseAlpha; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if(a.type==='object'&&a.objectAngle){ctx.translate(g.x,g.y);ctx.rotate(a.objectAngle*RAD);ctx.translate(-g.x,-g.y);}
   if (stem) { // pointer from the badge down to the exact location
     const col = st.badgeBorderW > 0 ? st.badgeBorder : st.badgeBg, lw = Math.max(2, st.badgeBorderW) * v.unit;
     ctx.save(); ctx.globalAlpha = baseAlpha * .3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(g.x, g.y, Math.max(4 * v.unit, r * .24), Math.max(1.5 * v.unit, r * .08), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
@@ -1530,8 +1534,28 @@ function queueTextLabel(v, geo, a, frame, labels) {
   labels.push({ x, y: y + (1 - p) * 12 * v.unit, ...(r ? { ground: { X: r.X, Y: r.Y }, groundOffset: { x: (a.offsetX ?? 0) * v.unit, y: ((a.offsetY ?? -24) + (1 - p) * 12) * v.unit } } : {}), text: a.text, alpha: p, scale: .94 + .06 * p });
 }
 
+// Shared anchors let attacks follow moving objects without changing stored locations.
+export function objectLocationAt(v,geo,a,frame) {
+  if(a.mode==='wallPath'){const r=pathRoute(a);if(r){const p=routeAt(r,.5);return{X:p.X+Math.round(v.cx-r.mid),Y:p.Y};}}
+  return pinSpot(v,geo,a,frame);
+}
+function drawWallPath(ctx,v,geo,a,frame,labels){
+  const route=pathRoute(a);if(!route)return;
+  const off=Math.round(v.cx-route.mid),points=[];
+  for(let i=0;i<route.n;i++){const X=route.X[i]+off,Y=route.Y[i],p=project(v,X,Y);points.push(p.z<v.near*2?null:{...p,X,Y});}
+  const placements=wallPlacements(points,(a.wallSpacing??52)*a.size*v.unit),margin=26*a.size*v.unit*4;
+  for(const placement of placements){
+    if(placement.x < -margin || placement.x>v.W+margin || placement.y < -margin || placement.y>v.H+margin)continue;
+    const gate=a.wallGate&&placement.index===Math.floor(placements.length/2),tower=!gate&&(a.wallTowerEvery??8)>0&&placement.index%(a.wallTowerEvery??8)===0;
+    const place={kind:'point',name:'Wall segment',lon:xToLon(placement.X),lat:yToLat(placement.Y)};
+    const part={...a,place,mode:'stay',formation:'row',count:1,trail:false,_wallSegment:true,showLabel:false,objectAngle:placement.angle+a.objectAngle};
+    drawObject(OBJ_H,ctx,v,geo,part,frame,labels);
+    if(gate||tower)drawObject(OBJ_H,ctx,v,geo,{...part,glyph:gate?'gatehouse':'watchtower',objectAngle:0,color:gate?a.color:'#927449'},frame,labels);
+  }
+}
+
 // Helpers handed to map-objects.mjs (objects, effects, arrows and zones).
-const OBJ_H = { drawBadge, objectImage: src => { const e = badgeEntry(src); return e?.ok ? e.img : null; }, resolveLoc, project, groundCircle, actionProgress: objectMoveProgress, actAlpha, planeRoute, routeAt, ease, clamp01, bounce };
+const OBJ_H = { drawBadge, objectLocationAt, objectImage: src => { const e = badgeEntry(src); return e?.ok ? e.img : null; }, resolveLoc, project, groundCircle, actionProgress: objectMoveProgress, actAlpha, planeRoute, routeAt, ease, clamp01, bounce };
 
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
@@ -1539,7 +1563,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
   proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false) };
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(camera, W, H), labels = [];
-  v.fps = proj.fps;
+  v.fps = proj.fps; v.objects = new Map(proj.actions.filter(a=>a.type==='object').map(a=>[a.id,a]));
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
   for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
     const r = planeRoute(geo, a);
@@ -1570,11 +1594,14 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
     else if (a.type === 'object') tag(a, () => {
       if (!actAlpha(a, frame)) return;
-      const offsets = objectOffsets(a), scale = (a.size || 1) * v.unit;
+      const item = {...a,...objectPoseAt(a,frame)};
+      if(item.mode==='wallPath'){drawWallPath(ctx,v,geo,item,frame,labels);return;}
+      const troops = item.glyph==='army' ? armyCopies(item) : null;
+      const offsets = objectOffsets(troops?{...item,count:troops.length}:item), scale = (item.size || 1) * v.unit;
       for (let i = 0; i < offsets.length; i++) {
         const dx = offsets[i].x * scale, dy = offsets[i].y * scale;
         ctx.save(); ctx.translate(dx, dy);
-        const itemLabels = []; drawObject(OBJ_H, ctx, v, geo, { ...a, showLabel: a.showLabel && i === 0 }, frame, itemLabels);
+        const itemLabels = []; drawObject(OBJ_H, ctx, v, geo, { ...item, ...(troops?.[i]||{}), trail:item.trail!==false&&i===0, showLabel: item.showLabel && i === 0 }, frame, itemLabels);
         ctx.restore(); labels.push(...itemLabels.map(l => ({ ...l, x: l.x + dx, y: l.y + dy, groundOffset: { x: (l.groundOffset?.x || 0) + dx, y: (l.groundOffset?.y || 0) + dy } })));
       }
     });
@@ -1709,6 +1736,10 @@ export function validateMapProject(p) {
   if (!i || !num(i.lon, -540, 540) || !num(i.lat, -90, 90) || !num(i.zoom, 0, 14) || !num(i.bearing ?? 0, -3600, 3600) || !num(i.pitch ?? 0, 0, 75)) throw Error('Invalid start view.');
   checkLabelStyle(p.labelStyle);
   if (p.area !== undefined) checkArea(p.area);
+  if(p.armyPresets!==undefined){
+    if(!Array.isArray(p.armyPresets)||p.armyPresets.length>30)throw Error('Too many saved armies.');
+    const ids=new Set();for(const preset of p.armyPresets){if(!preset||typeof preset.id!=='string'||preset.id.length>100||ids.has(preset.id)||typeof preset.name!=='string'||!preset.name||preset.name.length>60)throw Error('Invalid saved army.');ids.add(preset.id);validateArmyUnits(preset.units,OBJECT_ICONS);}
+  }
   const ids = new Set();
   for (const it of [...p.actions, ...p.shots]) {
     if (it.visible !== undefined && typeof it.visible !== 'boolean') throw Error('Invalid layer visibility.');
@@ -1760,6 +1791,12 @@ export function validateMapProject(p) {
     if (a.type === 'plane' && ((a.showRouteLabels !== undefined && typeof a.showRouteLabels !== 'boolean') || (a.routeLabelMode !== undefined && !['auto', 'country', 'region'].includes(a.routeLabelMode)) || (a.routeLabelTiming !== undefined && !['all', 'visited'].includes(a.routeLabelTiming)))) throw Error('Invalid route label settings.');
     const inList = (list, x) => list.some(([k]) => k === x);
     if (a.type === 'object') {
+      validateObjectKeys(a);
+      if(a.armyUnits!==undefined){validateArmyUnits(a.armyUnits,OBJECT_ICONS);if(a.glyph==='army'&&a.armyUnits.reduce((n,u)=>n+u.count,0)*(a.count||1)>100)throw Error('An army object can contain at most 100 units.');}
+      if(a.armyName!==undefined&&(typeof a.armyName!=='string'||a.armyName.length>60))throw Error('Invalid army name.');
+      if(a.wallSpacing!==undefined&&!num(a.wallSpacing,12,120))throw Error('Invalid wall spacing.');
+      if(a.wallTowerEvery!==undefined&&(!Number.isInteger(a.wallTowerEvery)||!num(a.wallTowerEvery,0,50)))throw Error('Invalid tower spacing.');
+      if(a.wallGate!==undefined&&typeof a.wallGate!=='boolean')throw Error('Invalid wall gate setting.');
       if (a.bannerTitle !== undefined && (typeof a.bannerTitle !== 'string' || a.bannerTitle.length > 100)) throw Error('Invalid banner title.');
       for (const k of ['bannerWind', 'bannerPole', 'bannerPlaque']) if (a[k] !== undefined && typeof a[k] !== 'boolean') throw Error('Invalid banner setting.');
       for (const [k,lo,hi] of [['bannerWindStrength',0,1],['bannerWindSpeed',.1,3],['bannerAspect',.35,2.5]]) if (a[k] !== undefined && !num(a[k],lo,hi)) throw Error('Invalid banner setting.');
@@ -1767,15 +1804,18 @@ export function validateMapProject(p) {
       if (a.formation !== undefined && !Object.hasOwn(FORMATIONS,a.formation)) throw Error('Invalid object formation.');
       if (a.formationAlign !== undefined && !['left','center','right'].includes(a.formationAlign)) throw Error('Invalid formation alignment.');
       if (a.formationCols !== undefined && (!Number.isInteger(a.formationCols) || !num(a.formationCols,1,100))) throw Error('Invalid formation columns.');
-      for (const key of ['formationAngle','objectAngle']) if (a[key] !== undefined && !num(a[key],-360,360)) throw Error('Invalid object angle.');
+      for (const key of ['formationAngle','objectAngle']) if (a[key] !== undefined && !num(a[key],key==='objectAngle'?-3600:-360,key==='objectAngle'?3600:360)) throw Error('Invalid object angle.');
       for (const key of ['gapX', 'gapY']) if (a[key] !== undefined && !num(a[key], 0, 1000)) throw Error('Invalid object spacing.');
       if (a.count !== undefined && (!Number.isInteger(a.count) || a.count < 1 || a.count > 100)) throw Error('Object count must be between 1 and 100.');
       if ((a.moveStart !== undefined || a.moveEnd !== undefined) && (!Number.isSafeInteger(a.moveStart) || !Number.isSafeInteger(a.moveEnd) || a.moveStart < a.start || a.moveEnd <= a.moveStart || a.moveEnd > a.start + a.dur)) throw Error('Movement keyframes must be inside the object timeline bar, with the end after the start.');
       if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid object destination.');
-      if (!Object.hasOwn(OBJECT_ICONS, a.glyph) || (a.enter !== undefined && !inList(OBJECT_ENTER, a.enter)) || (a.idle !== undefined && !inList(OBJECT_IDLE, a.idle)) || (a.exit !== undefined && !inList(OBJECT_EXIT, a.exit)) || (a.mode !== undefined && !['stay', 'move', 'path'].includes(a.mode))) throw Error('Invalid object.');
-      if (a.mode === 'path') checkPath(a); else if (!isLoc(a.place)) throw Error('Invalid object location.');
+      if (!Object.hasOwn(OBJECT_ICONS, a.glyph) || (a.enter !== undefined && !inList(OBJECT_ENTER, a.enter)) || (a.idle !== undefined && !inList(OBJECT_IDLE, a.idle)) || (a.exit !== undefined && !inList(OBJECT_EXIT, a.exit)) || (a.mode !== undefined && !['stay', 'move', 'path', 'wallPath'].includes(a.mode))) throw Error('Invalid object.');
+      if (['path','wallPath'].includes(a.mode)) checkPath(a); else if (!isLoc(a.place)) throw Error('Invalid object location.');
     }
     if (a.type === 'effect') {
+      if(a.attackTargeted!==undefined&&typeof a.attackTargeted!=='boolean')throw Error('Invalid attack setting.');
+      if(a.attackTargeted&&!isLoc(a.from))throw Error('Choose an attack source.');
+      for(const key of ['attackSourceId','attackTargetId'])if(a[key]!==undefined&&(typeof a[key]!=='string'||a[key].length>100))throw Error('Invalid linked attack object.');
       for (const [key,lo,hi] of [['battleAngle',-360,360],['battleRange',40,800],['battleSpread',0,120]]) if (a[key] !== undefined && !num(a[key],lo,hi)) throw Error('Invalid battle effect setting.');
       if (a.battleIntensity !== undefined && (!Number.isInteger(a.battleIntensity) || !num(a.battleIntensity,1,12))) throw Error('Invalid battle intensity.');
     }

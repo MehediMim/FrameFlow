@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict';
+import { objectPoseAt,putObjectKey,removeObjectKey,moveObjectKey } from '../map-object-keys.mjs';
+import { newMapProject,makeAction,validateMapProject } from '../map-engine.mjs';
+import { retimeMapItem } from '../map-timing.mjs';
+import { ARMY_PRESETS,armyCopies } from '../map-armies.mjs';
+import { wallPlacements } from '../map-wall-path.mjs';
+import { targetedAttack } from '../map-battle-effects.mjs';
+const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} ~ ${b}`);
+const a=makeAction('object',10,{glyph:'stoneFort',easing:'linear',size:1,dur:120});
+putObjectKey(a,70,{size:3,objectAngle:180,damageState:'burning'});
+assert.deepEqual(a.objectKeys[0],{frame:10,values:{size:1,objectAngle:0,damageState:'intact'}});
+assert.equal(objectPoseAt(a,40).size,2);assert.equal(objectPoseAt(a,40).objectAngle,90);
+assert.equal(objectPoseAt(a,69).damageState,'intact');assert.equal(objectPoseAt(a,70).damageState,'burning');
+putObjectKey(a,100,{damageState:'destroyed'});assert.equal(objectPoseAt(a,101).damageState,'destroyed');
+moveObjectKey(a,70,75,['size']);assert.ok(a.objectKeys.find(k=>k.frame===70).values.objectAngle===180);assert.equal(a.objectKeys.find(k=>k.frame===75).values.size,3);
+removeObjectKey(a,75,['size']);assert.equal(objectPoseAt(a,75).size,1);
+retimeMapItem(a,30,120,true);assert.deepEqual(a.objectKeys.map(k=>k.frame),[30,90,120]);
+retimeMapItem(a,60,40,false);assert.ok(a.objectKeys.every(k=>k.frame>=60&&k.frame<=100));
+const before=structuredClone(a);retimeMapItem(a,60,40,false);assert.deepEqual(a,before,'retiming does not accumulate drift');
+const points=[{x:0,y:0,X:.1,Y:.2},{x:104,y:0,X:.2,Y:.2},{x:104,y:104,X:.2,Y:.3}];
+const wall=wallPlacements(points,52);assert.equal(wall.length,4);near(wall[0].x,26);near(wall[1].x,78);near(wall[2].y,26);near(wall[3].y,78);near(wall[0].angle,0);near(wall[3].angle,90);
+assert.deepEqual(wallPlacements([points[0],null,points[2]]),[],'no segments bridge the camera horizon');
+assert.ok(wallPlacements([{...points[0]},{...points[1],x:1e8}],12,1200).length===1200,'long paths are bounded');
+const troops=armyCopies({count:1,armyUnits:ARMY_PRESETS.siege.units});assert.equal(troops.length,10);assert.ok(troops.some(u=>u.glyph==='cannon'));assert.ok(troops.some(u=>u.glyph==='flag'));
+for(const to of [{x:300,y:400},{x:-100,y:200},{x:0,y:-300}]){const from={x:50,y:70},scale=60,geometry=targetedAttack(from,to,scale),angle=geometry.battleAngle*Math.PI/180,length=geometry.battleRange/40*scale;near(from.x+Math.cos(angle)*length,to.x);near(from.y+Math.sin(angle)*length,to.y);}
+const p=newMapProject();p.actions=[makeAction('object',0,{glyph:'army',armyUnits:ARMY_PRESETS.pikeShot.units,objectKeys:[{frame:60,values:{size:2,objectAngle:360,damageState:'damaged'}}]}),makeAction('object',0,{glyph:'stoneWall',mode:'wallPath',path:[{lat:0,lon:0},{lat:1,lon:2}],wallGate:true,wallTowerEvery:6}),makeAction('effect',0,{fx:'cannonShot',attackTargeted:true,attackSourceId:'source',from:{kind:'point',name:'From',lat:0,lon:0}})];
+p.armyPresets=[{id:'saved',name:'Siege',units:ARMY_PRESETS.siege.units}];validateMapProject(JSON.parse(JSON.stringify(p)));
+for(const bad of [{objectKeys:[{frame:999,values:{size:2}}]},{objectKeys:[{frame:0,values:{size:NaN}}]},{objectKeys:[{frame:0,values:{damageState:'broken'}}]},{armyUnits:[{glyph:'army',count:1}]},{wallTowerEvery:1.5}]){const copy=structuredClone(p);Object.assign(copy.actions[0],bad);assert.throws(()=>validateMapProject(copy));}
+console.log('Object sparse keys, retiming, damage steps, wall placement, army composition and targeted attacks passed');

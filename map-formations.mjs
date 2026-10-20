@@ -1,5 +1,5 @@
 export const FORMATIONS = {grid:'Grid',row:'Row',wall:'Joined wall segments',column:'Column',staggered:'Staggered ranks',wedge:'Wedge',circle:'Circle'};
-export const defaultObjectGap = a => a.formation==='wall'?52:a.glyph==='banner'?160:a.glyph==='image'?104:64;
+export const defaultObjectGap = a => a.formation==='wall'?52:a.glyph==='army'?50:a.glyph==='banner'?160:a.glyph==='image'?104:64;
 export function objectOffsets(a) {
   const n=Math.max(1,Math.min(100,Math.round(a.count||1))), mode=a.formation||'grid';
   const gap=defaultObjectGap(a);

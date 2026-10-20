@@ -3,7 +3,8 @@
 // same on every device and in exported video. The engine passes its helpers in as `H`.
 import { drawBanner } from './map-banner.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
-import { BATTLE_EFFECTS, drawBattleEffect } from './map-battle-effects.mjs';
+import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
+import { drawDamage, drawRubble } from './map-damage.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
 const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = Math.max(1, s * .05); c.stroke(); };
 const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = fill; c.fill(); stroke(c, s); };
@@ -17,6 +18,7 @@ const mirrorY = pts => pts.map(([x, y]) => [x, -y]);
 export const OBJECT_ICONS = {
   image: { label: 'Image badge', color: '#ffffff' },
   banner: { label: 'Hanging image flag', color: '#b89963' },
+  army: { label: 'Mixed army formation', color: '#9d4d40', group:'armies', historic:true, draw:(c,s,col,t)=>{for(const x of[-.55,.05,.65]){c.save();c.translate(x*s,0);OBJECT_ICONS.musketeer.draw(c,s*.55,col,t);c.restore();}} },
   ...HISTORIC_OBJECTS,
   soldier: { label: 'Soldier', color: '#5b7f3a', draw: (c, s, col) => { rect(c, -.2, .2, .16, .55, dark, s); rect(c, .04, .2, .16, .55, dark, s); rect(c, -.22, -.42, .44, .62, col, s); circ(c, 0, -.6, .2, '#e0b88f', s); poly(c, [[-.25, -.62], [.25, -.62], [.2, -.84], [-.2, -.84]], col, s); seg(c, .1, -.15, .85, -.4, dark, .1, s); } },
   tank: { label: 'Tank', color: '#6b7f4a', draw: (c, s, col) => { rect(c, -.9, .25, 1.8, .4, dark, s, .2); poly(c, [[-.85, .25], [.85, .25], [.7, -.1], [-.7, -.1]], col, s); rect(c, -.35, -.42, .7, .34, col, s, .12); rect(c, .3, -.34, .75, .12, metal, s); for (let x = -.65; x <= .66; x += .26) circ(c, x, .45, .12, metal, s); } },
@@ -81,11 +83,15 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if (g.z < v.near) return;
   c.save();
   c.globalAlpha = alpha * .28; c.fillStyle = '#000'; c.beginPath(); c.ellipse(g0.x, g0.y, s * .7 * sc, s * .18 * sc, 0, 0, TAU); c.fill();
-  c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air ? 0 : s * .5 * sc) + dy);
+  c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
-  if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
-  else ic.draw(c, s, a.color, ic.historic ? t/(v.fps||30) : t);
+  if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','warship','submarine'].includes(a.glyph));
+  else{
+    if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
+    else ic.draw(c, s, a.color, ic.historic ? t/(v.fps||30) : t);
+    drawDamage(c,s,a.damageState,t/(v.fps||30));
+  }
   c.restore();
   if (a.showLabel) { const off = -s * (a.glyph==='banner'?6:ic.historic?2.8:1.5) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
 }
@@ -111,11 +117,21 @@ function rings(H, c, v, X, Y, s, p, col, n, spread, w) {
 }
 export function drawEffect(H, c, v, geo, a, frame, labels) {
   if (!H.actAlpha(a, frame)) return;
-  const r = H.resolveLoc(geo, a.place, v.cx); if (!r) return;
+  const targetObject=a.attackTargeted&&v.objects?.get(a.attackTargetId);
+  const r = targetObject ? H.objectLocationAt(v,geo,targetObject,frame) : H.resolveLoc(geo, a.place, v.cx); if (!r) return;
   const base = H.actionProgress(a, frame), rep = Math.max(1, a.repeat | 0 || 1), p = base >= 1 ? 1 : (base * rep) % 1, env = Math.min(1, base / .08, (1 - base) / .08 + .001);
   const u = v.unit, s = 40 * (a.size || 1) * u, g = H.project(v, r.X, r.Y, 0); if (g.z < v.near) return;
   c.save();
-  if (EFFECTS[a.fx]?.battle) drawBattleEffect(c,a.fx,g,s,p,env,a,(frame-a.start)/(v.fps||30));
+  if (EFFECTS[a.fx]?.battle){
+    let origin=g,settings=a;
+    if(a.attackTargeted&&['cannonShot','musketVolley','arrowVolley'].includes(a.fx)){
+      const sourceObject=v.objects?.get(a.attackSourceId),from=sourceObject?H.objectLocationAt(v,geo,sourceObject,frame):H.resolveLoc(geo,a.from,v.cx);
+      if(!from){c.restore();return;}
+      origin=H.project(v,from.X,from.Y);if(origin.z<v.near){c.restore();return;}
+      settings={...a,...targetedAttack(origin,g,s)};
+    }
+    drawBattleEffect(c,a.fx,origin,s,p,env,settings,(frame-a.start)/(v.fps||30));
+  }
   else if (a.fx === 'explosion') explosion(H, c, v, r.X, r.Y, s, p, a.color, frame);
   else if (a.fx === 'shockwave') rings(H, c, v, r.X, r.Y, s, p, a.color, 3, 3, 3);
   else if (a.fx === 'quake') { rings(H, c, v, r.X, r.Y, s, p, a.color, 4, 2.6, 3.5); c.globalAlpha = 1; c.fillStyle = a.color; c.beginPath(); c.arc(g.x, g.y, 4 * u, 0, TAU); c.fill(); }

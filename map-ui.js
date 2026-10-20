@@ -16,13 +16,16 @@ import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.m
 import { createRelief, reliefSettings, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { FORMATIONS, arrangementTargets, defaultObjectGap } from './map-formations.mjs';
+import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
+import { ARMY_PRESETS } from './map-armies.mjs';
 import { resolveLoc } from './map-engine.mjs?v=invert-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
 import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=invert-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey } from './map-timing.mjs';
 import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
 import { trimMapHistory } from './map-history.mjs';
-let cameraProperty = 'all';
+let cameraProperty = 'all', objectProperty = 'all';
+const WALL_GLYPHS = ['stoneWall','palisade','earthwork','gatehouse','stoneFort','watchtower','bastion'];
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -192,6 +195,7 @@ function setFrame(n) {
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
+  if (current()?.type === 'object') updateObjectInspector(current());
   if (current()?.preset === 'keyframed') { if (!playing) updateCameraInspector(current()); updateCameraKeySelection(); }
   window.dispatchEvent(new CustomEvent("ff-frame",{detail:{studio:"map",frame,fps:proj.fps,playing}}));
 }
@@ -347,11 +351,11 @@ function renderInspector() {
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
   let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>`;
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
-  h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
+  h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : it.type === 'object' ? F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
   h += '<p class="mini-label">' + (shot && it.preset === 'keyframed' ? 'Edit the camera at the playhead. Changes create keyframes automatically. Choose a property to see and retime its diamonds.' : 'The bar controls when this item appears and disappears. Drag the two centered diamonds to set when its animation starts and finishes.') + '</p>' + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
   if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it) + (it.type === 'object' ? objectArrangementFields(it) : '');
-  box.innerHTML = h; bindInspector(it); if (it.type === 'object') bindObjectArrangement();
+  box.innerHTML = h; bindInspector(it); if (it.type === 'object') { bindObjectArrangement(); bindObjectKeys(it); bindArmyFields(it); updateObjectInspector(it); }
 }
 function bannerFields(a) {
   return `<div class="m-badge"><span class="mini-label">Flag artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden><p class="mini-label">Upload your artwork. The cloth hangs from a rigid crossbar and waves in the wind. Its proportions follow your uploaded image.</p>`
@@ -395,22 +399,98 @@ async function shrinkImage(file, max = 512) {
     return out;
   } finally { URL.revokeObjectURL(url); }
 }
+function objectFields(a) {
+  const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
+  const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
+  return objectPicker(a.glyph)
+    + (a.glyph==='army'?armyFields(a):'')
+    + (wall?'':F.num('count',a.glyph==='army'?'Army copies':'Count',a.count??1,1,a.glyph==='army'?Math.max(1,Math.floor(100/total)):100,1)+formationFields(a)+`<div class="two">${F.num('gapX','Horizontal gap',a.gapX??defaultObjectGap(a),0,1000)}${F.num('gapY','Vertical gap',a.gapY??defaultObjectGap(a),0,1000)}</div>`)
+    + F.sel('__pinMove','Position',a.mode||'stay',positionOptions)
+    + (['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'From':'Location',a.place,'place')+(a.mode==='move'?F.loc('to','To',a.to,'place'):''))
+    + (wall?F.range('wallSpacing','Segment spacing / overlap',a.wallSpacing??52,12,120,1,x=>x+' px')+F.num('wallTowerEvery','Tower every N segments (0 = off)',a.wallTowerEvery??8,0,50)+F.chk('wallGate','Gate in the middle',!!a.wallGate):'')
+    + (['move','path'].includes(a.mode)?F.chk('trail','Draw a trail behind it',a.trail!==false):'')
+    + (a.glyph==='image'?badgeFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
+    + '<div class="section-title m-sep">SIZE, ROTATION &amp; DAMAGE</div>'
+    + F.range('size','Size',pose.size,.2,8,.05,x=>x.toFixed(2)+'x')
+    + F.num('objectAngle',a.formation==='wall'?'Extra facing angle (degrees)':'Rotation (degrees)',pose.objectAngle,-3600,3600,1)
+    + (a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
+    + objectKeyFields(a)
+    + (a.glyph==='image'?'':F.sel('enter','Appears',a.enter,OBJECT_ENTER)+F.sel('idle','While visible',a.idle,OBJECT_IDLE)+F.sel('exit','Disappears',a.exit,OBJECT_EXIT))
+    + F.chk('showLabel','Show label',a.showLabel)+(a.showLabel?F.text('label','Label text',a.label,60,'Uses the default name'):'');
+}
+function objectKeyFields(a) {
+  const labels={size:'Size',objectAngle:'Rotation',damageState:'Damage'};
+  return F.chk('autoObjectKey','Auto-key edits at the playhead',!!a.autoObjectKey)
+    + `<div class="m-object-key-buttons">${Object.entries(labels).filter(([field])=>a.glyph!=='image'||field!=='damageState').map(([field,title])=>`<button type="button" data-object-key="${field}">Key ${title}</button>`).join('')}</div><p class="mini-label">Size and rotation interpolate. Damage changes at its keyframe. Move the playhead inside this bar, then enable Auto-key or press a Key button.</p>`;
+}
+function bindObjectKeys(a) {
+  $$('#mInspector [data-object-key]').forEach(el=>el.onclick=()=>{
+    if(frame<a.start||frame>a.start+a.dur)return;
+    const field=el.dataset.objectKey,key=a.objectKeys?.find(k=>k.frame===frame&&k.values[field]!==undefined);
+    pause();checkpoint();if(key)removeObjectKey(a,frame,[field]);else putObjectKey(a,frame,{[field]:objectPoseAt(a,frame)[field]});changed();updateObjectInspector(a);
+  });
+}
+function updateObjectInspector(a) {
+  const pose=objectPoseAt(a,frame),outside=frame<a.start||frame>a.start+a.dur;
+  for(const field of ['size','objectAngle','damageState']){
+    const el=$(`#mInspector [data-mf="${field}"]`);if(!el)continue;
+    if(document.activeElement!==el){el.value=pose[field];const out=el.parentElement.querySelector('.m-val');if(out)out.textContent=field==='size'?pose.size.toFixed(2)+'x':pose[field];}
+    el.disabled=outside&&(a.autoObjectKey||a.objectKeys?.some(k=>k.values[field]!==undefined));
+  }
+  $$('#mInspector [data-object-key]').forEach(el=>{const field=el.dataset.objectKey,has=a.objectKeys?.some(k=>k.frame===frame&&k.values[field]!==undefined);el.disabled=outside;el.classList.toggle('current',!!has);el.textContent=(has?'Remove ':'Key ')+({size:'size',objectAngle:'rotation',damageState:'damage'}[field]);});
+}
+function writeObjectValue(a,field,value) {
+  if(a.type==='object'&&['size','objectAngle','damageState'].includes(field)&&(a.autoObjectKey||a.objectKeys?.some(k=>k.values[field]!==undefined))){
+    const at=clamp(frame,a.start,a.start+a.dur);putObjectKey(a,at,{[field]:value});
+  }else a[field]=value;
+}
+function armyFields(a){
+  const units=a.armyUnits||ARMY_PRESETS.pikeShot.units,options=Object.entries(OBJECT_ICONS).filter(([key])=>!['army','image','banner'].includes(key));
+  const presets=[...Object.entries(ARMY_PRESETS).map(([key,p])=>[key,p.name]),...(proj.armyPresets||[]).map(p=>['saved:'+p.id,p.name])];
+  return `<div class="section-title m-sep">MIXED ARMY</div><label>Start from a formation<select data-army-preset><option value="">Choose a preset</option>${presets.map(([key,name])=>`<option value="${esc(key)}">${esc(name)}</option>`).join('')}</select></label>`
+    + F.text('armyName','Formation name',a.armyName||'My army',60)
+    + units.map((unit,i)=>`<div class="m-army-row"><select aria-label="Unit type" data-army-unit="${i}">${options.map(([key,icon])=>`<option value="${key}" ${key===unit.glyph?'selected':''}>${esc(icon.label)}</option>`).join('')}</select><input aria-label="Unit count" type="number" min="1" max="100" value="${unit.count}" data-army-count="${i}"><input aria-label="Unit color" type="color" value="${unit.color||a.color}" data-army-color="${i}"><button type="button" data-army-remove="${i}" aria-label="Remove unit row">Remove</button></div>`).join('')
+    + '<div class="two"><button type="button" data-army-add>Add unit type</button><button type="button" data-army-save>Save formation</button></div><p class="mini-label">Up to 100 units per object. Saved formations stay in this project and can be reused by another Army object.</p>';
+}
+function bindArmyFields(a){
+  if(a.glyph!=='army')return;
+  const copyUnits=()=>clone(a.armyUnits||ARMY_PRESETS.pikeShot.units);
+  const edit=fn=>{pause();checkpoint();a.armyUnits=copyUnits();fn(a.armyUnits);a.count=1;changed();renderInspector();};
+  const preset=$('#mInspector [data-army-preset]');preset.onchange=()=>{const p=preset.value.startsWith('saved:')?proj.armyPresets?.find(p=>p.id===preset.value.slice(6)):ARMY_PRESETS[preset.value];if(!p)return;edit(()=>{a.armyUnits=clone(p.units);a.armyName=p.name;a.name=p.name;});};
+  $$('#mInspector [data-army-unit]').forEach(el=>el.onchange=()=>edit(units=>{units[+el.dataset.armyUnit].glyph=el.value;units[+el.dataset.armyUnit].color=OBJECT_ICONS[el.value].color;}));
+  $$('#mInspector [data-army-count]').forEach(el=>el.onchange=()=>edit(units=>{const i=+el.dataset.armyCount,available=100-units.reduce((n,u,j)=>n+(j===i?0:u.count),0);units[i].count=clamp(Math.round(Number(el.value)||1),1,available);}));
+  $$('#mInspector [data-army-color]').forEach(el=>el.onchange=()=>edit(units=>units[+el.dataset.armyColor].color=el.value));
+  $$('#mInspector [data-army-remove]').forEach(el=>el.onclick=()=>{if(copyUnits().length>1)edit(units=>units.splice(+el.dataset.armyRemove,1));});
+  $('#mInspector [data-army-add]').onclick=()=>{const units=copyUnits();if(units.length>=20||units.reduce((n,u)=>n+u.count,0)>=100){notify('This formation has reached its unit limit.');return;}edit(units=>units.push({glyph:'musketeer',count:1,color:'#9d4d40'}));};
+  $('#mInspector [data-army-save]').onclick=()=>{if((proj.armyPresets?.length||0)>=30){notify('This project can store 30 army presets.');return;}checkpoint();a.name=a.armyName||'My army';(proj.armyPresets||=[]).push({id:crypto.randomUUID(),name:(a.armyName||'My army').slice(0,60),units:copyUnits()});changed();renderInspector();notify('Army formation saved in this project');};
+}
 function formationFields(a) {
   return '<div class="section-title m-sep">FORMATION</div>' + F.sel('formation', 'Arrange copies', a.formation || 'grid', Object.entries(FORMATIONS))
     + (['grid','staggered'].includes(a.formation || 'grid') ? F.num('formationCols', 'Columns (0 = automatic)', a.formationCols ?? 0, 0, 100) + F.sel('formationAlign', 'Last row alignment', a.formationAlign || 'center', [['left','Left'],['center','Center'],['right','Right']]) : '')
     + F.range('formationAngle', 'Formation angle', a.formationAngle ?? 0, -180, 180, 5, x => x + ' degrees')
-    + (a.glyph === 'image' ? '' : F.range('objectAngle', a.formation === 'wall' ? 'Extra facing angle' : 'Object facing angle', a.objectAngle ?? 0, -180, 180, 5, x => x + ' degrees'))
     + '<p class="mini-label">Count creates copies within this item. Formation rotates their positions; facing rotates each illustration. Joined wall segments also follow the formation angle.</p>';
 }
 function effectPicker(fx) {
   const options = battle => Object.entries(EFFECTS).filter(([,e])=>!!e.battle===battle).map(([key,e])=>`<option value="${key}" ${key===fx?'selected':''}>${esc(e.label)}</option>`).join('');
   return `<label>Effect<select data-mf="fx" data-t="sel"><optgroup label="Battle &amp; siege">${options(true)}</optgroup><optgroup label="General effects">${options(false)}</optgroup></select></label>`;
 }
+function effectLocationFields(a){
+  if(a.fx==='strike')return F.loc('from','Launch from',a.from,'place')+F.loc('place','Target',a.place,'place');
+  if(['cannonShot','musketVolley','arrowVolley'].includes(a.fx)&&a.attackTargeted){
+    const objects=proj.actions.filter(item=>item.type==='object'),options=[['','Manual location'],...objects.map(item=>[item.id,item.name])];
+    return F.sel('attackSourceId','Source object (optional)',a.attackSourceId||'',options)+F.loc('from','From location',a.from,'place')
+      +F.sel('attackTargetId','Target object (optional)',a.attackTargetId||'',options)+F.loc('place','Target location',a.place,'place')
+      +'<p class="mini-label">Linked objects are tracked as they move. Manual locations are used if a linked object is removed. Projectiles land at the target; direction and reach are automatic.</p>';
+  }
+  return F.loc('place','Location',a.place,'place');
+}
 function battleFields(a) {
-  return F.range('battleAngle','Direction',a.battleAngle??0,-180,180,5,x=>x+' degrees')
+  const targeted=['cannonShot','musketVolley','arrowVolley'].includes(a.fx);
+  return (targeted?F.chk('attackTargeted','Attack from source to target',!!a.attackTargeted):'')
     + F.num('battleIntensity','Intensity / number of shots',a.battleIntensity??5,1,12)
+    + (targeted&&a.attackTargeted?'':F.range('battleAngle','Direction',a.battleAngle??0,-180,180,5,x=>x+' degrees')
     + F.range('battleRange','Reach / spread area',a.battleRange??180,40,800,10,x=>x+' px')
-    + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees');
+    + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees'));
 }
 function objectArrangementFields(currentObject) {
   const objects=proj.actions.filter(a=>a.type==='object');
@@ -443,7 +523,7 @@ function arrangeObjects(operation) {
 }
 function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup></select></label>`;
+  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
 }
 function actionFields(a) {
   switch (a.type) {
@@ -454,8 +534,8 @@ function actionFields(a) {
       const country = ['country','region','regions'].includes(a.target.kind);
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || reliefSettings(proj.terrain).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? reliefSettings(proj.terrain).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
-    case 'object': return objectPicker(a.glyph) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + formationFields(a) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? defaultObjectGap(a), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? defaultObjectGap(a), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) : '') + (a.glyph === 'image' ? badgeFields(a) : a.glyph === 'banner' ? bannerFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
-    case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'object': return objectFields(a);
+    case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
@@ -602,7 +682,7 @@ function bindInspector(it) {
     if (t === 'range' || t === 'color') {
       el.oninput = () => {
         if (!gesture) { checkpoint(); gesture = true; }
-        const v = t === 'range' ? Number(el.value) : el.value; it[key] = v;
+        const v = t === 'range' ? Number(el.value) : el.value; writeObjectValue(it,key,v);
         const out = el.parentElement.querySelector('.m-val'); if (out) out.textContent = key === 'pitch' ? v + '°' : key === 'size' || key === 'badgeZoom' ? v + '×' : key === 'badgeLabelY' ? v + '%' : key === 'badgeStemLen' ? v + ' px' : ['fillAlpha', 'dim'].includes(key) ? Math.round(v * 100) + '%' : v;
         draw();
       };
@@ -619,6 +699,7 @@ function bindInspector(it) {
       checkpoint();
       if (key === '__cameraTrack') { cameraProperty = v; renderTimeline(); renderInspector(); return; }
       if (key === '__keyProperty') return;
+      if (key === '__objectTrack') { objectProperty=v;renderTimeline();return; }
       if (key.includes('.')) { const [endpoint, property] = key.split('.'); if (!Number.isFinite(v)) { renderInspector(); return; } it[endpoint][property] = clamp(v, +el.min, +el.max); previewCamera = null; changed(); renderInspector(); return; }
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }
       if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; if (v === 'keyframed' && !it.cameraFrom) { it.cameraFrom = captureCamera(); it.cameraTo = { ...it.cameraFrom }; } if (v === 'keyframed') it.cameraKeys ??= []; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
@@ -626,23 +707,24 @@ function bindInspector(it) {
         const def = (TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane).lift;
         it.mode = v === 'path' ? 'path' : 'direct';
         if (it.mode === 'path') { it.path ||= []; if (it.lift === def) it.lift = 0; } else { if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } if (it.lift === 0) it.lift = def; }
-        changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return;
+        changed(); renderInspector(); if (['path','wallPath'].includes(it.mode) && !it.path.length) startPathDraw(it.id); return;
       }
       if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
       if (key === '__moveKeys') { if (v) { it.moveStart = it.start; it.moveEnd = it.start + Math.min(it.animDur ?? it.dur, it.dur); } else { delete it.moveStart; delete it.moveEnd; } changed(); renderInspector(); return; }
-      if (key === '__move') { it.mode = v === 'path' ? 'path' : 'stay'; if (it.mode === 'path') it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return; }
+      if (key === '__move') { it.mode = v === 'path' ? 'path' : 'stay'; if (['path','wallPath'].includes(it.mode)) it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } changed(); renderInspector(); if (['path','wallPath'].includes(it.mode) && !it.path.length) startPathDraw(it.id); return; }
       for (const [k, cat, base] of [['glyph', OBJECT_ICONS, 'Object'], ['fx', EFFECTS, 'Effect'], ['shape', SHAPES, 'Arrow / zone']]) if (key === k) { // new look: follow its default color and name unless the user changed them
         const old = cat[it[k]], nu = cat[v]; if (!nu) return;
         if (it.color === old?.color) it.color = nu.color; if (!it.name || it.name === base || it.name === old?.label) it.name = nu.label;
-        it[k] = v; changed(); renderInspector(); return;
+        it[k] = v; if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
       }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__pinMove') {
-        it.mode = v === 'path' ? 'path' : v === 'move' ? 'move' : 'stay';
+        it.mode = v === 'wallPath' ? 'wallPath' : v === 'path' ? 'path' : v === 'move' ? 'move' : 'stay';
+        if(it.mode==='wallPath')it.enter='none';
         if (it.mode === 'move' && !(it.to && Number.isFinite(it.to.lat))) { const c = (isDetail() ? localCities() : []).find(x => x[0] !== it.place.name); it.to = c ? { kind: 'city', name: c[0], lat: c[1], lon: c[2] } : it.place.name === 'New York' ? { kind: 'city', name: 'London', lat: 51.5072, lon: -0.1276 } : { kind: 'city', name: 'New York', lat: 40.7128, lon: -74.006 }; }
-        if (it.mode === 'path') it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; }
+        if (['path','wallPath'].includes(it.mode)) it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; }
         if (it.mode !== 'stay' && it.dur <= (it.animDur ?? it.dur)) { it.dur = (it.animDur ?? it.dur) + 45; ensureLength(it.start + it.dur); } // leave time to sit at the destination before the bar ends
-        changed(); renderInspector(); if (it.mode === 'path' && !it.path.length) startPathDraw(it.id); return;
+        changed(); renderInspector(); if (['path','wallPath'].includes(it.mode) && !it.path.length) startPathDraw(it.id); return;
       }
       if (key === '__pinDisplay') { it.badge = v === 'badge'; it.showIcon = v === 'badge' ? false : v !== 'text'; it.showLabel = v !== 'icon'; if (it.badge && !it.size) it.size = 1; changed(); renderInspector(); return; }
       if (key === '__hmode') { it.target = v === 'country' ? (isDetail() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
@@ -672,7 +754,7 @@ function bindInspector(it) {
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
-      it[key] = v; changed(); if (key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      writeObjectValue(it,key,v); changed(); if (key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
@@ -1029,8 +1111,11 @@ function updateTimelineItem(it) {
 }
 function timelineKeys(it, last) {
   if (it.preset === 'keyframed') return cameraKeysOf(it).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).map(k => `<button type="button" class="m-key ${k.frame === frame && it.id === sel ? 'current' : ''}" data-map-key="camera:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Camera keyframe - frame ${k.frame}. Drag to retime." aria-label="Camera keyframe, frame ${k.frame}"></button>`).join('');
+  const fields=objectProperty==='all'?['size','objectAngle','damageState']:[objectProperty];
+  const objectMarkers=it.type==='object'&&objectProperty!=='animation'?(it.objectKeys||[]).filter(k=>fields.some(field=>k.values[field]!==undefined)).map(k=>`<button type="button" class="m-key m-object-key" data-map-key="object:${objectProperty}:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Object ${esc(objectProperty)} keyframe at frame ${k.frame}" aria-label="Object keyframe at frame ${k.frame}"></button>`).join(''):'';
+  if(it.type==='object'&&!['all','animation'].includes(objectProperty))return objectMarkers;
   const keys = animationKeysOf(it);
-  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('');
+  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('')+objectMarkers;
 }
 function bindTimelineKeys(root = document) {
   [...root.querySelectorAll('[data-map-key]')].forEach(el => {
@@ -1040,7 +1125,8 @@ function bindTimelineKeys(root = document) {
       const it = items().find(i => i.id === el.dataset.keyItem); if (!it) return;
       sel = it.id; renderItems(); renderInspector();
       if (el.dataset.mapKey.startsWith('camera:')) setFrame(+el.dataset.mapKey.split(':')[1]);
-      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, moved: false };
+      if (el.dataset.mapKey.startsWith('object:')) setFrame(+el.dataset.mapKey.split(':')[2]);
+      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
       renderTimeline();
     };
     el.onkeydown = e => {
@@ -1051,6 +1137,7 @@ function bindTimelineKeys(root = document) {
       checkpoint();
       let focusKey = key;
       if (key.startsWith('camera:')) { const from = +key.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur); moveCameraKey(it, from, to, cameraTrackFields()); setFrame(to); focusKey = `camera:${to}`; }
+      else if(key.startsWith('object:')){const [,field,time]=key.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);focusKey=`object:${field}:${to}`;}
       else setAnimationKey(it, key, animationKeysOf(it)[key === 'animationStart' ? 'start' : 'end'] + d);
       ensureLength(it.start + it.dur); changed(); renderInspector();
       $$('[data-map-key]').find(b => b.dataset.keyItem === it.id && b.dataset.mapKey === focusKey)?.focus();
@@ -1072,7 +1159,7 @@ function renderTimeline() {
     e.preventDefault(); e.stopPropagation(); pause();
     const id = el.dataset.mclip, it = items().find(i => i.id === id); if (!it) return;
     if (sel !== id) { sel = id; renderItems(); renderInspector(); }
-    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, moved: false };
+    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
     renderTimeline();
   });
   bindTimelineKeys();
@@ -1085,6 +1172,7 @@ window.addEventListener('pointermove', e => {
   if (drag.kind === 'scrub') { const next = frameFromEvent(e); if (next !== frame) setFrame(next); return; }
   const it = items().find(i => i.id === drag.id); if (!it) return;
   const d = frameFromEvent(e) - drag.x0; if (d !== 0) drag.moved = true;
+  if(drag.mode.startsWith('object:')){const [,field,time]=drag.mode.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);if(drag.lastTo===to)return;drag.lastTo=to;it.objectKeys=clone(drag.objectKeys||[]);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);updateTimelineItem(it);return;}
   if (drag.mode.startsWith('camera:')) {
     const from = +drag.mode.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur);
     if (drag.lastTo === to) return; drag.lastTo = to;
@@ -1104,6 +1192,7 @@ window.addEventListener('pointermove', e => {
   if (drag.animStart !== undefined) { it.animStart = drag.animStart; it.animEnd = drag.animEnd; }
   if (drag.moveStart !== undefined) { it.moveStart = drag.moveStart; it.moveEnd = drag.moveEnd; }
   if (drag.cameraKeys) it.cameraKeys = clone(drag.cameraKeys);
+  if (drag.objectKeys) it.objectKeys = clone(drag.objectKeys);
   retimeMapItem(it, start, dur, drag.mode === 'move');
   const oldFrames = proj.frames; ensureLength(it.start + it.dur);
   if (proj.frames !== oldFrames) renderTimeline(); else updateTimelineItem(it);

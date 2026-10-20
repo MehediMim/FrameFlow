@@ -17,7 +17,7 @@ assert.deepEqual(arrangementTargets(points,'centerY').map(p=>p.y),[21.5,21.5,21.
 assert.deepEqual(arrangementTargets(points,'distributeX').map(p=>p.x),[0,50,100]);
 assert.deepEqual(points.map(p=>p.x),[0,30,100],'arranging never mutates source positions');
 const p=newMapProject();p.actions=[makeAction('object',0,{glyph:'stoneWall',count:8,formation:'row',formationAngle:25,objectAngle:25})];validateMapProject(structuredClone(p));
-for(const settings of [{formation:'bad'},{formationCols:0},{formationAlign:'bad'},{formationAngle:NaN},{objectAngle:999}]){
+for(const settings of [{formation:'bad'},{formationCols:0},{formationAlign:'bad'},{formationAngle:NaN},{objectAngle:9999}]){
   const copy=structuredClone(p);Object.assign(copy.actions[0],settings);assert.throws(()=>validateMapProject(copy));
 }
 for(const fx of ['cannonShot','musketVolley','arrowVolley','artilleryBarrage','meleeClash','battleSmoke','siegeFire']){

@@ -121,3 +121,12 @@ body.mode-map #mapStudio{display:flex}
 .m-arrange-list label.m-chk{display:flex;align-items:center;gap:8px;overflow-wrap:anywhere}
 .m-arrange-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:10px 0}
 .m-arrange-buttons button{min-width:0;padding:7px 3px;font-size:10px;white-space:normal}
+.m-object-key-buttons{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
+.m-object-key-buttons button{font-size:10px;padding:7px}
+.m-object-key-buttons button.current{border-color:var(--accent);color:var(--accent)}
+.m-key.m-object-key{background:#e2bb70;border-color:#fff0c9}
+.m-army-row{display:grid;grid-template-columns:minmax(0,1fr) 48px 32px;gap:5px;margin:9px 0;align-items:center}
+.m-army-row select,.m-army-row input{min-width:0;max-width:100%;padding:5px;font-size:10px}
+.m-army-row input[type=color]{width:32px}
+.m-army-row button{grid-column:1 / -1;justify-self:end;font-size:9px;padding:3px 7px}
+.m-army-row > .ff-palette{grid-column:1 / -1;margin:3px 0;min-width:0;max-width:100%}

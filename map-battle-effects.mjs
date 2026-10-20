@@ -9,6 +9,7 @@ export const BATTLE_EFFECTS={
 };
 const TAU=Math.PI*2,clamp=x=>Math.max(0,Math.min(1,x));
 const noise=i=>{const n=Math.sin(i*91.173+3.17)*43758.5453;return n-Math.floor(n);};
+export function targetedAttack(from,to,scale){return{_targeted:true,battleRange:Math.hypot(to.x-from.x,to.y-from.y)/scale*40,battleAngle:Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI};}
 function dot(c,x,y,r,col,alpha){if(alpha<=0)return;c.globalAlpha=alpha;c.fillStyle=col;c.beginPath();c.arc(x,y,Math.max(.005,r),0,TAU);c.fill();}
 function stroke(c,x,y,X,Y,col,width,alpha){c.globalAlpha=alpha;c.strokeStyle=col;c.lineWidth=width;c.beginPath();c.moveTo(x,y);c.lineTo(X,Y);c.stroke();}
 function flash(c,x,y,r,col,alpha){
@@ -32,16 +33,16 @@ export function drawBattleEffect(c,fx,g,s,p,env,a,seconds){
     for(let i=0;i<shots;i++){
       const q=clamp((p-i/(shots||1)*.26)/.74),active=p>=i/shots*.26;
       if(!active)continue;
-      const angle=(shots===1?0:i/(shots-1)-.5)*spread,originY=(i-(shots-1)/2)*.18;
+      const angle=(a._targeted||shots===1?0:i/(shots-1)-.5)*spread,originY=(i-(shots-1)/2)*.18,targetY=a._targeted?-originY:0;
       c.save();c.translate(0,originY);c.rotate(angle);
-      const flight=Math.min(1,q/.65),x=flight*range,y=fx==='musketVolley'?0:-Math.sin(flight*Math.PI)*range*.22;
+      const flight=Math.min(1,q/.65),x=flight*range,y=targetY*flight+(fx==='musketVolley'?0:-Math.sin(flight*Math.PI)*range*.22);
       if(fx!=='arrowVolley'){flash(c,0,0,(fx==='cannonShot'?.6:.28)*(1-clamp(q/.15)),a.color,env*(1-clamp(q/.15)));puff(c,0,0,q,'#a49c89',env,fx==='cannonShot'?1.7:.8);}
       if(q>0&&q<.65){
         if(fx==='cannonShot')dot(c,x,y,.09,'#302b28',env);
         else if(fx==='musketVolley')stroke(c,Math.max(0,x-.38),y,x,y,'#ffe2a1',.025,env);
         else{const tilt=-Math.cos(flight*Math.PI)*.65;c.save();c.translate(x,y);c.rotate(tilt);stroke(c,-.36,0,.1,0,'#7a5437',.035,env);stroke(c,-.35,0,-.44,-.08,'#ede0bb',.035,env);stroke(c,-.35,0,-.44,.08,'#ede0bb',.035,env);c.globalAlpha=env;c.fillStyle='#aeb6b3';c.beginPath();c.moveTo(.2,0);c.lineTo(.07,-.055);c.lineTo(.07,.055);c.closePath();c.fill();c.restore();}
       }
-      if(q>=.65)impact(c,range,0,(q-.65)/.35,a.color,env);
+      if(q>=.65)impact(c,range,targetY,(q-.65)/.35,a.color,env);
       c.restore();
     }
   }else if(fx==='artilleryBarrage'){

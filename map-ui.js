@@ -1,3 +1,4 @@
+import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs';
 import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=invert-1';
@@ -516,8 +517,28 @@ function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
   return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
 }
+function scenePanelFields(a) {
+  const d={...SCENE_PANEL_DEFAULTS,...a};
+  return F.sel('panelSide','Gradient side',d.panelSide,[['left','Left'],['right','Right']])
+    + F.range('panelWidth','Panel width',d.panelWidth,25,70,1,x=>x+'%')
+    + F.sel('panelAlign','Text position',d.panelAlign,[['top','Top'],['center','Center'],['bottom','Bottom']])
+    + '<div class="section-title m-sep">YEAR &amp; EVENT</div>'
+    + F.chk('autoYear','Advance year automatically',d.autoYear)
+    + F.num('startYear',d.autoYear?'Starting year':'Year',d.startYear,1,9999)
+    + (d.autoYear?F.num('endYear','Ending year',d.endYear,1,9999):'')
+    + F.sel('yearEra','Year suffix',d.yearEra,[['','None'],['CE','CE'],['BCE','BCE']])
+    + F.text('eventTitle','Event name',d.eventTitle,160)
+    + `<label>Description<textarea data-mf="description" data-t="text" rows="5" maxlength="2000">${esc(d.description)}</textarea></label>`
+    + '<p class="mini-label">The year advances between the animation diamonds on this bar. Use {year} in your title or description to include the current year. Add another Scene panel for the next event.</p>'
+    + '<div class="section-title m-sep">APPEARANCE</div>'
+    + F.color('panelColor','Gradient color',d.panelColor)+F.range('panelOpacity','Gradient opacity',d.panelOpacity,0,1,.05,x=>Math.round(x*100)+'%')
+    + F.color('accentColor','Year color',d.accentColor)+F.color('textColor','Text color',d.textColor)
+    + F.range('textScale','Text size',d.textScale,.6,2,.05,x=>x.toFixed(2)+'x')
+    + F.range('fadeSeconds','Fade in / out (seconds)',d.fadeSeconds,0,2,.05,x=>x.toFixed(2)+'s');
+}
 function actionFields(a) {
   switch (a.type) {
+    case 'scene': return scenePanelFields(a);
     case 'label': return F.text('text', 'Text', a.text, 160, 'Your label') + F.sel('labelPlacement', 'Anchor', a.labelPlacement || 'screen', [['map', 'Geographic position'], ['screen', 'Canvas position']]) + (a.labelPlacement === 'map' ? F.loc('place', 'Position on map', a.place, 'place') + F.num('offsetX', 'Horizontal offset', a.offsetX ?? 0, -1000, 1000) + F.num('offsetY', 'Vertical offset', a.offsetY ?? 0, -1000, 1000) : F.num('x', 'Horizontal position (%)', a.x ?? 50, 0, 100) + F.num('y', 'Vertical position (%)', a.y ?? 15, 0, 100));
     case 'border': return (regionTarget(a) ? regionFields(a) : F.loc('target', 'Country / region', a.target, 'border') + '<p class="mini-label">Type a country or region to choose specific ones. You can then add more.</p>') + (regionTarget(a) && !a.borderPartial ? F.num('borderFrom','Border animation start (%)',a.borderFrom ?? 0,0,100,.1) + '<button type="button" data-borderpoint="borderFrom">Pick start on border</button>' + F.chk('borderReverse','Reverse direction',a.borderReverse) : '') + F.chk('borderPartial','Animate part of the border',a.borderPartial) + (a.borderPartial ? `<div class="two">${F.num('borderFrom','From (%)',a.borderFrom ?? 0,0,100,.1)}${F.num('borderTo','To (%)',a.borderTo ?? 100,0,100,.1)}</div><div class="two"><button type="button" data-borderpoint="borderFrom">Pick start on border</button><button type="button" data-borderpoint="borderTo">Pick end on border</button></div>` + F.chk('borderReverse','Reverse direction',a.borderReverse) + '<p class="mini-label">Click near the outline to set each endpoint. Start and end follow the same outline; each island has its own outline.</p>' : '') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + (a.borderPartial ? '' : F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%')) + F.chk('invert', 'Invert (start fully drawn, then shrink away)', a.invert);
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
@@ -742,11 +763,11 @@ function bindInspector(it) {
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
-      if (key === 'count') v = Math.round(v);
+      if (['count','startYear','endYear'].includes(key)) v = Math.round(v);
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
-      writeObjectValue(it,key,v); changed(); if (key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      writeObjectValue(it,key,v); changed(); if (key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });

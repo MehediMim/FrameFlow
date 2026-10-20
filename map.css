@@ -10,6 +10,7 @@ body.mode-map #mapStudio{display:flex}
 #mProjectName{background:transparent;border:0;border-left:1px solid #393e42;border-radius:0;margin-left:18px;padding-left:20px;width:210px;font-weight:500}
 #mSaveState{margin-right:auto;font-size:10px}
 #mInspector{padding:17px}
+#mInspector textarea[data-mf="description"]{display:block;width:100%;min-width:0;box-sizing:border-box;resize:vertical;min-height:100px;max-height:320px;font:inherit;line-height:1.5}
 .m-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:24px}
 .m-presets button{display:flex;align-items:center;gap:7px;text-align:left;padding:8px 7px;font-size:10px;background:#202428;white-space:normal;line-height:1.2}
 .m-presets b{font-size:15px;font-weight:400;width:16px;color:#9fd3ee;flex:none}

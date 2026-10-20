@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { sceneYearAt, validateScenePanel, drawScenePanel } from '../map-scene-panel.mjs';
+import { makeAction, newMapProject, validateMapProject } from '../map-engine.mjs';
+import { retimeMapItem } from '../map-timing.mjs';
+const a=makeAction('scene',30,{dur:101,startYear:1500,endYear:1600});
+for(const [frame,year] of [[0,1500],[30,1500],[80,1550],[130,1600],[150,1600]])assert.equal(sceneYearAt(a,frame),year);
+assert.equal(sceneYearAt({...a,autoYear:false},100),1500);
+assert.equal(sceneYearAt({...a,startYear:1600,endYear:1500},80),1550);
+assert.equal(sceneYearAt({...a,animStart:50,animEnd:71},60),1550);
+assert.equal(sceneYearAt({...a,dur:1,animDur:1},30),1500);
+retimeMapItem(a,100,101,true);assert.equal(sceneYearAt(a,150),1550);
+const p=newMapProject();p.actions=[a];validateMapProject(p);validateMapProject(JSON.parse(JSON.stringify(p)));
+for(const fields of [{panelSide:'bottom'},{panelWidth:90},{startYear:0},{startYear:1500.5},{endYear:NaN},{autoYear:'yes'},{description:'x'.repeat(2001)},{panelColor:'red'},{panelOpacity:2},{textScale:Infinity},{fadeSeconds:-1}])assert.throws(()=>validateScenePanel({...a,...fields}));
+const texts=[];
+const ctx=new Proxy({measureText:s=>({width:s.length*10}),createLinearGradient:()=>({addColorStop(){}}),fillText:s=>texts.push(s)},{get:(o,k)=>o[k]??(()=>{})});
+drawScenePanel(ctx,1280,720,{...a,dur:1,animDur:1},100);
+assert.ok(texts.includes('1500'),'one-frame panels remain visible with default fades');
+console.log('Scene year interpolation, reverse/fixed years, animation timing, retiming and project validation passed');

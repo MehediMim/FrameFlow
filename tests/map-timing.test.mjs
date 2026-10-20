@@ -22,7 +22,7 @@ function recordingCanvas() {
   const commands = [], stack = [];
   let state = { globalAlpha: 1, letterSpacing: '0px' }, gradientId = 0;
   const methods = {};
-  for (const name of ['beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke', 'fillRect', 'clip', 'arc', 'arcTo', 'roundRect', 'ellipse', 'bezierCurveTo', 'setLineDash', 'translate', 'rotate', 'scale', 'fillText', 'strokeText']) {
+  for (const name of ['beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke', 'fillRect', 'rect', 'clip', 'arc', 'arcTo', 'roundRect', 'ellipse', 'bezierCurveTo', 'setLineDash', 'translate', 'rotate', 'scale', 'fillText', 'strokeText']) {
     methods[name] = (...args) => commands.push([name, ...args]);
   }
   methods.save = () => { stack.push({ ...state }); commands.push(['save']); };
@@ -31,6 +31,11 @@ function recordingCanvas() {
   methods.createRadialGradient = (...args) => {
     const id = gradientId++;
     commands.push(['createRadialGradient', id, ...args]);
+    return { gradientId: id, addColorStop: (...stop) => commands.push(['addColorStop', id, ...stop]) };
+  };
+  methods.createLinearGradient = (...args) => {
+    const id = gradientId++;
+    commands.push(['createLinearGradient', id, ...args]);
     return { gradientId: id, addColorStop: (...stop) => commands.push(['addColorStop', id, ...stop]) };
   };
   const ctx = new Proxy({}, {

@@ -1,3 +1,4 @@
+import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-scene-panel.mjs';
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
 import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
@@ -1628,6 +1629,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
+  for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
   ctx.restore();
   return v;
@@ -1635,6 +1637,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
 
 // ---------------------------------------------------------------- Project model
 export const ACTION_TYPES = {
+  scene: { label: 'Scene panel', icon: 'T', dur: 240, hint: 'Side gradient with an automatic year, event title and description' },
   border: { label: 'Border', icon: '▱', dur: 60, hint: 'Draw a country outline, or sweep every border' },
   plane: { label: 'Travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
   highlight: { label: 'Highlight', icon: '◎', dur: 45, hint: 'Light up a country or a place' },
@@ -1663,6 +1666,7 @@ const uid = () => crypto.randomUUID();
 export function makeAction(type, start, extra = {}) {
   const base = { id: uid(), type, name: ACTION_TYPES[type].label, start, dur: ACTION_TYPES[type].dur, easing: 'easeInOut' };
   const own = {
+    scene: { ...SCENE_PANEL_DEFAULTS, color: '#d9b767' },
     border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18, invert: false },
     plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
     highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400, invert: false },
@@ -1769,6 +1773,7 @@ export function validateMapProject(p) {
   }
   for (const a of p.actions) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
+    if(a.type === 'scene')validateScenePanel(a);
     if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
     if (a.type === 'border' && !(a.target?.kind === 'all' || (['country','region','regions'].includes(a.target?.kind) && isLoc(a.target)))) throw Error('Invalid border target.');
     if (a.type === 'border') {

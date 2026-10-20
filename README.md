@@ -249,3 +249,7 @@ Choose **Object > SVG / PNG image**, then **Choose image** for transparent artwo
 When highlights overlap, the active highlight with the latest start time wins within its boundary; later list order breaks a tie. Older color is excluded rather than blended underneath. Outside that boundary other highlights remain visible, and an older active highlight returns when the newer one ends.
 
 Run `npm run test:map-object-sizing` and `npm run test:map-object-images:browser` to check sizing, image imports, highlight precedence, saving and PNG/WebM exports.
+
+Add **Scene panel** from the Map Studio left panel for a screen-fixed side gradient, large year, event name and description. Choose left/right, width, text position, colors, opacity, text size and fade duration. **Advance year automatically** interpolates between starting and ending years as the timeline plays or is scrubbed; the animation diamonds define the year progression. Turn it off for a fixed year. CE/BCE suffixes and decreasing year ranges are supported. `{year}` in the event name or description follows the displayed year. Use consecutive Scene panel clips to tell successive events. Panels are saved in the project and rendered in PNG and WebM exports.
+
+Run `npm run test:map-scene-panel` and `npm run test:map-scene-panel:browser` for year/timing validation, editor persistence, gradient placement, wrapping, and PNG/video checks.

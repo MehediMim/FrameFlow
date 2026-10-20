@@ -27,12 +27,35 @@ const fillAlphas = (log, color) => log.filter(l => l.op === 'fill' && l.fill ===
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const cases = {
+  'highlight (percentage)': () => mk('highlight', { target: { kind: 'country', name: 'Testland' }, highlightExtent: 'percentage', highlightPercent: 35, pulse: false }),
+  'highlight (radius)': () => mk('highlight', { target: { kind: 'country', name: 'Testland' }, highlightExtent: 'radius', radius: 80, pulse: false }),
   'highlight (custom origin)': () => mk('highlight', { target: { kind: 'country', name: 'Testland' }, highlightOrigin: { kind: 'point', name: 'Corner', lat: 40, lon: 0 }, dim: .5, pulse: false, showLabel: true }),
   'border (custom start)': () => mk('border', { target: { kind: 'country', name: 'Testland' }, borderFrom: 33.3, borderReverse: true }),
   'highlight (country)': () => mk('highlight', { target: { kind: 'country', name: 'Testland' }, dim: .5, pulse: false, showLabel: true, color: '#ffb703' }),
   'highlight (place)': () => mk('highlight', { target: { kind: 'city', name: 'Paris', lat: 48.8, lon: 2.3 }, dim: .5, pulse: false, showLabel: true, color: '#ffb703' }),
   'border': () => mk('border', { target: { kind: 'country', name: 'Testland' }, fillAlpha: .3, color: '#e4572e' }),
 };
+
+// Partial highlights hold their limited extent after the animation finishes.
+{
+  const a = mk('highlight', { target: { kind: 'country', name: 'Testland' }, pulse: false, showLabel: false, dim: 0 });
+  const f = geo.byName.get('Testland'), full = E.highlightExtent(a, f);
+  const partial = { ...a, highlightExtent: 'percentage', highlightPercent: 50 };
+  assert.equal(E.highlightExtent(partial, f).radius, full.radius / 2);
+  assert.ok(same(render(partial, START + ANIM), render(a, START + ANIM / 2)), '50% spread stops at the halfway reveal radius');
+  assert.ok(same(render(partial, START + ANIM), render(partial, START + ANIM + 20)), 'partial fill holds without completing the whole region');
+  assert.ok(same(render({ ...a, highlightExtent: 'percentage', highlightPercent: 100 }, START + ANIM), render(a, START + ANIM)), '100% preserves existing full highlights');
+  assert.ok(same(render({ ...a, highlightExtent: 'percentage', highlightPercent: 0 }, START + ANIM), render(a, START)), 'zero spread paints no country fill');
+  const radius = E.highlightExtent({ ...a, highlightExtent: 'radius', radius: 80 }, f);
+  assert.ok(Math.abs(radius.radius * 40075 * Math.cos(E.yToLat(radius.y) * Math.PI / 180) - 80) < 1e-9, 'radius uses kilometers at the fill origin');
+  const origin = { kind: 'point', name: 'Corner', lat: 40, lon: 0 };
+  assert.notDeepEqual(E.highlightExtent({ ...partial, highlightOrigin: origin }, f), E.highlightExtent(partial, f), 'partial extent follows a custom center');
+  const roundTrip = E.validateMapProject(JSON.parse(JSON.stringify({ ...E.newMapProject(), actions: [partial] })));
+  assert.equal(roundTrip.actions[0].highlightPercent, 50);
+  for (const invalid of [{ highlightExtent: 'bad' }, { highlightPercent: -1 }, { highlightPercent: 101 }, { highlightPercent: '50' }, { highlightExtent: 'radius', radius: 0 }]) {
+    assert.throws(() => E.validateMapProject({ ...E.newMapProject(), actions: [{ ...a, ...invalid }] }), /highlight|radius/i);
+  }
+}
 
 // Start points change the reveal geometry, while a completed border remains complete.
 {

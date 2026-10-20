@@ -1125,15 +1125,37 @@ function featureRadius(f, x = f.cx, y = f.cy) { // cache the radius for the curr
   f._revealRadius = { x, y, radius: m || .01 };
   return f._revealRadius.radius;
 }
+// Distances use the same Mercator ground scale as place-radius highlights.
+export function highlightExtent(a, f) {
+  const originX = a.highlightOrigin ? lonToX(a.highlightOrigin.lon) : f.cx;
+  const x = originX + Math.round(f.cx - originX), y = a.highlightOrigin ? latToY(a.highlightOrigin.lat) : f.cy;
+  const full = featureRadius(f, x, y) * 1.05;
+  const radius = a.highlightExtent === 'radius'
+    ? (a.radius ?? 400) / (40075 * Math.cos(yToLat(y) * RAD))
+    : full * (a.highlightExtent === 'percentage' ? (a.highlightPercent ?? 100) / 100 : 1);
+  return { x, y, radius };
+}
+export function drawHighlightExtentHandles(ctx, v, geo, a) {
+  if (a?.type !== 'highlight' || !['country', 'region', 'regions'].includes(a.target?.kind)) return;
+  const f = featureForTarget(geo, a.target); if (!f) return;
+  const { x, y, radius } = highlightExtent(a, f), off = Math.round(v.cx - f.cx);
+  const center = project(v, x + off, y), end = project(v, x + off + radius, y);
+  ctx.save(); ctx.strokeStyle = '#ffcf59'; ctx.fillStyle = '#ffcf59'; ctx.lineWidth = 1.5;
+  if (a.highlightExtent === 'radius' || a.highlightExtent === 'percentage') {
+    ctx.setLineDash([5, 4]); ctx.beginPath(); groundCircle(ctx, v, x, y, radius * v.S, off); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(end.x, end.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(end.x, end.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(center.x, center.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t0 = actionProgress(a, frame), t = a.invert ? 1 - t0 : t0, p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3)); // invert: the same grow played backwards
   if (['country', 'region', 'regions'].includes(a.target?.kind)) {
     const f = featureForTarget(geo,a.target); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
-    const originX = a.highlightOrigin ? lonToX(a.highlightOrigin.lon) : f.cx;
-    const x = originX + Math.round(f.cx - originX), y = a.highlightOrigin ? latToY(a.highlightOrigin.lat) : f.cy;
-    const c = project(v, f.cx + off, f.cy), rad = featureRadius(f, x, y) * v.S * 1.05 * p;
+    const { x, y, radius } = highlightExtent(a, f);
+    const c = project(v, f.cx + off, f.cy), rad = radius * v.S * p;
     ctx.save();
     if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
     if (rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
@@ -1831,6 +1853,8 @@ export function validateMapProject(p) {
     checkLabelStyle(a.labelStyle);
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
     if(a.type==='highlight'){
+      if(a.highlightExtent!==undefined&&!['full','percentage','radius'].includes(a.highlightExtent))throw Error('Invalid highlight extent.');
+      if(a.highlightPercent!==undefined&&!num(a.highlightPercent,0,100))throw Error('Invalid highlight percentage.');
       if(a.highlightFill!==undefined&&!['color','flag'].includes(a.highlightFill))throw Error('Invalid highlight fill.');
       if(a.flagFit!==undefined&&!['cover','stretch'].includes(a.flagFit))throw Error('Invalid flag fit.');
       if(a.flagRelief!==undefined&&typeof a.flagRelief!=='boolean')throw Error('Invalid flag relief setting.');

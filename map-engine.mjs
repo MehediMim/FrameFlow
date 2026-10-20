@@ -4,7 +4,7 @@ import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { animationKeysOf } from './map-timing.mjs';
 import { objectOffsets, FORMATIONS } from './map-formations.mjs';
-import { objectPoseAt, validateObjectKeys } from './map-object-keys.mjs';
+import { objectPoseAt, objectSizeAt, validateObjectKeys } from './map-object-keys.mjs';
 import { armyCopies, validateArmyUnits } from './map-armies.mjs';
 import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
@@ -1393,14 +1393,14 @@ export const onBadgeImage = fn => { badgeListener = fn; };
 function badgeEntry(src) {
   if (typeof Image === 'undefined' || !src) return null;
   let e = badgeCache.get(src);
-  if (!e) { e = { img: new Image(), ok: false }; e.img.onload = () => { e.ok = true; badgeListener?.(); }; e.img.src = src; badgeCache.set(src, e); }
+  if (!e) { e = { img: new Image(), ok: false, failed: false }; e.img.onerror = () => { e.failed = true; badgeListener?.(); }; e.img.onload = () => { e.ok = true; badgeListener?.(); }; e.img.src = src; badgeCache.set(src, e); }
   return e;
 }
 /** Resolves once every badge picture in the project has loaded, so exports never miss one. */
 export function preloadBadges(proj) {
-  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner'].includes(a.glyph))) && a.image).map(a => a.image))];
+  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork'].includes(a.glyph))) && a.image).map(a => a.image))];
   return Promise.all(srcs.map(src => new Promise(done => {
-    const e = badgeEntry(src); if (!e || e.ok) { done(); return; }
+    const e = badgeEntry(src); if (!e || e.ok || e.failed) { done(); return; }
     e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
     if (e.img.complete && e.img.naturalWidth) { e.ok = true; done(); }
   })));
@@ -1583,7 +1583,25 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   labels.push(...atlasMapLabels(proj, geo, v));
   drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
-  for (const a of proj.actions) if (a.type === 'highlight') tag(a, () => drawHighlight(ctx, v, geo, th, a, frame, labels));
+  // Later starts take precedence; list order breaks ties. Clip older paint out
+  // of each newer boundary so translucent fills never accumulate there.
+  const highlights = proj.actions.filter(a => a.type === 'highlight' && actAlpha(a,frame)>0)
+    .map((a,index)=>({a,index})).sort((x,y)=>x.a.start-y.a.start||x.index-y.index).map(x=>x.a);
+  for (let i=0;i<highlights.length;i++) {
+    const a=highlights[i], newer=highlights.slice(i+1);
+    if(newer.some(b=>JSON.stringify(b.target)===JSON.stringify(a.target)))continue;
+    ctx.save();
+    for(const b of newer) {
+      if(!['country','region','regions'].includes(b.target?.kind))continue;
+      const f=featureForTarget(geo,b.target);
+      if(!f)continue;
+      ctx.beginPath();ctx.rect(0,0,W,H);
+      const off=Math.round(v.cx-f.cx);
+      for(const r of f.rings){loadXY(v,r.xy,r.n,off);emit(ctx,v,r.n,true);}
+      ctx.clip('evenodd');
+    }
+    tag(a,()=>drawHighlight(ctx,v,geo,th,a,frame,labels));ctx.restore();
+  }
   // Composite texture over country highlights, underneath borders and labels.
   drawTexture(ctx, W, H, proj.texture);
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
@@ -1594,7 +1612,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
     else if (a.type === 'object') tag(a, () => {
       if (!actAlpha(a, frame)) return;
-      const item = {...a,...objectPoseAt(a,frame)};
+      const item = {...a,...objectPoseAt(a,frame),size:objectSizeAt(a,frame,v.cam.zoom)};
       if(item.mode==='wallPath'){drawWallPath(ctx,v,geo,item,frame,labels);return;}
       const troops = item.glyph==='army' ? armyCopies(item) : null;
       const offsets = objectOffsets(troops?{...item,count:troops.length}:item), scale = (item.size || 1) * v.unit;
@@ -1768,7 +1786,7 @@ export function validateMapProject(p) {
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
-    if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner'].includes(a.glyph))) {
+    if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner', 'artwork'].includes(a.glyph))) {
       if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
       if (a.mode !== undefined && !Object.hasOwn(PIN_MODES, a.mode)) throw Error('Invalid pin movement.');
       if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid pin destination.');
@@ -1792,6 +1810,8 @@ export function validateMapProject(p) {
     const inList = (list, x) => list.some(([k]) => k === x);
     if (a.type === 'object') {
       validateObjectKeys(a);
+      if(a.sizeMode!==undefined&&!['screen','map'].includes(a.sizeMode))throw Error('Invalid object sizing mode.');
+      if(a.sizeZoom!==undefined&&!num(a.sizeZoom,0,14))throw Error('Invalid object reference zoom.');
       if(a.armyUnits!==undefined){validateArmyUnits(a.armyUnits,OBJECT_ICONS);if(a.glyph==='army'&&a.armyUnits.reduce((n,u)=>n+u.count,0)*(a.count||1)>100)throw Error('An army object can contain at most 100 units.');}
       if(a.armyName!==undefined&&(typeof a.armyName!=='string'||a.armyName.length>60))throw Error('Invalid army name.');
       if(a.wallSpacing!==undefined&&!num(a.wallSpacing,12,120))throw Error('Invalid wall spacing.');

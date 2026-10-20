@@ -218,7 +218,7 @@ For cannon fire, musket volleys or arrow volleys, enable **Attack from source to
 
 Run `npm run test:map-object-workflows` and `npm run test:map-object-workflows:browser` for sparse animation, retiming, wall geometry, army presets, targeted attacks, UI save/reload, and PNG/video rendering checks.
 
-**Defenses & walls** in the Object picker adds stone wall segments, wooden palisades, watchtowers, gatehouses, star bastions, earthworks and cannon batteries. In **Formation**, set Count and choose a row, column, grid, staggered ranks, wedge or circle. **Joined wall segments** uses adjoining spacing and rotates each segment with the formation; facing adds an extra angle in this mode. Columns, last-row alignment, gaps and angles are saved per item. Spacing is measured in pixels at size 1 and follows the existing camera-independent object sizing.
+**Defenses & walls** in the Object picker adds stone wall segments, wooden palisades, watchtowers, gatehouses, star bastions, earthworks and cannon batteries. In **Formation**, set Count and choose a row, column, grid, staggered ranks, wedge or circle. **Joined wall segments** uses adjoining spacing and rotates each segment with the formation; facing adds an extra angle in this mode. Columns, last-row alignment, gaps and angles are saved per item. Spacing is measured in pixels at size 1 and follows the chosen screen or map sizing mode.
 
 To arrange mixed types, add separate Object items and expand **Arrange separate objects** in an Object inspector. Select the items, then align their starting anchors, distribute them, or place them in a row, column, grid or circle. Arrangement uses the current camera view and shifts movement destinations and waypoints with each anchor. Undo/redo restores the whole operation. These controls align geographic anchors rather than the visible edges of differently sized illustrations.
 
@@ -241,3 +241,11 @@ Only visible XYZ tiles and their immediate parents are requested, up to zoom 14.
 Terrain settings survive project saves, undo/redo, PNG snapshots and video export. Exports wait for requested tiles to settle and disable preview fades. Source requests use a 20-second timeout and one retry before settling as failed. Required dataset credits are linked from settings in [terrain-credits.html](terrain-credits.html); include appropriate credits with published exports.
 
 Run `npm run test:map-relief` for deterministic rendering/cache tests and `npm run test:map-relief:browser` for persisted UI settings, live DEM loading, canvas export safety and a Spain/Portugal highlight preview. The browser test needs network access and writes `frameflow-relief-review.png` to the system temp directory.
+
+Object **Sizing** offers **Fixed on screen** (the existing default) and **Scale with map**. Map sizing records the camera zoom when enabled; zooming in one level doubles the object and its formation gaps. Change Reference zoom to adjust its map footprint. Size keyframes multiply this zoom scaling for previews and exports.
+
+Choose **Object > SVG / PNG image**, then **Choose image** for transparent artwork without a badge or frame. Proportions are preserved. SVG artwork is rasterized at up to 1,024 pixels and embedded in the project; SVGs must be self-contained, without linked external resources. PNG transparency is retained. Movement, rotation and size keyframes work with uploaded objects.
+
+When highlights overlap, the active highlight with the latest start time wins within its boundary; later list order breaks a tie. Older color is excluded rather than blended underneath. Outside that boundary other highlights remain visible, and an older active highlight returns when the newer one ends.
+
+Run `npm run test:map-object-sizing` and `npm run test:map-object-images:browser` to check sizing, image imports, highlight precedence, saving and PNG/WebM exports.

@@ -1,3 +1,4 @@
+import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs';
 import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=invert-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
@@ -383,21 +384,9 @@ function badgeFields(a) {
     + (a.image ? F.range('badgeZoom', 'Zoom picture', b.badgeZoom, 1, 4, .05, x => x + '×') + F.range('badgeX', 'Move picture left / right', b.badgeX, -100, 100, 1) + F.range('badgeY', 'Move picture up / down', b.badgeY, -100, 100, 1) : '')
     + '</div>';
 }
-/** Shrinks a chosen picture so projects stay small enough to save. Returns a data URL. */
-async function shrinkImage(file, max = 512) {
-  if (!/^image\//.test(file.type)) throw Error('Choose an image file.');
-  if (file.size > 15e6) throw Error('That image is larger than 15 MB.');
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(Error('That image could not be read.')); i.src = url; });
-    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
-    const photo = file.type === 'image/jpeg'; if (photo) { const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); }
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    const out = c.toDataURL(photo ? 'image/jpeg' : 'image/png', .88);
-    if (out.length > 1.9e6) throw Error('That image is too detailed. Try a smaller one.');
-    return out;
-  } finally { URL.revokeObjectURL(url); }
+const shrinkImage = importObjectImage;
+function artworkFields(a) {
+  return `<div class="m-badge"><span class="mini-label">SVG / PNG artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden><p class="mini-label">Transparent artwork keeps its proportions, without a badge or frame. SVG is embedded as a high-resolution image for saving and export.</p></div>`;
 }
 function objectFields(a) {
   const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
@@ -409,8 +398,10 @@ function objectFields(a) {
     + (['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'From':'Location',a.place,'place')+(a.mode==='move'?F.loc('to','To',a.to,'place'):''))
     + (wall?F.range('wallSpacing','Segment spacing / overlap',a.wallSpacing??52,12,120,1,x=>x+' px')+F.num('wallTowerEvery','Tower every N segments (0 = off)',a.wallTowerEvery??8,0,50)+F.chk('wallGate','Gate in the middle',!!a.wallGate):'')
     + (['move','path'].includes(a.mode)?F.chk('trail','Draw a trail behind it',a.trail!==false):'')
-    + (a.glyph==='image'?badgeFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
+    + (a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
     + '<div class="section-title m-sep">SIZE, ROTATION &amp; DAMAGE</div>'
+    + F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
+    + (a.sizeMode==='map'?F.num('sizeZoom','Reference zoom',a.sizeZoom??3,0,14,.1)+'<p class="mini-label">Size is measured at this zoom. Zooming in one level doubles it. Size keyframes still apply.</p>':'')
     + F.range('size','Size',pose.size,.2,8,.05,x=>x.toFixed(2)+'x')
     + F.num('objectAngle',a.formation==='wall'?'Extra facing angle (degrees)':'Rotation (degrees)',pose.objectAngle,-3600,3600,1)
     + (a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
@@ -445,7 +436,7 @@ function writeObjectValue(a,field,value) {
   }else a[field]=value;
 }
 function armyFields(a){
-  const units=a.armyUnits||ARMY_PRESETS.pikeShot.units,options=Object.entries(OBJECT_ICONS).filter(([key])=>!['army','image','banner'].includes(key));
+  const units=a.armyUnits||ARMY_PRESETS.pikeShot.units,options=Object.entries(OBJECT_ICONS).filter(([key])=>!['army','image','banner','artwork'].includes(key));
   const presets=[...Object.entries(ARMY_PRESETS).map(([key,p])=>[key,p.name]),...(proj.armyPresets||[]).map(p=>['saved:'+p.id,p.name])];
   return `<div class="section-title m-sep">MIXED ARMY</div><label>Start from a formation<select data-army-preset><option value="">Choose a preset</option>${presets.map(([key,name])=>`<option value="${esc(key)}">${esc(name)}</option>`).join('')}</select></label>`
     + F.text('armyName','Formation name',a.armyName||'My army',60)
@@ -709,6 +700,7 @@ function bindInspector(it) {
         if (it.mode === 'path') { it.path ||= []; if (it.lift === def) it.lift = 0; } else { if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } if (it.lift === 0) it.lift = def; }
         changed(); renderInspector(); if (['path','wallPath'].includes(it.mode) && !it.path.length) startPathDraw(it.id); return;
       }
+      if (key === 'sizeMode') { it.sizeMode=v; if(v==='map')it.sizeZoom=lastView?.cam.zoom??proj.camera.init.zoom; changed(); renderInspector(); return; }
       if (key === 'icon') { const old = TRAVEL_ICONS[it.icon] || TRAVEL_ICONS.plane, nu = TRAVEL_ICONS[v]; if (!nu) return; if (it.planeColor === old.color) it.planeColor = nu.color; if (it.lift === old.lift) it.lift = nu.lift; if (['Travel', 'Plane', old.label].includes(it.name)) it.name = nu.label; it.icon = v; changed(); renderInspector(); return; }
       if (key === '__moveKeys') { if (v) { it.moveStart = it.start; it.moveEnd = it.start + Math.min(it.animDur ?? it.dur, it.dur); } else { delete it.moveStart; delete it.moveEnd; } changed(); renderInspector(); return; }
       if (key === '__move') { it.mode = v === 'path' ? 'path' : 'stay'; if (['path','wallPath'].includes(it.mode)) it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; } changed(); renderInspector(); if (['path','wallPath'].includes(it.mode) && !it.path.length) startPathDraw(it.id); return; }

@@ -17,6 +17,7 @@ const mirrorY = pts => pts.map(([x, y]) => [x, -y]);
 // rot: turns fully to its heading when it moves; otherwise it just mirrors. air: floats above the ground.
 export const OBJECT_ICONS = {
   image: { label: 'Image badge', color: '#ffffff' },
+  artwork: { label: 'SVG / PNG image', color: '#ffffff' },
   banner: { label: 'Hanging image flag', color: '#b89963' },
   army: { label: 'Mixed army formation', color: '#9d4d40', group:'armies', historic:true, draw:(c,s,col,t)=>{for(const x of[-.55,.05,.65]){c.save();c.translate(x*s,0);OBJECT_ICONS.musketeer.draw(c,s*.55,col,t);c.restore();}} },
   ...HISTORIC_OBJECTS,
@@ -82,13 +83,18 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   const lift = ic.air ? 38 * size * u : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
   if (g.z < v.near) return;
   c.save();
-  c.globalAlpha = alpha * .28; c.fillStyle = '#000'; c.beginPath(); c.ellipse(g0.x, g0.y, s * .7 * sc, s * .18 * sc, 0, 0, TAU); c.fill();
+  if(a.glyph!=='artwork'){c.globalAlpha = alpha * .28; c.fillStyle = '#000'; c.beginPath(); c.ellipse(g0.x, g0.y, s * .7 * sc, s * .18 * sc, 0, 0, TAU); c.fill();}
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
   if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','warship','submarine'].includes(a.glyph));
   else{
     if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
+    else if(a.glyph==='artwork') {
+      const img=H.objectImage?.(a.image);
+      if(img){const factor=3.5*s/Math.max(img.naturalWidth,img.naturalHeight),w=img.naturalWidth*factor,h=img.naturalHeight*factor;c.drawImage(img,-w/2,-h/2,w,h);}
+      else {c.strokeStyle='#ffffff';c.lineWidth=2*u;c.strokeRect(-s,-s,2*s,2*s);}
+    }
     else ic.draw(c, s, a.color, ic.historic ? t/(v.fps||30) : t);
     drawDamage(c,s,a.damageState,t/(v.fps||30));
   }

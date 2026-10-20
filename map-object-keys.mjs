@@ -49,3 +49,8 @@ export function validateObjectKeys(a){
     }
   }
 }
+
+/** Apply camera zoom after evaluating size keys, without changing saved key values. */
+export function objectSizeAt(a, frame, zoom) {
+  return objectPoseAt(a, frame).size * (a.sizeMode === 'map' ? 2 ** (zoom - (a.sizeZoom ?? 3)) : 1);
+}

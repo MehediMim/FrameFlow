@@ -10,5 +10,5 @@ export function armyCopies(a){
 }
 export function validateArmyUnits(units,icons){
   if(!Array.isArray(units)||!units.length||units.length>20||units.reduce((n,u)=>n+(u?.count||0),0)>100)throw Error('An army must contain 1–100 units in at most 20 rows.');
-  for(const row of units)if(!row||!Object.hasOwn(icons,row.glyph)||['army','image','banner'].includes(row.glyph)||!Number.isInteger(row.count)||row.count<1||row.count>100||(row.color!==undefined&&!/^#[a-f0-9]{6}$/i.test(row.color)))throw Error('Invalid army unit.');
+  for(const row of units)if(!row||!Object.hasOwn(icons,row.glyph)||['army','image','banner','artwork'].includes(row.glyph)||!Number.isInteger(row.count)||row.count<1||row.count>100||(row.color!==undefined&&!/^#[a-f0-9]{6}$/i.test(row.color)))throw Error('Invalid army unit.');
 }

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { objectSizeAt, putObjectKey } from '../map-object-keys.mjs';
+import { makeAction, newMapProject, validateMapProject } from '../map-engine.mjs';
+const a=makeAction('object',0,{glyph:'artwork',size:2,dur:120,easing:'linear',sizeMode:'map',sizeZoom:4});
+assert.equal(objectSizeAt(a,0,4),2);
+assert.equal(objectSizeAt(a,0,5),4);
+assert.equal(objectSizeAt(a,0,3),1);
+putObjectKey(a,60,{size:4});
+assert.equal(objectSizeAt(a,30,5),6);
+assert.equal(objectSizeAt({...a,sizeMode:'screen'},30,9),3);
+assert.equal(objectSizeAt({...a,sizeMode:undefined},30,1),3);
+const p=newMapProject();p.actions=[a];validateMapProject(p);
+for(const fields of [{sizeMode:'bad'},{sizeZoom:NaN},{sizeZoom:15}])assert.throws(()=>validateMapProject({...p,actions:[{...a,...fields}]}));
+console.log('Object map/screen sizing, size keys, backward compatibility and validation passed');

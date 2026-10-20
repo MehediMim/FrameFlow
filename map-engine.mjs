@@ -1,3 +1,4 @@
+import { curvedGlyphs, flagImageCrop, flagFeatureParts } from './map-label-curve.mjs';
 import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-scene-panel.mjs';
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
@@ -622,9 +623,10 @@ function rrect(ctx, x, y, w, h, r) {
 // ---------------------------------------------------------------- Label style (project-wide, with optional per-item override)
 export const LABEL_SHAPES = { pill: 'Pill', rounded: 'Rounded box', square: 'Square box', tag: 'Tag with pointer', none: 'Text only' };
 export const LABEL_WEIGHTS = [[400, 'Regular'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold']];
-export const DEFAULT_LABEL_STYLE = { font: 'Arial', weight: 600, italic: false, size: 14, caps: false, spacing: 0, shape: 'pill', placement: 'screen', useTheme: true, text: '#ffffff', bg: '#0c1c28', bgAlpha: .9, border: '#ffffff', borderW: 0, halo: false, shadow: false };
+export const DEFAULT_LABEL_STYLE = { font: 'Arial', weight: 600, italic: false, size: 14, caps: false, spacing: 0, textPath: 'straight', curveAngle: 90, shape: 'pill', placement: 'screen', useTheme: true, text: '#ffffff', bg: '#0c1c28', bgAlpha: .9, border: '#ffffff', borderW: 0, halo: false, shadow: false };
 export const LABEL_PRESETS = {
   atlasGround: { label: 'Atlas serif · fixed to map', style: { placement: 'map', scaleMode: 'fixed', font: 'Libre Baskerville', weight: 700, size: 48, shape: 'none', halo: true, haloWidth: .08, useTheme: false, text: '#d5e3df', bg: '#172c30', spacing: 8 } },
+  curved: { label: 'Curved atlas text', style: { placement:'map', shape:'none', font:'Libre Baskerville', size:36, halo:true, textPath:'arc', curveAngle:90 } },
   default: { label: 'Default pill', style: { placement: 'screen' } },
   clean: { label: 'Clean text', style: { placement: 'screen', shape: 'none', halo: true, weight: 700, size: 17 } },
   map2d: { label: '2D · Attached to map', style: { placement: 'map', shape: 'none', halo: true, weight: 700, size: 17 } },
@@ -655,7 +657,16 @@ function drawLabel(ctx, v, th, l, st) {
   ctx.save();
   ctx.font = `${st.italic ? 'italic ' : ''}${st.weight} ${fs}px ${fontStack(st.font)}`;
   const ls = fs * st.spacing / 100; if ('letterSpacing' in ctx) ctx.letterSpacing = ls.toFixed(2) + 'px';
-  const boxed = st.shape !== 'none', w = ctx.measureText(text).width + (boxed ? fs * 1.5 : 0), h = fs * 1.9;
+  const curved=st.textPath==='arc';
+  let glyphs=null,bounds=null;
+  if(curved){
+    if('letterSpacing' in ctx)ctx.letterSpacing='0px';
+    glyphs=curvedGlyphs(text,t=>ctx.measureText(t).width,ls,st.curveAngle??90);
+    const xs=[],ys=[];
+    for(const g of glyphs)for(const dx of [-g.width/2-fs*.35,g.width/2+fs*.35])for(const dy of [-fs,fs]){xs.push(g.x+dx*Math.cos(g.angle)-dy*Math.sin(g.angle));ys.push(g.y+dx*Math.sin(g.angle)+dy*Math.cos(g.angle));}
+    bounds={x0:Math.min(0,...xs),x1:Math.max(0,...xs),y0:Math.min(0,...ys),y1:Math.max(0,...ys)};
+  }
+  const boxed = !curved && st.shape !== 'none', w = ctx.measureText(text).width + (boxed ? fs * 1.5 : 0), h = fs * 1.9;
   const bg = st.useTheme ? th.pill : st.bg, fg = st.useTheme ? th.pillText : st.text, bgA = st.useTheme ? 1 : st.bgAlpha, a0 = clamp01(l.alpha);
   let x = l.x, y = l.y;
   if (st.placement === 'map' && l.ground) {
@@ -665,7 +676,7 @@ function drawLabel(ctx, v, th, l, st) {
     // Keep the entire label in front of the near plane, including its tag/halo.
     const pad = fs * .35, bottom = h / 2 + (st.shape === 'tag' ? fs * .55 : 0) + pad;
     const angle = (l.angle || 0) * RAD, ac = Math.cos(angle), as = Math.sin(angle);
-    for (const dx of [-w / 2 - pad, w / 2 + pad]) for (const dy of [-h / 2 - pad, bottom]) {
+    for (const dx of bounds?[bounds.x0,bounds.x1]:[-w / 2 - pad, w / 2 + pad]) for (const dy of bounds?[bounds.y0,bounds.y1]:[-h / 2 - pad, bottom]) {
       const rx = x + dx * ac - dy * as, ry = y + dx * as + dy * ac;
       if (q.z - (-v.sb * rx + v.cb * ry) * v.sp <= v.near) { ctx.restore(); return; }
     }
@@ -691,6 +702,12 @@ function drawLabel(ctx, v, th, l, st) {
     if (st.borderW > 0) { ctx.globalAlpha = a0; ctx.strokeStyle = st.border; ctx.lineWidth = st.borderW * v.unit; ctx.lineJoin = 'round'; path(); ctx.stroke(); }
   }
   ctx.globalAlpha = a0; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if(curved){
+    ctx.fillStyle=fg;ctx.strokeStyle=bg;ctx.lineJoin='round';ctx.lineWidth=fs*(st.haloWidth??.26);
+    if(st.shadow){ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=fs*.35;ctx.shadowOffsetY=fs*.08;}
+    for(const g of glyphs){ctx.save();ctx.translate(x+g.x,y+g.y);ctx.rotate(g.angle);if(st.halo)ctx.strokeText(g.char,0,fs*.05);ctx.fillText(g.char,0,fs*.05);ctx.restore();}
+    ctx.restore();return;
+  }
   const tx = x + ls / 2, ty = y + fs * .05;
   if (st.halo) { ctx.lineJoin = 'round'; ctx.lineWidth = fs * (st.haloWidth ?? .26); ctx.strokeStyle = bg; ctx.strokeText(text, tx, ty); }
   if (!boxed && st.shadow) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = fs * .35; ctx.shadowOffsetY = fs * .08; }
@@ -797,12 +814,12 @@ export function imageryNeeds(proj, geo, W, H, frame) {
   for (const t of plan.list) { const x = ((t.tx % plan.n) + plan.n) % plan.n, k = x + ',' + t.ty; if (!seen.has(k)) { seen.add(k); out.push({ src: id, z: plan.z, x, y: t.ty }); } }
   return out;
 }
-function tileMesh(ctx, v, img, X0, Y0, w, sx, sy, ss, n) { // draw one tile as an n x n mesh of affine-mapped cells (n = 1 when the map is not tilted)
+function tileMesh(ctx, v, img, X0, Y0, w, sx, sy, ss, n, height = w, sourceHeight = ss, partial = false) { // draw one tile as an n x n mesh of affine-mapped cells (n = 1 when the map is not tilted)
   const iw = img.width, ih = img.height, P = [], e = .9;
-  for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) P.push(project(v, X0 + w * i / n, Y0 + w * j / n, 0));
-  if (P.some(q => !Number.isFinite(q.x) || !Number.isFinite(q.y) || q.z < v.near * 2)) return;
+  for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) P.push(project(v, X0 + w * i / n, Y0 + height * j / n, 0));
+  if (!partial && P.some(q => !Number.isFinite(q.x) || !Number.isFinite(q.y) || q.z < v.near * 2)) return;
   if (P.every(q => q.x < -40) || P.every(q => q.x > v.W + 40) || P.every(q => q.y < -40) || P.every(q => q.y > v.H + 40)) return;
-  const U = i => (sx + ss * i / n) * iw, V = j => (sy + ss * j / n) * ih;
+  const U = i => (sx + ss * i / n) * iw, V = j => (sy + sourceHeight * j / n) * ih;
   const put = (a, b, c, ua, va, ub, vb, uc, vc, clip) => { // affine map: image pixels (u,v) -> screen, from three vertex pairs
     const det = (ub - ua) * (vc - va) - (uc - ua) * (vb - va); if (Math.abs(det) < 1e-9) return;
     const A = ((b.x - a.x) * (vc - va) - (c.x - a.x) * (vb - va)) / det, C = ((c.x - a.x) * (ub - ua) - (b.x - a.x) * (uc - ua)) / det;
@@ -816,6 +833,7 @@ function tileMesh(ctx, v, img, X0, Y0, w, sx, sy, ss, n) { // draw one tile as a
   };
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const u0 = U(i), u1 = U(i + 1), v0 = V(j), v1 = V(j + 1), p00 = P[j * (n + 1) + i], p10 = P[j * (n + 1) + i + 1], p01 = P[(j + 1) * (n + 1) + i], p11 = P[(j + 1) * (n + 1) + i + 1];
+    if(partial && [p00,p10,p01,p11].some(q=>!Number.isFinite(q.x)||!Number.isFinite(q.y)||q.z<v.near*2))continue;
     const cell = () => ctx.drawImage(img, u0, v0, u1 - u0, v1 - v0, u0 - e, v0 - e, u1 - u0 + 2 * e, v1 - v0 + 2 * e);
     if (n === 1) { if (put(p00, p10, p01, u0, v0, u1, v0, u0, v1, false)) { cell(); ctx.restore(); } continue; }
     if (put(p00, p10, p01, u0, v0, u1, v0, u0, v1, true)) { cell(); ctx.restore(); }
@@ -937,12 +955,12 @@ function nameAnchor(f, cities, midX) {
 export function atlasMapLabels(proj, geo, v) {
   const s = atlasLabelSettings(proj.atlasLabels), out = [], occupied = [];
   if (!s.countries && !s.oceans) return out;
-  const style = { font: s.font, weight: 700, shape: 'none', halo: true, haloWidth: s.haloWidth, useTheme: false, text: s.text, bg: s.outline, spacing: s.spacing, placement: s.placement, scaleMode: s.scaleMode, referenceZoom: s.referenceZoom, caps: false, italic: false };
+  const style = { font: s.font, weight: 700, shape: 'none', halo: true, haloWidth: s.haloWidth, useTheme: false, text: s.text, bg: s.outline, spacing: s.spacing, placement: s.placement, scaleMode: s.scaleMode, referenceZoom: s.referenceZoom, textPath:s.textPath, curveAngle:s.curveAngle, caps: false, italic: false };
   const add = (text, X, Y, size, ocean = false, angle = 0) => {
     const ground = { X, Y }, q = project(v, X, Y);
     if (q.z <= v.near) return;
     const scale = s.scaleMode === 'world' ? 2 ** (v.cam.zoom - s.referenceZoom) : 1;
-    const fs = size * v.unit * scale, w = text.length * fs * .67 * (1 + s.spacing / 100), h = fs * 1.4;
+    const fs = size * v.unit * scale, w = text.length * fs * .67 * (1 + s.spacing / 100), sweep=Math.abs(s.curveAngle)*RAD, h = fs * 1.4+(s.textPath==='arc'&&sweep>1e-6?2*w/sweep*(1-Math.cos(sweep/2)):0);
     if (s.declutter && fs < 6) return;
     const a = angle * RAD, c = Math.cos(a), sn = Math.sin(a), corners = [];
     for (const x of [-w / 2, w / 2]) for (const y of [-h / 2, h / 2]) {
@@ -1121,8 +1139,26 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
       ctx.fillStyle = th.relief ? (a.reliefColor || v.terrain.highlightColor) : a.color;
       // Hard-light can lift dark green terrain into warm gold while retaining
       // the elevation image's local contrast beneath the highlight.
-      if (th.relief) ctx.globalCompositeOperation = 'hard-light';
-      ctx.fill('evenodd'); ctx.globalCompositeOperation = 'source-over';
+      const flag=a.highlightFill==='flag'?badgeEntry(a.image):null;
+      if(a.highlightFill==='flag' && flag?.ok){
+        ctx.save();ctx.clip('evenodd');
+        ctx.globalAlpha=alpha*(a.flagOpacity??.9);
+        if(th.relief && a.flagRelief!==false)ctx.globalCompositeOperation='hard-light';
+        for(const part of flagFeatureParts(f)){
+          const b=part.box,bw=b[2]-b[0],bh=b[3]-b[1];
+          if(bw<=0||bh<=0||!bboxVisible(v,b,off))continue;
+          ctx.save();ctx.beginPath();
+          for(const r of part.rings){loadXY(v,r.xy,r.n,off);emit(ctx,v,r.n,true);}ctx.clip('evenodd');
+          const crop=flagImageCrop(flag.img.width/flag.img.height,bw/bh,a.flagFit||'cover',a.flagZoom??1,a.flagX??0,a.flagY??0);
+          tileMesh(ctx,v,flag.img,b[0]+off,b[1],bw,crop.x,crop.y,crop.w,v.sp<1e-4?1:8,bh,crop.h,true);
+          ctx.restore();
+        }
+        ctx.restore();path();
+      }else{
+        if (th.relief) ctx.globalCompositeOperation = 'hard-light';
+        ctx.fill('evenodd');
+      }
+      ctx.globalCompositeOperation = 'source-over';
       ctx.lineJoin = 'round';
       if (th.relief) glowStroke(ctx, a.reliefColor || v.terrain.highlightColor, .8 * v.unit, alpha * .45, false);
       else glowStroke(ctx, a.color, 2.6 * v.unit, alpha, true);
@@ -1399,7 +1435,7 @@ function badgeEntry(src) {
 }
 /** Resolves once every badge picture in the project has loaded, so exports never miss one. */
 export function preloadBadges(proj) {
-  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork'].includes(a.glyph))) && a.image).map(a => a.image))];
+  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'highlight' && a.highlightFill === 'flag') || (a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork'].includes(a.glyph))) && a.image).map(a => a.image))];
   return Promise.all(srcs.map(src => new Promise(done => {
     const e = badgeEntry(src); if (!e || e.ok || e.failed) { done(); return; }
     e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
@@ -1736,8 +1772,9 @@ function checkLabelStyle(s) {
   if (s.font !== undefined && (typeof s.font !== 'string' || s.font.length > 60)) bad();
   if (s.weight !== undefined && !LABEL_WEIGHTS.some(w => w[0] === s.weight)) bad();
   if (s.shape !== undefined && !Object.hasOwn(LABEL_SHAPES, s.shape)) bad();
+  if (s.textPath !== undefined && !['straight','arc'].includes(s.textPath)) bad();
   if (s.placement !== undefined && !['screen', 'map'].includes(s.placement)) bad();
-  for (const [k, lo, hi] of [['size', 6, 240], ['spacing', 0, 40], ['bgAlpha', 0, 1], ['borderW', 0, 8], ['referenceZoom', 0, 14], ['haloWidth', 0, 1]]) if (s[k] !== undefined && !num(s[k], lo, hi)) bad();
+  for (const [k, lo, hi] of [['size', 6, 240], ['spacing', 0, 40], ['bgAlpha', 0, 1], ['borderW', 0, 8], ['referenceZoom', 0, 14], ['haloWidth', 0, 1], ['curveAngle', -360, 360]]) if (s[k] !== undefined && !num(s[k], lo, hi)) bad();
   if (s.scaleMode !== undefined && !['fixed', 'world'].includes(s.scaleMode)) bad();
   for (const k of ['text', 'bg', 'border']) if (s[k] !== undefined && !col(s[k])) bad();
   for (const k of ['italic', 'caps', 'useTheme', 'halo', 'shadow']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
@@ -1786,6 +1823,13 @@ export function validateMapProject(p) {
     else if (a.type === 'plane' && !(isLoc(a.from) && isLoc(a.to))) throw Error('Invalid plane route.');
     checkLabelStyle(a.labelStyle);
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
+    if(a.type==='highlight'){
+      if(a.highlightFill!==undefined&&!['color','flag'].includes(a.highlightFill))throw Error('Invalid highlight fill.');
+      if(a.flagFit!==undefined&&!['cover','stretch'].includes(a.flagFit))throw Error('Invalid flag fit.');
+      if(a.flagRelief!==undefined&&typeof a.flagRelief!=='boolean')throw Error('Invalid flag relief setting.');
+      for(const [k,lo,hi] of [['flagOpacity',0,1],['flagZoom',1,4],['flagX',-100,100],['flagY',-100,100]])if(a[k]!==undefined&&!num(a[k],lo,hi))throw Error('Invalid flag image setting.');
+      if(a.image!==undefined&&(typeof a.image!=='string'||a.image.length>2e6||!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(a.image)))throw Error('Invalid highlight image.');
+    }
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');
     if (a.type === 'highlight' && a.highlightOrigin !== undefined && !(a.highlightOrigin?.kind === 'point' && isLoc(a.highlightOrigin))) throw Error('Invalid highlight fill start.');
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');

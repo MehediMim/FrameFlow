@@ -517,6 +517,16 @@ function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
   return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
 }
+function flagHighlightFields(a) {
+  return F.sel('highlightFill','Highlight fill',a.highlightFill||'color',[['color','Color'],['flag','Uploaded flag / image']])
+    + (a.highlightFill==='flag'?`<div class="m-badge"><span class="mini-label">Flag image</span><div class="two"><button type="button" data-badgeimg>${a.image?'Change flag':'Upload flag'}</button><button type="button" data-badgeclear ${a.image?'':'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden><p class="mini-label">Upload PNG, SVG or another image. It fills the selected country or region. Until uploaded, the highlight uses its color.</p></div>`
+      + F.sel('flagFit','Image fitting',a.flagFit||'cover',[['cover','Fill boundary (crop)'],['stretch','Stretch whole flag']])
+      + F.range('flagOpacity','Flag opacity',a.flagOpacity??.9,0,1,.05,x=>Math.round(x*100)+'%')
+      + F.range('flagZoom','Flag zoom',a.flagZoom??1,1,4,.05,x=>x+'x')
+      + F.range('flagX','Horizontal image position',a.flagX??0,-100,100,1,x=>x+'%')
+      + F.range('flagY','Vertical image position',a.flagY??0,-100,100,1,x=>x+'%')
+      + F.chk('flagRelief','Preserve relief shading in terrain style',a.flagRelief!==false):'');
+}
 function scenePanelFields(a) {
   const d={...SCENE_PANEL_DEFAULTS,...a};
   return F.sel('panelSide','Gradient side',d.panelSide,[['left','Left'],['right','Right']])
@@ -544,7 +554,7 @@ function actionFields(a) {
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
     case 'highlight': {
       const country = ['country','region','regions'].includes(a.target.kind);
-      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || reliefSettings(proj.terrain).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? reliefSettings(proj.terrain).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country?flagHighlightFields(a):'') + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || reliefSettings(proj.terrain).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? reliefSettings(proj.terrain).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
@@ -767,7 +777,7 @@ function bindInspector(it) {
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
-      writeObjectValue(it,key,v); changed(); if (key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      writeObjectValue(it,key,v); changed(); if (key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
@@ -816,6 +826,8 @@ function labelStyleHtml(st, pre) {
     fontPickerHtml(pre + 'Font', 'Font', st.font) +
     `<div class="two"><label>Weight<select data-ls="weight" data-t="int">${LABEL_WEIGHTS.map(([w, l]) => o(w, l, st.weight)).join('')}</select></label>${num('size', 'Size', 6, 240, 1)}</div>` +
     `<label>Orientation<select data-ls="placement" data-t="sel">${o('screen', 'Upright', st.placement)}${o('map', 'Flat on map', st.placement)}</select></label>` +
+    `<label>Text path<select data-ls="textPath" data-t="sel">${o('straight','Straight',st.textPath||'straight')}${o('arc','Circular arc',st.textPath)}</select></label>` +
+    (st.textPath==='arc'?num('curveAngle','Arc bend (negative reverses it)',-360,360,1)+'<p class="mini-label">Curved text follows a circular baseline, without a background badge.</p>':'') +
     `<label>Zoom sizing<select data-ls="scaleMode" data-t="sel">${o('fixed', 'Keep text size fixed', st.scaleMode || 'fixed')}${o('world', 'Scale with the map', st.scaleMode)}</select></label>` +
     (st.scaleMode === 'world' ? num('referenceZoom', 'Size measured at zoom', 0, 14, .1) : '') +
     `<label>Shape<select data-ls="shape" data-t="sel">${Object.entries(LABEL_SHAPES).map(([k, l]) => o(k, l, st.shape)).join('')}</select></label>` +
@@ -839,7 +851,7 @@ function bindLabelStyle(root, pre, get, replace, rerender) {
     el.onchange = () => {
       let v = val(); checkpoint();
       if (t === 'num') { const lo = Number(el.min), hi = Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi); el.value = v; }
-      get()[key] = v; changed(); if (key === 'useTheme' || key === 'shape' || key === 'halo' || key === 'scaleMode') rerender();
+      get()[key] = v; changed(); if (key === 'textPath' || key === 'useTheme' || key === 'shape' || key === 'halo' || key === 'scaleMode') rerender();
     };
   });
 }
@@ -864,6 +876,8 @@ function renderAtlasLabelPanel() {
     ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
     ${fontPickerHtml('mAtlasFont', 'Font', s.font)}
     <div class="two">${num('size', 'Country size multiplier (30 = normal)', 6, 240)}${num('oceanSize', 'Ocean text size', 6, 240)}</div>
+    <label>Text path<select data-atlas="textPath"><option value="straight" ${s.textPath==='straight'?'selected':''}>Straight</option><option value="arc" ${s.textPath==='arc'?'selected':''}>Circular arc</option></select></label>
+    ${s.textPath==='arc'?num('curveAngle','Arc bend (negative reverses it)',-360,360):''}
     <label>Orientation<select data-atlas="placement"><option value="map" ${s.placement === 'map' ? 'selected' : ''}>Flat on map</option><option value="screen" ${s.placement === 'screen' ? 'selected' : ''}>Upright</option></select></label>
     <label>Zoom sizing<select data-atlas="scaleMode"><option value="fixed" ${s.scaleMode === 'fixed' ? 'selected' : ''}>Keep text size fixed</option><option value="world" ${s.scaleMode === 'world' ? 'selected' : ''}>Scale with the map</option></select></label>
     ${s.scaleMode === 'world' ? num('referenceZoom', 'Size measured at zoom', 0, 14, .1) : ''}

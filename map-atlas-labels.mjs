@@ -15,7 +15,7 @@ export const OCEAN_LABELS = Object.freeze([
 export const ATLAS_LABEL_DEFAULTS = Object.freeze({
   countries: false, oceans: false, declutter: true, fitCountries: true, countryAngles: true, size: 30, oceanSize: 23,
   font: 'Libre Baskerville', text: '#d5e3df', outline: '#172c30',
-  opacity: .9, spacing: 8, haloWidth: .08, placement: 'map', scaleMode: 'world', referenceZoom: 3,
+  opacity: .9, spacing: 8, haloWidth: .08, textPath: 'straight', curveAngle: 60, placement: 'map', scaleMode: 'world', referenceZoom: 3,
 });
 export const atlasLabelSettings = value => ({ ...ATLAS_LABEL_DEFAULTS, ...value });
 export function validateAtlasLabels(s) {
@@ -23,9 +23,10 @@ export function validateAtlasLabels(s) {
   const bad = () => { throw Error('Invalid atlas label settings.'); };
   if (!s || typeof s !== 'object' || Array.isArray(s)) bad();
   for (const k of ['countries', 'oceans', 'declutter', 'fitCountries', 'countryAngles']) if (s[k] !== undefined && typeof s[k] !== 'boolean') bad();
-  for (const [k, lo, hi] of [['size', 6, 240], ['oceanSize', 6, 240], ['opacity', 0, 1], ['spacing', 0, 40], ['haloWidth', 0, 1], ['referenceZoom', 0, 14]])
+  for (const [k, lo, hi] of [['size', 6, 240], ['oceanSize', 6, 240], ['opacity', 0, 1], ['spacing', 0, 40], ['haloWidth', 0, 1], ['referenceZoom', 0, 14], ['curveAngle',-360,360]])
     if (s[k] !== undefined && (!Number.isFinite(s[k]) || s[k] < lo || s[k] > hi)) bad();
   for (const k of ['text', 'outline']) if (s[k] !== undefined && !/^#[a-f0-9]{6}$/i.test(s[k])) bad();
+  if (s.textPath !== undefined && !['straight','arc'].includes(s.textPath)) bad();
   if (s.font !== undefined && (typeof s.font !== 'string' || !s.font || s.font.length > 60)) bad();
   if (s.placement !== undefined && !['screen', 'map'].includes(s.placement)) bad();
   if (s.scaleMode !== undefined && !['fixed', 'world'].includes(s.scaleMode)) bad();

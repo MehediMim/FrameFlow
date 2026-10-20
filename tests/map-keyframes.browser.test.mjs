@@ -135,7 +135,9 @@ try {
   p=await saved(); assert.equal(p.shots.at(-1).planeId,object.id,'Follow traveler selects the current moving object');
   await evaluate(`document.querySelector('[data-mid="${object.id}"]').click()`);
   await change('#mFrame','2');
-  await evaluate(`document.querySelector('#mSplit').click()`);
+  const splitButton = await evaluate(`(()=>{const r=document.querySelector('#mSplit').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+  await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...splitButton,button:'left',buttons:1,clickCount:1});
+  await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...splitButton,button:'left',buttons:0,clickCount:1});
   p=await saved();
   assert.equal(p.actions.length,2,'Split creates a second clip');
   assert.equal(p.actions[0].start+p.actions[0].dur,60);
@@ -143,6 +145,11 @@ try {
   assert.equal(p.actions[1].sourceStart,object.start,'split preserves original animation clock');
   await evaluate(`document.querySelector('#mUndo').click()`);
   assert.equal((await saved()).actions.length,1,'split can be undone');
+  await evaluate(`document.querySelector('[data-mid="${object.id}"]').click()`);
+  await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'s',code:'KeyS',windowsVirtualKeyCode:83});
+  await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'s',code:'KeyS',windowsVirtualKeyCode:83});
+  assert.equal((await saved()).actions.length,2,'S splits the selected map item');
+  await evaluate(`document.querySelector('#mUndo').click()`);
   await evaluate(`document.querySelector('#mRedo').click()`);
   await evaluate(`location.reload()`);
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);

@@ -4,7 +4,7 @@ import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
 import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
-import { animationKeysOf, mapSourceItem } from './map-timing.mjs';
+import { animationKeysOf, mapSourceItem } from './map-timing.mjs?v=map-split-1';
 import { objectOffsets, FORMATIONS } from './map-formations.mjs';
 import { objectPoseAt, objectSizeAt, validateObjectKeys } from './map-object-keys.mjs';
 import { armyCopies, validateArmyUnits } from './map-armies.mjs';

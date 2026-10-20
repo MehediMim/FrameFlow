@@ -1,7 +1,7 @@
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs';
-import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=invert-1';
+import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=map-split-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -10,7 +10,7 @@ import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=invert-1';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=map-split-1';
 import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
@@ -20,10 +20,10 @@ import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { FORMATIONS, arrangementTargets, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
-import { resolveLoc } from './map-engine.mjs?v=invert-1';
+import { resolveLoc } from './map-engine.mjs?v=map-split-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
-import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=invert-1';
-import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs';
+import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=map-split-1';
+import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs?v=map-split-1';
 import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
 import { trimMapHistory } from './map-history.mjs';
 let cameraProperty = 'all', objectProperty = 'all';

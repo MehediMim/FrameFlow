@@ -94,7 +94,39 @@ function wagon(c,s,col){
   box(c,s,-.85,.16,1.62,.13,col);line(c,s,.74,.22,1.1,.02,wood,.07);wheel(c,s,-.48,.46,.25);wheel(c,s,.46,.46,.25);
 }
 function entry(label,color,group,draw){return{label,color,group,historic:true,draw};}
+function wall(c,s,col){
+  box(c,s,-1,-.45,2,.95,col);for(let i=0;i<8;i++)box(c,s,-1+i*.27,-.65,.18,.24,col);
+  for(let row=0;row<3;row++){const y=-.18+row*.24;line(c,s,-.98,y,.98,y,'#655d51',.018);for(let i=0;i<5;i++){const x=-.9+i*.44+(row%2)*.22;if(x<.98)line(c,s,x,y,x,y+.22,'#655d51',.018);}}
+}
+function palisade(c,s,col){
+  for(let i=0;i<9;i++){const x=-1+i*.24;path(c,s,[[x,.5],[x,-.45],[x+.08,-.72],[x+.16,-.45],[x+.16,.5]],col);line(c,s,x+.05,-.35,x+.05,.4,'#b79b6c',.018);}
+  box(c,s,-1.02,-.12,2.13,.1,wood);box(c,s,-1.02,.3,2.13,.1,wood);
+}
+function tower(c,s,col){
+  for(const x of[-.43,.43])line(c,s,x,.6,x*.8,-.9,wood,.11);
+  line(c,s,-.4,.5,.4,-.5,wood,.06);line(c,s,.4,.5,-.4,-.5,wood,.06);
+  box(c,s,-.58,-.97,1.16,.47,col);for(let x=-.52;x<.57;x+=.26)line(c,s,x,-.97,x,-.5,wood,.035);
+  path(c,s,[[-.76,-1.01],[0,-1.55],[.76,-1.01]],wood);line(c,s,0,-1.56,0,-1.9,wood,.04);pennant(c,s,0,-1.9,col,0);
+}
+function gatehouse(c,s,col){fort(c,s,col);box(c,s,-.27,-.1,.54,.56,wood);for(let i=0;i<5;i++)line(c,s,-.2+i*.1,.02,-.2+i*.1,.44,brass,.025);line(c,s,-.24,.18,.24,.18,brass,.025);}
+function bastion(c,s,col){
+  path(c,s,[[0,-1],[-.22,-.62],[-.72,-.78],[-.68,-.22],[-1,.1],[-.58,.3],[-.51,.8],[0,.59],[.51,.8],[.58,.3],[1,.1],[.68,-.22],[.72,-.78],[.22,-.62]],col);
+  path(c,s,[[-.43,-.39],[.43,-.39],[.57,.24],[0,.47],[-.57,.24]],'#71694e');box(c,s,-.23,-.24,.46,.44,cream);line(c,s,0,-.65,0,-1.2,wood);pennant(c,s,0,-1.2,'#8d4438',0);
+}
+function earthwork(c,s,col){
+  path(c,s,[[-1,.46],[-.88,-.04],[-.55,-.31],[-.19,-.2],[.17,-.34],[.57,-.18],[.9,.02],[1,.46]],col);
+  for(let row=0;row<2;row++)for(let i=0;i<6;i++){const x=-.9+i*.31+(row%2)*.12;box(c,s,x,-.02+row*.23,.29,.21,'#b2a079');}
+  line(c,s,-.6,-.28,-.6,-.65,wood,.045);line(c,s,.4,-.27,.4,-.72,wood,.045);
+}
+function battery(c,s,col){for(const x of[-.57,.49]){c.save();c.translate(x*s,0);c.scale(.55,.55);cannon(c,s,col);c.restore();}box(c,s,-.95,.44,1.9,.18,wood);}
 export const HISTORIC_OBJECTS={
+  stoneWall:entry('Stone wall segment','#a09882','defense',wall),
+  palisade:entry('Wooden palisade','#8e6945','defense',palisade),
+  watchtower:entry('Watchtower','#927449','defense',tower),
+  gatehouse:entry('Fortified gatehouse','#9a9279','defense',gatehouse),
+  bastion:entry('Star bastion','#98916d','defense',bastion),
+  earthwork:entry('Earthwork / barricade','#80784e','defense',earthwork),
+  cannonBattery:entry('Cannon battery','#646e57','defense',battery),
   caravel:entry('Caravel','#a65c42','exploration',(c,s,col,t)=>ship(c,s,col,t,'caravel')),
   galleon:entry('Galleon / sailing warship','#8c4438','warfare',(c,s,col,t)=>ship(c,s,col,t,'galleon')),
   galley:entry('Oared galley','#9a7445','warfare',(c,s,col,t)=>ship(c,s,col,t,'galley')),

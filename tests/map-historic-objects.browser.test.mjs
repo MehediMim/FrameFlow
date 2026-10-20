@@ -67,7 +67,7 @@ try {
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);
   const {HISTORIC_OBJECTS}=await import('../map-historic-objects.mjs'),E=await import('../map-engine.mjs');
-  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup').length`),3);
+  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup').length`),4);
   for(const [glyph,icon] of Object.entries(HISTORIC_OBJECTS)){
     await change('#mInspector [data-mf="glyph"]',glyph);
     const p=await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);E.validateMapProject(p);
@@ -92,7 +92,7 @@ try {
   assert.equal(integration.fpsDiff,0,'historic ship motion and sails are frame-rate independent');assert.ok(integration.motion>100);assert.ok(integration.png);
   await evaluate(`(async()=>{
     const {HISTORIC_OBJECTS}=await import('./map-historic-objects.mjs');
-    const c=document.createElement('canvas');c.width=1200;c.height=850;const x=c.getContext('2d');
+    const c=document.createElement('canvas');c.width=1200;c.height=62+Math.ceil(Object.keys(HISTORIC_OBJECTS).length/5)*258+20;const x=c.getContext('2d');
     x.fillStyle='#172126';x.fillRect(0,0,c.width,c.height);x.fillStyle='#e6dac0';x.font='bold 25px Georgia';x.fillText('EXPLORATION & WARFARE',26,38);
     Object.entries(HISTORIC_OBJECTS).forEach(([key,icon],i)=>{
       const left=24+(i%5)*234,top=62+Math.floor(i/5)*258;
@@ -102,7 +102,7 @@ try {
     });document.body.replaceChildren(c);c.style.cssText='height:98vh;width:auto;display:block;margin:auto';
   })()`);
   const screenshot=await cdp('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'frameflow-historic-objects-review.png'),Buffer.from(screenshot.data,'base64'));
-  assert.deepEqual(errors,[],'all historical object renderers work');console.log('13 historic objects passed: picker groups, colors, validation, saved movement, animation FPS and PNG rendering');
+  assert.deepEqual(errors,[],'all historical object renderers work');console.log('Historic and defense objects passed: picker groups, colors, validation, saved movement, animation FPS and PNG rendering');
 } finally {
   ws?.close(); chrome.kill(); server.closeAllConnections(); server.close();
   await new Promise(r => chrome.exitCode !== null ? r() : chrome.once('exit', r));

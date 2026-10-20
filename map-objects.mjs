@@ -3,6 +3,7 @@
 // same on every device and in exported video. The engine passes its helpers in as `H`.
 import { drawBanner } from './map-banner.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
+import { BATTLE_EFFECTS, drawBattleEffect } from './map-battle-effects.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
 const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = Math.max(1, s * .05); c.stroke(); };
 const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = fill; c.fill(); stroke(c, s); };
@@ -39,6 +40,7 @@ export const OBJECT_ENTER = [['drop', 'Drop in'], ['fade', 'Fade in'], ['grow', 
 export const OBJECT_IDLE = [['none', 'Still'], ['pulse', 'Pulse'], ['shake', 'Shake'], ['bob', 'Bob up and down'], ['spin', 'Spin']];
 export const OBJECT_EXIT = [['none', 'Stay until the bar ends'], ['fade', 'Fade out'], ['shrink', 'Shrink'], ['explode', 'Explode']];
 export const EFFECTS = {
+  ...BATTLE_EFFECTS,
   explosion: { label: 'Explosion', color: '#ff7a1a' }, fire: { label: 'Fire', color: '#ff5a1f' }, smoke: { label: 'Smoke', color: '#6b7278' },
   shockwave: { label: 'Shockwave', color: '#ffffff' }, quake: { label: 'Earthquake rings', color: '#ff4d4d' }, blast: { label: 'Blast / danger radius', color: '#ff3b30' },
   strike: { label: 'Missile strike (launch → target)', color: '#ff7a1a' },
@@ -81,7 +83,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   c.globalAlpha = alpha * .28; c.fillStyle = '#000'; c.beginPath(); c.ellipse(g0.x, g0.y, s * .7 * sc, s * .18 * sc, 0, 0, TAU); c.fill();
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air ? 0 : s * .5 * sc) + dy);
   if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
-  c.rotate(rot); c.scale(sc, sc);
+  c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
   if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
   else ic.draw(c, s, a.color, ic.historic ? t/(v.fps||30) : t);
   c.restore();
@@ -113,7 +115,8 @@ export function drawEffect(H, c, v, geo, a, frame, labels) {
   const base = H.actionProgress(a, frame), rep = Math.max(1, a.repeat | 0 || 1), p = base >= 1 ? 1 : (base * rep) % 1, env = Math.min(1, base / .08, (1 - base) / .08 + .001);
   const u = v.unit, s = 40 * (a.size || 1) * u, g = H.project(v, r.X, r.Y, 0); if (g.z < v.near) return;
   c.save();
-  if (a.fx === 'explosion') explosion(H, c, v, r.X, r.Y, s, p, a.color, frame);
+  if (EFFECTS[a.fx]?.battle) drawBattleEffect(c,a.fx,g,s,p,env,a,(frame-a.start)/(v.fps||30));
+  else if (a.fx === 'explosion') explosion(H, c, v, r.X, r.Y, s, p, a.color, frame);
   else if (a.fx === 'shockwave') rings(H, c, v, r.X, r.Y, s, p, a.color, 3, 3, 3);
   else if (a.fx === 'quake') { rings(H, c, v, r.X, r.Y, s, p, a.color, 4, 2.6, 3.5); c.globalAlpha = 1; c.fillStyle = a.color; c.beginPath(); c.arc(g.x, g.y, 4 * u, 0, TAU); c.fill(); }
   else if (a.fx === 'blast') { const k = 1.5 * H.ease('easeOut', H.clamp01(p * 3)) * s; c.beginPath(); H.groundCircle(c, v, r.X, r.Y, Math.max(1, k)); c.globalAlpha = (.2 + .08 * Math.sin(frame * .3)) * env; c.fillStyle = a.color; c.fill(); c.globalAlpha = .9 * env; c.strokeStyle = a.color; c.lineWidth = 2.5 * u; c.stroke(); }

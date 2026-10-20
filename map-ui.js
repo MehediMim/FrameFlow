@@ -15,6 +15,8 @@ import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { createRelief, reliefSettings, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
+import { FORMATIONS, arrangementTargets, defaultObjectGap } from './map-formations.mjs';
+import { resolveLoc } from './map-engine.mjs?v=invert-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
 import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=invert-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey } from './map-timing.mjs';
@@ -34,6 +36,7 @@ let proj, sel = null, frame = 0, playing = false, loop = true, raf, startTime, s
 let undoStack = [], redoStack = [], geo = null, geoState = 'idle', geoError = '', pick = null, exporting = false, lastView = null, drag = null;
 let pathDraw = null, pathDrag = null; // pathDraw = { id } while points of a travel path are being clicked on the map
 let previewCamera = null, mapPan = null;
+let arrangeSelection = new Set(), arrangeGap = 80;
 
 // ------------------------------------------------------------------ helpers
 const items = () => [...proj.shots].sort((a, b) => a.start - b.start).concat(proj.actions);
@@ -347,8 +350,8 @@ function renderInspector() {
   h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
   h += '<p class="mini-label">' + (shot && it.preset === 'keyframed' ? 'Edit the camera at the playhead. Changes create keyframes automatically. Choose a property to see and retime its diamonds.' : 'The bar controls when this item appears and disappears. Drag the two centered diamonds to set when its animation starts and finishes.') + '</p>' + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
-  if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
-  box.innerHTML = h; bindInspector(it);
+  if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it) + (it.type === 'object' ? objectArrangementFields(it) : '');
+  box.innerHTML = h; bindInspector(it); if (it.type === 'object') bindObjectArrangement();
 }
 function bannerFields(a) {
   return `<div class="m-badge"><span class="mini-label">Flag artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden><p class="mini-label">Upload your artwork. The cloth hangs from a rigid crossbar and waves in the wind. Its proportions follow your uploaded image.</p>`
@@ -392,9 +395,55 @@ async function shrinkImage(file, max = 512) {
     return out;
   } finally { URL.revokeObjectURL(url); }
 }
+function formationFields(a) {
+  return '<div class="section-title m-sep">FORMATION</div>' + F.sel('formation', 'Arrange copies', a.formation || 'grid', Object.entries(FORMATIONS))
+    + (['grid','staggered'].includes(a.formation || 'grid') ? F.num('formationCols', 'Columns (0 = automatic)', a.formationCols ?? 0, 0, 100) + F.sel('formationAlign', 'Last row alignment', a.formationAlign || 'center', [['left','Left'],['center','Center'],['right','Right']]) : '')
+    + F.range('formationAngle', 'Formation angle', a.formationAngle ?? 0, -180, 180, 5, x => x + ' degrees')
+    + (a.glyph === 'image' ? '' : F.range('objectAngle', a.formation === 'wall' ? 'Extra facing angle' : 'Object facing angle', a.objectAngle ?? 0, -180, 180, 5, x => x + ' degrees'))
+    + '<p class="mini-label">Count creates copies within this item. Formation rotates their positions; facing rotates each illustration. Joined wall segments also follow the formation angle.</p>';
+}
+function effectPicker(fx) {
+  const options = battle => Object.entries(EFFECTS).filter(([,e])=>!!e.battle===battle).map(([key,e])=>`<option value="${key}" ${key===fx?'selected':''}>${esc(e.label)}</option>`).join('');
+  return `<label>Effect<select data-mf="fx" data-t="sel"><optgroup label="Battle &amp; siege">${options(true)}</optgroup><optgroup label="General effects">${options(false)}</optgroup></select></label>`;
+}
+function battleFields(a) {
+  return F.range('battleAngle','Direction',a.battleAngle??0,-180,180,5,x=>x+' degrees')
+    + F.num('battleIntensity','Intensity / number of shots',a.battleIntensity??5,1,12)
+    + F.range('battleRange','Reach / spread area',a.battleRange??180,40,800,10,x=>x+' px')
+    + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees');
+}
+function objectArrangementFields(currentObject) {
+  const objects=proj.actions.filter(a=>a.type==='object');
+  if(objects.length<2)return '<p class="mini-label">Add another Object to align or distribute separate items.</p>';
+  arrangeSelection=new Set([...arrangeSelection].filter(id=>objects.some(a=>a.id===id)));
+  if(!arrangeSelection.size)arrangeSelection.add(currentObject.id);
+  const buttons=[['left','Left'],['centerX','Center X'],['right','Right'],['top','Top'],['centerY','Center Y'],['bottom','Bottom'],['distributeX','Distribute X'],['distributeY','Distribute Y'],['row','Row'],['column','Column'],['grid','Grid'],['circle','Circle']];
+  return `<details class="m-arrange"><summary class="section-title">ARRANGE SEPARATE OBJECTS</summary><p class="mini-label">Select items below. Align their starting anchors in the current camera view. Movement routes shift with each object.</p><div class="m-arrange-list">${objects.map(a=>`<label class="m-chk"><input type="checkbox" data-arrange-id="${esc(a.id)}" ${arrangeSelection.has(a.id)?'checked':''}>${esc(a.name)}</label>`).join('')}</div><div class="two"><button type="button" data-arrange-select="all">Select all</button><button type="button" data-arrange-select="none">Clear</button></div><label>Spacing<input type="number" data-arrange-gap min="0" max="1000" value="${arrangeGap}"></label><div class="m-arrange-buttons">${buttons.map(([key,title])=>`<button type="button" data-arrange-op="${key}" ${arrangeSelection.size<2?'disabled':''}>${title}</button>`).join('')}</div></details>`;
+}
+function bindObjectArrangement() {
+  const box=$('#mInspector .m-arrange');if(!box)return;
+  box.querySelectorAll('[data-arrange-id]').forEach(el=>el.onchange=()=>{if(el.checked)arrangeSelection.add(el.dataset.arrangeId);else arrangeSelection.delete(el.dataset.arrangeId);box.querySelectorAll('[data-arrange-op]').forEach(button=>button.disabled=arrangeSelection.size<2);});
+  box.querySelectorAll('[data-arrange-select]').forEach(el=>el.onclick=()=>{arrangeSelection=new Set(el.dataset.arrangeSelect==='all'?proj.actions.filter(a=>a.type==='object').map(a=>a.id):[]);box.querySelectorAll('[data-arrange-id]').forEach(input=>input.checked=arrangeSelection.has(input.dataset.arrangeId));box.querySelectorAll('[data-arrange-op]').forEach(button=>button.disabled=arrangeSelection.size<2);});
+  box.querySelector('[data-arrange-gap]').onchange=e=>{arrangeGap=clamp(Number(e.target.value)||0,0,1000);e.target.value=arrangeGap;};
+  box.querySelectorAll('[data-arrange-op]').forEach(el=>el.onclick=()=>arrangeObjects(el.dataset.arrangeOp));
+}
+function arrangeObjects(operation) {
+  if(!geo||!lastView)return;
+  const selected=proj.actions.filter(a=>a.type==='object'&&arrangeSelection.has(a.id));
+  if(selected.length<2)return;
+  const points=selected.map(a=>{const loc=a.mode==='path'&&a.path?.length?{kind:'point',name:'Path start',...a.path[0]}:a.place,r=resolveLoc(geo,loc,lastView.cx);if(!r)return null;const q=projectPoint(lastView,r.X,r.Y);return{...q,id:a.id,lon:xToLon(r.X),lat:yToLat(r.Y)};});
+  if(points.some(p=>!p||p.z<=lastView.near)){notify('Keep selected starting positions in front of the camera to arrange them.');return;}
+  const normalize=lon=>((lon+180)%360+360)%360-180;
+  const targets=arrangementTargets(points,operation,arrangeGap*lastView.unit);
+  const changes=targets.map((target,i)=>{const loc=screenToLonLat(lastView,target.x,target.y);if(!loc)return null;const dx=normalize(loc.lon-points[i].lon),dy=loc.lat-points[i].lat,a=selected[i];
+    const shift=location=>{const r=resolveLoc(geo,location);if(!r)return location;return{kind:'point',name:location.name||'Position',lon:normalize(xToLon(r.X)+dx),lat:clamp(yToLat(r.Y)+dy,-85,85)};};
+    const patch={place:shift(a.place)};if(a.from)patch.from=shift(a.from);if(a.to)patch.to=shift(a.to);if(a.path)patch.path=a.path.map(p=>({...p,lon:normalize(p.lon+dx),lat:clamp(p.lat+dy,-85,85)}));return{a,patch};});
+  if(changes.some(c=>!c)){notify('That arrangement crosses the camera horizon. Reduce spacing or tilt.');return;}
+  pause();checkpoint();for(const {a,patch} of changes)Object.assign(a,patch);changed();notify('Object positions arranged');
+}
 function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup></select></label>`;
+  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup></select></label>`;
 }
 function actionFields(a) {
   switch (a.type) {
@@ -405,8 +454,8 @@ function actionFields(a) {
       const country = ['country','region','regions'].includes(a.target.kind);
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || reliefSettings(proj.terrain).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? reliefSettings(proj.terrain).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
-    case 'object': return objectPicker(a.glyph) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? (a.glyph === 'banner' ? 160 : a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? (a.glyph === 'banner' ? 160 : a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) : '') + (a.glyph === 'image' ? badgeFields(a) : a.glyph === 'banner' ? bannerFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
-    case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'object': return objectPicker(a.glyph) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + formationFields(a) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? defaultObjectGap(a), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? defaultObjectGap(a), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) : '') + (a.glyph === 'image' ? badgeFields(a) : a.glyph === 'banner' ? bannerFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
@@ -622,7 +671,8 @@ function bindInspector(it) {
       if (key === 'count') v = Math.round(v);
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
-      it[key] = v; changed(); if (key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
+      it[key] = v; changed(); if (key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });

@@ -3,6 +3,7 @@
 import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { animationKeysOf } from './map-timing.mjs';
+import { objectOffsets, FORMATIONS } from './map-formations.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
 import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
@@ -401,7 +402,7 @@ export function lonLatOf(geo, loc) {
   if (['country', 'region'].includes(loc.kind)) { const f = geo.byName.get(loc.name); return f ? { lon: f.center.lon, lat: f.center.lat } : null; }
   return Number.isFinite(loc.lat) && Number.isFinite(loc.lon) ? { lon: loc.lon, lat: loc.lat } : null;
 }
-function resolveLoc(geo, loc, nearX) {
+export function resolveLoc(geo, loc, nearX) {
   let X, Y, bbox = null;
   if (['country', 'region', 'regions'].includes(loc?.kind)) {
     const f = loc.kind === 'regions' ? featureForTarget(geo,loc) : geo.byName.get(loc.name); if (!f) return null;
@@ -1569,11 +1570,9 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
     else if (a.type === 'object') tag(a, () => {
       if (!actAlpha(a, frame)) return;
-      const count = Math.max(1, Math.min(100, Math.round(a.count || 1))), cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols);
-      const defaultGap = a.glyph === 'banner' ? 160 : a.glyph === 'image' ? 104 : 64;
-      const gapX = (a.gapX ?? defaultGap) * (a.size || 1) * v.unit, gapY = (a.gapY ?? defaultGap) * (a.size || 1) * v.unit;
-      for (let i = 0; i < count; i++) {
-        const dx = ((i % cols) - (Math.min(cols, count - Math.floor(i / cols) * cols) - 1) / 2) * gapX, dy = (Math.floor(i / cols) - (rows - 1) / 2) * gapY;
+      const offsets = objectOffsets(a), scale = (a.size || 1) * v.unit;
+      for (let i = 0; i < offsets.length; i++) {
+        const dx = offsets[i].x * scale, dy = offsets[i].y * scale;
         ctx.save(); ctx.translate(dx, dy);
         const itemLabels = []; drawObject(OBJ_H, ctx, v, geo, { ...a, showLabel: a.showLabel && i === 0 }, frame, itemLabels);
         ctx.restore(); labels.push(...itemLabels.map(l => ({ ...l, x: l.x + dx, y: l.y + dy, groundOffset: { x: (l.groundOffset?.x || 0) + dx, y: (l.groundOffset?.y || 0) + dy } })));
@@ -1765,12 +1764,20 @@ export function validateMapProject(p) {
       for (const k of ['bannerWind', 'bannerPole', 'bannerPlaque']) if (a[k] !== undefined && typeof a[k] !== 'boolean') throw Error('Invalid banner setting.');
       for (const [k,lo,hi] of [['bannerWindStrength',0,1],['bannerWindSpeed',.1,3],['bannerAspect',.35,2.5]]) if (a[k] !== undefined && !num(a[k],lo,hi)) throw Error('Invalid banner setting.');
       if (a.bannerPoleColor !== undefined && !col(a.bannerPoleColor)) throw Error('Invalid pole color.');
+      if (a.formation !== undefined && !Object.hasOwn(FORMATIONS,a.formation)) throw Error('Invalid object formation.');
+      if (a.formationAlign !== undefined && !['left','center','right'].includes(a.formationAlign)) throw Error('Invalid formation alignment.');
+      if (a.formationCols !== undefined && (!Number.isInteger(a.formationCols) || !num(a.formationCols,1,100))) throw Error('Invalid formation columns.');
+      for (const key of ['formationAngle','objectAngle']) if (a[key] !== undefined && !num(a[key],-360,360)) throw Error('Invalid object angle.');
       for (const key of ['gapX', 'gapY']) if (a[key] !== undefined && !num(a[key], 0, 1000)) throw Error('Invalid object spacing.');
       if (a.count !== undefined && (!Number.isInteger(a.count) || a.count < 1 || a.count > 100)) throw Error('Object count must be between 1 and 100.');
       if ((a.moveStart !== undefined || a.moveEnd !== undefined) && (!Number.isSafeInteger(a.moveStart) || !Number.isSafeInteger(a.moveEnd) || a.moveStart < a.start || a.moveEnd <= a.moveStart || a.moveEnd > a.start + a.dur)) throw Error('Movement keyframes must be inside the object timeline bar, with the end after the start.');
       if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid object destination.');
       if (!Object.hasOwn(OBJECT_ICONS, a.glyph) || (a.enter !== undefined && !inList(OBJECT_ENTER, a.enter)) || (a.idle !== undefined && !inList(OBJECT_IDLE, a.idle)) || (a.exit !== undefined && !inList(OBJECT_EXIT, a.exit)) || (a.mode !== undefined && !['stay', 'move', 'path'].includes(a.mode))) throw Error('Invalid object.');
       if (a.mode === 'path') checkPath(a); else if (!isLoc(a.place)) throw Error('Invalid object location.');
+    }
+    if (a.type === 'effect') {
+      for (const [key,lo,hi] of [['battleAngle',-360,360],['battleRange',40,800],['battleSpread',0,120]]) if (a[key] !== undefined && !num(a[key],lo,hi)) throw Error('Invalid battle effect setting.');
+      if (a.battleIntensity !== undefined && (!Number.isInteger(a.battleIntensity) || !num(a.battleIntensity,1,12))) throw Error('Invalid battle intensity.');
     }
     if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
     if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); }

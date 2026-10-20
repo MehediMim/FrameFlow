@@ -1,6 +1,7 @@
 // Map objects, effects and shapes: units, places and hazards you can place, move and animate
 // (war maps, disasters, logistics...). Everything is drawn as vector shapes in code, so it looks the
 // same on every device and in exported video. The engine passes its helpers in as `H`.
+import { drawBanner } from './map-banner.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
 const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = Math.max(1, s * .05); c.stroke(); };
 const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = fill; c.fill(); stroke(c, s); };
@@ -13,6 +14,7 @@ const mirrorY = pts => pts.map(([x, y]) => [x, -y]);
 // rot: turns fully to its heading when it moves; otherwise it just mirrors. air: floats above the ground.
 export const OBJECT_ICONS = {
   image: { label: 'Image badge', color: '#ffffff' },
+  banner: { label: 'Hanging image flag', color: '#b89963' },
   soldier: { label: 'Soldier', color: '#5b7f3a', draw: (c, s, col) => { rect(c, -.2, .2, .16, .55, dark, s); rect(c, .04, .2, .16, .55, dark, s); rect(c, -.22, -.42, .44, .62, col, s); circ(c, 0, -.6, .2, '#e0b88f', s); poly(c, [[-.25, -.62], [.25, -.62], [.2, -.84], [-.2, -.84]], col, s); seg(c, .1, -.15, .85, -.4, dark, .1, s); } },
   tank: { label: 'Tank', color: '#6b7f4a', draw: (c, s, col) => { rect(c, -.9, .25, 1.8, .4, dark, s, .2); poly(c, [[-.85, .25], [.85, .25], [.7, -.1], [-.7, -.1]], col, s); rect(c, -.35, -.42, .7, .34, col, s, .12); rect(c, .3, -.34, .75, .12, metal, s); for (let x = -.65; x <= .66; x += .26) circ(c, x, .45, .12, metal, s); } },
   warship: { label: 'Warship', color: '#8a9aa6', draw: (c, s, col) => { poly(c, [[-1, 0], [1, 0], [.8, .4], [-.85, .4]], col, s); rect(c, -.3, -.35, .55, .35, light, s); rect(c, -.1, -.68, .2, .33, dark, s); rect(c, .4, -.2, .5, .1, dark, s); seg(c, -.6, 0, -.6, -.5, dark, .05, s); } },
@@ -76,10 +78,12 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   c.save();
   c.globalAlpha = alpha * .28; c.fillStyle = '#000'; c.beginPath(); c.ellipse(g0.x, g0.y, s * .7 * sc, s * .18 * sc, 0, 0, TAU); c.fill();
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air ? 0 : s * .5 * sc) + dy);
-  if (ang !== null) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
-  c.rotate(rot); c.scale(sc, sc); ic.draw(c, s, a.color, t);
+  if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
+  c.rotate(rot); c.scale(sc, sc);
+  if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
+  else ic.draw(c, s, a.color, t);
   c.restore();
-  if (a.showLabel) { const off = -s * 1.5 - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
+  if (a.showLabel) { const off = -s * (a.glyph==='banner'?6:1.5) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
 }
 
 // ---------------------------------------------------------------- effects

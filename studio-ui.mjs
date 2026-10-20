@@ -29,7 +29,7 @@ function arrangeSettings(panel, prefix) {
     section('Composition', [size, timing]);
     if(prefix === 'motion') section('Appearance', [control('background')]);
     if(prefix === 'm') {
-      section('Map appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSection'), document.getElementById('mLabelStyle')]);
+      section('Map appearance', [control('mTheme'), control('mImagery'), document.getElementById('mTerrainBox'), document.getElementById('mAtlasLabels'), control('mGrat'), document.getElementById('mTextureSection'), document.getElementById('mLabelStyle')]);
       section('Country details', [document.getElementById('mAreaBox')]);
       section('Starting view', [control('mRegion'), document.getElementById('mStartZoom')?.closest('.two'), control('mStartBearing')]);
     }

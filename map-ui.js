@@ -13,6 +13,8 @@ import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
+import { createRelief, reliefSettings, RELIEF_DEFAULTS } from './map-relief.mjs';
+import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
 import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=invert-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey } from './map-timing.mjs';
@@ -72,7 +74,7 @@ async function ensureGeo() {
   geoState = 'loading'; draw();
   try {
     const [hi, lo] = await Promise.all(['countries-50m.json', 'countries-110m.json'].map(f => fetch('map-data/' + f).then(r => { if (!r.ok) throw Error(`${f}: HTTP ${r.status}`); return r.json(); })));
-    geo = buildGeo(hi, lo); geo.cities = CITIES; geo.imagery = createImagery(); let tileDraw = 0; geo.imagery.onTile = () => { if (!tileDraw) tileDraw = requestAnimationFrame(() => { tileDraw = 0; if (!exporting) draw(); }); }; geoState = 'ready'; buildLists();
+    geo = buildGeo(hi, lo); geo.cities = CITIES; geo.imagery = createImagery(); geo.relief = createRelief(); let tileDraw = 0; geo.relief.onTile = geo.imagery.onTile = () => { if (!tileDraw) tileDraw = requestAnimationFrame(() => { tileDraw = 0; if (!exporting) { draw(); updateTerrainStatus(); } }); }; geoState = 'ready'; buildLists();
   } catch (e) { geoState = 'error'; geoError = e.message || String(e); }
   renderAll();
 }
@@ -273,6 +275,7 @@ function addAction(type) {
   pause(); checkpoint();
   const a = makeAction(type, frame); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
   if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
+  if (type === 'label') { const [lon, lat] = centerLonLat(); Object.assign(a, { labelPlacement: 'map', place: { kind: 'point', name: 'Map position', lon: ((lon + 180) % 360 + 360) % 360 - 180, lat }, offsetX: 0, offsetY: 0, labelStyle: { ...DEFAULT_LABEL_STYLE, ...LABEL_PRESETS.atlasGround.style } }); }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
   if (type === 'shape') startPathDraw(a.id);
 }
@@ -347,6 +350,18 @@ function renderInspector() {
   if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
   box.innerHTML = h; bindInspector(it);
 }
+function bannerFields(a) {
+  return `<div class="m-badge"><span class="mini-label">Flag artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden><p class="mini-label">Upload your artwork. The cloth hangs from a rigid crossbar and waves in the wind. Its proportions follow your uploaded image.</p>`
+    + F.chk('bannerWind', 'Wind animation', a.bannerWind !== false)
+    + F.range('bannerWindStrength', 'Wind strength', a.bannerWindStrength ?? .45, 0, 1, .05, x => Math.round(x * 100) + '%')
+    + F.range('bannerWindSpeed', 'Wind speed', a.bannerWindSpeed ?? 1, .1, 3, .1, x => x.toFixed(1) + 'x')
+    + F.range('bannerAspect', 'Cloth width / height', a.bannerAspect ?? .75, .35, 2.5, .05, x => x.toFixed(2))
+    + F.color('color', 'Cloth background', a.color)
+    + F.chk('bannerPole', 'Show wooden pole', a.bannerPole !== false)
+    + F.color('bannerPoleColor', 'Wood color', a.bannerPoleColor || '#65503a')
+    + F.chk('bannerPlaque', 'Show title plaque', a.bannerPlaque !== false)
+    + F.text('bannerTitle', 'Plaque title', a.bannerTitle || '', 100, 'e.g. Richard Hakluyt') + '</div>';
+}
 function badgeFields(a) {
   const b = badgeOf(a);
   return `<div class="m-badge"><span class="mini-label">Picture</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image…' : 'Choose image…'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden>${a.image ? '' : '<p class="mini-label">No picture yet. Choose a photo, logo or flag.</p>'}`
@@ -379,14 +394,14 @@ async function shrinkImage(file, max = 512) {
 }
 function actionFields(a) {
   switch (a.type) {
-    case 'label': return F.text('text', 'Text', a.text, 160, 'Your label');
+    case 'label': return F.text('text', 'Text', a.text, 160, 'Your label') + F.sel('labelPlacement', 'Anchor', a.labelPlacement || 'screen', [['map', 'Geographic position'], ['screen', 'Canvas position']]) + (a.labelPlacement === 'map' ? F.loc('place', 'Position on map', a.place, 'place') + F.num('offsetX', 'Horizontal offset', a.offsetX ?? 0, -1000, 1000) + F.num('offsetY', 'Vertical offset', a.offsetY ?? 0, -1000, 1000) : F.num('x', 'Horizontal position (%)', a.x ?? 50, 0, 100) + F.num('y', 'Vertical position (%)', a.y ?? 15, 0, 100));
     case 'border': return (regionTarget(a) ? regionFields(a) : F.loc('target', 'Country / region', a.target, 'border') + '<p class="mini-label">Type a country or region to choose specific ones. You can then add more.</p>') + (regionTarget(a) && !a.borderPartial ? F.num('borderFrom','Border animation start (%)',a.borderFrom ?? 0,0,100,.1) + '<button type="button" data-borderpoint="borderFrom">Pick start on border</button>' + F.chk('borderReverse','Reverse direction',a.borderReverse) : '') + F.chk('borderPartial','Animate part of the border',a.borderPartial) + (a.borderPartial ? `<div class="two">${F.num('borderFrom','From (%)',a.borderFrom ?? 0,0,100,.1)}${F.num('borderTo','To (%)',a.borderTo ?? 100,0,100,.1)}</div><div class="two"><button type="button" data-borderpoint="borderFrom">Pick start on border</button><button type="button" data-borderpoint="borderTo">Pick end on border</button></div>` + F.chk('borderReverse','Reverse direction',a.borderReverse) + '<p class="mini-label">Click near the outline to set each endpoint. Start and end follow the same outline; each island has its own outline.</p>' : '') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + (a.borderPartial ? '' : F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%')) + F.chk('invert', 'Invert (start fully drawn, then shrink away)', a.invert);
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
     case 'highlight': {
       const country = ['country','region','regions'].includes(a.target.kind);
-      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + F.color('color', 'Color', a.color) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || reliefSettings(proj.terrain).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? reliefSettings(proj.terrain).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
-    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? (a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) : '') + (a.glyph === 'image' ? badgeFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
+    case 'object': return F.sel('glyph', 'Object', a.glyph, Object.entries(OBJECT_ICONS).map(([k, i]) => [k, i.label])) + F.num('count', 'Count', a.count ?? 1, 1, 100, 1) + '<div class="two">' + F.num('gapX', 'Horizontal gap', a.gapX ?? (a.glyph === 'banner' ? 160 : a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + F.num('gapY', 'Vertical gap', a.gapY ?? (a.glyph === 'banner' ? 160 : a.glyph === 'image' ? 104 : 64), 0, 1000, 1) + '</div><p class="mini-label">Distance between object centers in pixels at 1? size. Applies when Count is greater than 1.</p>' + F.sel('__pinMove', 'Position', a.mode || 'stay', Object.entries(PIN_MODES)) + (a.mode === 'path' ? pathFields(a) : F.loc('place', a.mode === 'move' ? 'From' : 'Location', a.place, 'place') + (a.mode === 'move' ? F.loc('to', 'To', a.to, 'place') : '')) + (['move', 'path'].includes(a.mode) ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) : '') + (a.glyph === 'image' ? badgeFields(a) : a.glyph === 'banner' ? bannerFields(a) : F.color('color', 'Color', a.color)) + F.range('size', 'Size', a.size, .4, 4, .1, x => x + '×') + (a.glyph === 'image' ? '' : F.sel('enter', 'Appears', a.enter, OBJECT_ENTER) + F.sel('idle', 'While visible', a.idle, OBJECT_IDLE) + F.sel('exit', 'Disappears', a.exit, OBJECT_EXIT)) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'effect': return F.sel('fx', 'Effect', a.fx, Object.entries(EFFECTS).map(([k, e]) => [k, e.label])) + (a.fx === 'strike' ? F.loc('from', 'Launch from', a.from, 'place') + F.loc('place', 'Target', a.place, 'place') : F.loc('place', 'Location', a.place, 'place')) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
     case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
     case 'pin': {
@@ -603,7 +618,7 @@ function bindInspector(it) {
       if (key === 'count') v = Math.round(v);
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
-      it[key] = v; changed(); if (key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      it[key] = v; changed(); if (key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
@@ -628,7 +643,7 @@ function bindInspector(it) {
   });
   { const file = $('#mInspector [data-badgefile]'), choose = $('#mInspector [data-badgeimg]'), clear = $('#mInspector [data-badgeclear]');
     if (choose) choose.onclick = () => file.click();
-    if (file) file.onchange = async () => { const f = file.files[0]; file.value = ''; if (!f) return; try { const url = await shrinkImage(f); pause(); checkpoint(); it.image = url; changed(); renderInspector(); notify('Image added'); } catch (err) { notify(err.message || 'That image could not be used.'); } };
+    if (file) file.onchange = async () => { const f = file.files[0]; file.value = ''; if (!f) return; try { const url = await shrinkImage(f); pause(); checkpoint(); it.image = url; if (it.glyph === 'banner') { const img = new Image(); img.src = url; await img.decode(); it.bannerAspect = clamp(img.naturalWidth / img.naturalHeight, .35, 2.5); } changed(); renderInspector(); notify('Image added'); } catch (err) { notify(err.message || 'That image could not be used.'); } };
     if (clear) clear.onclick = () => { pause(); checkpoint(); delete it.image; changed(); renderInspector(); }; }
   $$('#mInspector [data-mopenset]').forEach(el => el.onclick = () => $('#mSettingsButton').click());
   const combine = $('#mInspector [data-mcombine]'); if (combine) combine.onchange = () => { if (combine.value === 'separate') splitRegions(it); };
@@ -644,17 +659,20 @@ function centerLonLat() { const l = screenToLonLat(lastView, proj.width / 2, pro
 // ------------------------------------------------------------------ label style (project-wide in Map settings, optional override per item)
 function labelStyleHtml(st, pre) {
   const o = (v, l, cur) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`;
-  const num = (k, label, min, max, step) => `<label>${label}<input data-ls="${k}" data-t="num" type="number" min="${min}" max="${max}" step="${step}" value="${Number(st[k])}"></label>`;
+  const num = (k, label, min, max, step) => `<label>${label}<input data-ls="${k}" data-t="num" type="number" min="${min}" max="${max}" step="${step}" value="${Number(st[k] ?? (k === 'referenceZoom' ? 3 : k === 'haloWidth' ? .26 : 0))}"></label>`;
   const chk = (k, label) => `<label class="m-chk"><input type="checkbox" data-ls="${k}" data-t="chk" ${st[k] ? 'checked' : ''}> ${label}</label>`;
   const color = (k, label) => `<label class="color-row">${label}<input type="color" data-ls="${k}" data-t="color" value="${esc(st[k])}"></label>`;
   const range = (k, label, min, max, step, fmt) => `<label>${label} <span class="m-val">${fmt(st[k])}</span><input data-ls="${k}" data-t="range" type="range" min="${min}" max="${max}" step="${step}" value="${st[k]}"></label>`;
   return `<label>Start from a style<select data-lspreset><option value="">Choose a preset…</option>${Object.entries(LABEL_PRESETS).map(([k, p]) => o(k, p.label, '')).join('')}</select></label>` +
     fontPickerHtml(pre + 'Font', 'Font', st.font) +
-    `<div class="two"><label>Weight<select data-ls="weight" data-t="int">${LABEL_WEIGHTS.map(([w, l]) => o(w, l, st.weight)).join('')}</select></label>${num('size', 'Size', 6, 80, 1)}</div>` +
+    `<div class="two"><label>Weight<select data-ls="weight" data-t="int">${LABEL_WEIGHTS.map(([w, l]) => o(w, l, st.weight)).join('')}</select></label>${num('size', 'Size', 6, 240, 1)}</div>` +
+    `<label>Orientation<select data-ls="placement" data-t="sel">${o('screen', 'Upright', st.placement)}${o('map', 'Flat on map', st.placement)}</select></label>` +
+    `<label>Zoom sizing<select data-ls="scaleMode" data-t="sel">${o('fixed', 'Keep text size fixed', st.scaleMode || 'fixed')}${o('world', 'Scale with the map', st.scaleMode)}</select></label>` +
+    (st.scaleMode === 'world' ? num('referenceZoom', 'Size measured at zoom', 0, 14, .1) : '') +
     `<label>Shape<select data-ls="shape" data-t="sel">${Object.entries(LABEL_SHAPES).map(([k, l]) => o(k, l, st.shape)).join('')}</select></label>` +
     chk('useTheme', 'Use the map style’s label colors') + (st.useTheme ? '' : color('text', 'Text color') + (st.shape === 'none' ? '' : color('bg', 'Background color') + range('bgAlpha', 'Background opacity', 0, 1, .05, x => Math.round(x * 100) + '%'))) +
     (st.shape === 'none' ? '' : `<div class="two">${num('borderW', 'Border width', 0, 8, .5)}${color('border', 'Border color')}</div>`) +
-    range('spacing', 'Letter spacing', 0, 40, 1, x => x + '%') + chk('italic', 'Italic') + chk('caps', 'ALL CAPS') + chk('halo', 'Outline around text') + chk('shadow', 'Soft shadow');
+    range('spacing', 'Letter spacing', 0, 40, 1, x => x + '%') + chk('italic', 'Italic') + chk('caps', 'ALL CAPS') + chk('halo', 'Outline around text') + (st.halo ? num('haloWidth', 'Outline thickness (relative to text)', 0, 1, .01) : '') + chk('shadow', 'Soft shadow');
 }
 /** Wires up the controls made by labelStyleHtml(); `get` returns the style object being edited, `replace` swaps it, `rerender` rebuilds the panel. */
 function bindLabelStyle(root, pre, get, replace, rerender) {
@@ -672,17 +690,43 @@ function bindLabelStyle(root, pre, get, replace, rerender) {
     el.onchange = () => {
       let v = val(); checkpoint();
       if (t === 'num') { const lo = Number(el.min), hi = Number(el.max); v = clamp(Number.isFinite(v) ? v : lo, lo, hi); el.value = v; }
-      get()[key] = v; changed(); if (key === 'useTheme' || key === 'shape') rerender();
+      get()[key] = v; changed(); if (key === 'useTheme' || key === 'shape' || key === 'halo' || key === 'scaleMode') rerender();
     };
   });
 }
 function renderLabelPanel() {
+  renderAtlasLabelPanel();
   let box = $('#mLabelStyle');
   if (!box) { box = document.createElement('div'); box.id = 'mLabelStyle'; $('#mImageryBox').after(box); }
   const wasOpen = box.querySelector('details')?.open;
   const st = labelStyleOf(proj);
   box.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">LABEL STYLE <span>Aa</span></summary><p class="mini-label">Applies to place names, route names, pins and highlights. Choose “2D · Attached to map” to lay labels flat on the map. Pick a different style on any item to override it.</p>${labelStyleHtml(st, 'mProjLbl')}</details>`;
   bindLabelStyle(box, 'mProjLbl', () => (proj.labelStyle ||= { ...DEFAULT_LABEL_STYLE }), v => { proj.labelStyle = v; }, renderLabelPanel);
+}
+function renderAtlasLabelPanel() {
+  let box = $('#mAtlasLabels');
+  if (!box) { box = document.createElement('div'); box.id = 'mAtlasLabels'; $('#mImageryBox').after(box); }
+  const open = box.querySelector('details')?.open, s = atlasLabelSettings(proj.atlasLabels);
+  const chk = (key, title) => `<label class="m-chk"><input type="checkbox" data-atlas="${key}" ${s[key] ? 'checked' : ''}> ${title}</label>`;
+  const num = (key, title, min, max, step = 1) => `<label>${title}<input type="number" data-atlas="${key}" min="${min}" max="${max}" step="${step}" value="${s[key]}"></label>`;
+  const color = (key, title) => `<label>${title}<input type="color" data-atlas="${key}" value="${s[key]}"></label>`;
+  box.innerHTML = `<details ${open ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">COUNTRY &amp; OCEAN LABELS</summary>
+    <p class="mini-label">Names fit each country’s mainland shape and follow its natural direction. Use the country size multiplier to adjust all names together. Fixed zoom sizing preserves these proportions as you zoom.</p>
+    ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
+    ${fontPickerHtml('mAtlasFont', 'Font', s.font)}
+    <div class="two">${num('size', 'Country size multiplier (30 = normal)', 6, 240)}${num('oceanSize', 'Ocean text size', 6, 240)}</div>
+    <label>Orientation<select data-atlas="placement"><option value="map" ${s.placement === 'map' ? 'selected' : ''}>Flat on map</option><option value="screen" ${s.placement === 'screen' ? 'selected' : ''}>Upright</option></select></label>
+    <label>Zoom sizing<select data-atlas="scaleMode"><option value="fixed" ${s.scaleMode === 'fixed' ? 'selected' : ''}>Keep text size fixed</option><option value="world" ${s.scaleMode === 'world' ? 'selected' : ''}>Scale with the map</option></select></label>
+    ${s.scaleMode === 'world' ? num('referenceZoom', 'Size measured at zoom', 0, 14, .1) : ''}
+    <div class="two">${color('text', 'Text color')}${color('outline', 'Outline color')}</div>
+    ${num('haloWidth', 'Outline thickness (relative to text)', 0, 1, .01)}${num('opacity', 'Opacity', 0, 1, .05)}${num('spacing', 'Letter spacing (%)', 0, 40)}
+    <p class="mini-label">Disable overlap reduction to show every visible country name. Add a Map label for custom historical names.</p></details>`;
+  const set = (key, value) => { checkpoint(); proj.atlasLabels = { ...proj.atlasLabels, [key]: value }; changed(); renderAtlasLabelPanel(); };
+  bindFontPicker('mAtlasFont', font => set('font', font));
+  box.querySelectorAll('[data-atlas]').forEach(el => el.onchange = () => {
+    const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? clamp(Number.isFinite(el.valueAsNumber) ? el.valueAsNumber : Number(el.min), Number(el.min), Number(el.max)) : el.value;
+    set(el.dataset.atlas, value);
+  });
 }
 function labelFields(a) {
   if (!['plane', 'highlight', 'pin', 'label', 'object'].includes(a.type)) return '';
@@ -820,6 +864,7 @@ function syncMapDuration() {
 function renderSettings() {
   $('#mProjectName').value = proj.name; $('#mFps').value = proj.fps; $('#mFpsLabel').textContent = proj.fps + ' FPS';
   syncMapDuration(); $('#mSize').value = proj.width + ',' + proj.height; $('#mCompLabel').textContent = `${proj.width} × ${proj.height}`;
+  renderTerrainSettings();
   $('#mTheme').value = proj.theme; $('#mGrat').checked = !!proj.graticule;
   { const on = !!THEMES[proj.theme]?.imagery; $('#mImageryBox').hidden = !on; $('#mImagery').value = proj.imagery || DEFAULT_IMAGERY; $('#mImageryNote').textContent = on ? (proj.imagery === 'esri' ? 'Sharp to street level. Esri licence terms apply to published videos.' : 'Public-domain NASA imagery. Gets soft past about zoom 6.') : ''; }
   renderAreaSettings();
@@ -856,6 +901,22 @@ function renderAreaSettings() {
   $('#mRegion').disabled = $('#mStartZoom').disabled = false;
   $('#mAreaNote').textContent = countries.length ? 'The world map stays as it is. Only the countries listed above get detailed boundaries, and each loads only when added.' : 'Pick a country and press Add country details. Nothing extra loads until you do.';
 }
+function renderTerrainSettings() {
+  $('#mTerrainBox').hidden = !THEMES[proj.theme]?.relief;
+  const settings = reliefSettings(proj.terrain);
+  for (const [key, value] of Object.entries(settings)) {
+    if (!(key in RELIEF_DEFAULTS)) continue;
+    const id = '#mTerrain' + key[0].toUpperCase() + key.slice(1), el = $(id);
+    if (el.type === 'checkbox') el.checked = value; else el.value = value;
+    const output = $(id + 'Value');
+    if (output) output.textContent = ['azimuth', 'altitude'].includes(key) ? value + '\u00b0' : key === 'exaggeration' ? value.toFixed(1) + '\u00d7' : Math.round(value * 100) + '%';
+  }
+  updateTerrainStatus();
+}
+function updateTerrainStatus() {
+  const el = $('#mTerrainStatus');
+  if (el) el.textContent = geo?.relief?.failedCount() ? 'Some elevation tiles could not load. Available coarser terrain stays visible; check your connection and reload to retry.' : 'DEM relief \u00b7 visible tiles only \u00b7 up to zoom 14';
+}
 function bindSettings() {
   const edit = fn => e => { pause(); checkpoint(); fn(e.target); saveLocal(); renderAll(); };
   $('#mProjectName').onchange = edit(el => proj.name = el.value.trim().slice(0, 100) || 'Untitled map');
@@ -864,6 +925,11 @@ function bindSettings() {
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   $('#mTheme').onchange = edit(el => proj.theme = el.value);
   $('#mImagery').onchange = edit(el => proj.imagery = el.value);
+  for (const key of Object.keys(RELIEF_DEFAULTS)) {
+    const el = $('#mTerrain' + key[0].toUpperCase() + key.slice(1));
+    el.onchange = edit(input => { proj.terrain = { ...proj.terrain, [key]: input.type === 'checkbox' ? input.checked : input.type === 'range' ? +input.value : input.value }; });
+  }
+  $('#mTerrainReset').onclick = edit(() => { delete proj.terrain; });
   const area = patch => { proj.area = { ...DEFAULT_AREA, ...(proj.area || {}), ...patch }; };
   $('#mAreaMode').onchange = edit(el => { area({ mode: el.value }); if (el.value === 'country' && geo && !geo.byName.has(areaOf(proj).country)) area({ country: DEFAULT_AREA.country }); });
   $('#mAreaCountry').onchange = edit(el => area({ country: el.value }));
@@ -1013,9 +1079,10 @@ async function exportVideo() {
     await loadFonts(mapFontsUsed(snapshot)); await document.fonts.ready;
     const video = await exportMapVideo({ audio: getAudioSnapshot('map'), canvas: c, fps: snapshot.fps, frames: snapshot.frames,
       draw: async f => {
-        if (THEMES[snapshot.theme]?.imagery) { // wait for this frame's satellite tiles, and start fetching the next frames' tiles
-          await geo.imagery.ready(imageryNeeds(snapshot, geo, c.width, c.height, f), () => !exporting);
-          geo.imagery.prefetch(imageryNeeds(snapshot, geo, c.width, c.height, Math.min(f + 8, snapshot.frames - 1)));
+        if (THEMES[snapshot.theme]?.imagery || THEMES[snapshot.theme]?.relief) {
+          const provider = THEMES[snapshot.theme]?.relief ? geo.relief : geo.imagery;
+          await provider.ready(imageryNeeds(snapshot, geo, c.width, c.height, f), () => !exporting);
+          provider.prefetch(imageryNeeds(snapshot, geo, c.width, c.height, Math.min(f + 8, snapshot.frames - 1)));
         }
         drawMap(ec, c.width, c.height, snapshot, f, geo);
       },
@@ -1042,7 +1109,7 @@ function bindToolbar() {
     e.target.value = '';
   };
   $('#mExport').onclick = exportVideo;
-  $('#mSnapshot').onclick = async () => { if (!geo || (!await ensureDetail() && requiresDetail())) return; await preloadBadges(proj); const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
+  $('#mSnapshot').onclick = async () => { if (!geo || (!await ensureDetail() && requiresDetail())) return; await preloadBadges(proj); await loadFonts(mapFontsUsed(proj)); await document.fonts.ready; const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; if (THEMES[proj.theme]?.relief) await geo.relief.ready(imageryNeeds(proj, geo, c.width, c.height, frame)); drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
   $('#mPlay').onclick = play; $('#mStart').onclick = () => { pause(); setFrame(0); }; $('#mEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
   $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };

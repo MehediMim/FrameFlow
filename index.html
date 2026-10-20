@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=6"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=preview-controls-1"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=6"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=map-settings-layout-2"></head><body class="landing">
 <style>
 /* Support links shared by both studios and landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -287,6 +287,25 @@ if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('
 </div>
 <label>Map style <select id="mTheme"></select></label>
 <label id="mImageryBox" hidden>Imagery source <select id="mImagery"></select><span class="mini-label" id="mImageryNote"></span></label>
+<details id="mTerrainBox" hidden>
+<summary class="section-title">Terrain &amp; Relief</summary>
+<p class="mini-label">Elevation tiles load for the visible map. Detail varies by location. Colors and shading apply to previews and exports.</p>
+<label>Sun direction <input id="mTerrainAzimuth" type="range" min="0" max="360" step="5"><output id="mTerrainAzimuthValue"></output></label>
+<label>Sun altitude <input id="mTerrainAltitude" type="range" min="5" max="85" step="1"><output id="mTerrainAltitudeValue"></output></label>
+<label>Relief strength <input id="mTerrainStrength" type="range" min="0" max="1" step=".05"><output id="mTerrainStrengthValue"></output></label>
+<label>Terrain depth <input id="mTerrainExaggeration" type="range" min=".5" max="6" step=".1"><output id="mTerrainExaggerationValue"></output></label>
+<label>Ambient shading <input id="mTerrainAmbient" type="range" min="0" max="1" step=".05"><output id="mTerrainAmbientValue"></output></label>
+<label class="m-chk"><input id="mTerrainMultidirectional" type="checkbox"> Softer multidirectional lighting</label>
+<label class="m-chk"><input id="mTerrainBathymetry" type="checkbox"> Ocean depth shading</label>
+<div class="two"><label>Lowlands · 0 m<input id="mTerrainLow" type="color"></label><label>Uplands · 1,800 m<input id="mTerrainMiddle" type="color"></label></div>
+<label>Peaks · 6,000 m<input id="mTerrainHigh" type="color"></label>
+<div class="two"><label>Shallow water<input id="mTerrainShallow" type="color"></label><label>Deep ocean<input id="mTerrainDeep" type="color"></label></div>
+<label>Highlight color<input id="mTerrainHighlightColor" type="color"></label>
+<label>Highlight opacity<input id="mTerrainHighlightOpacity" type="range" min="0" max="1" step=".05"><output id="mTerrainHighlightOpacityValue"></output></label>
+<button id="mTerrainReset" type="button">Reset terrain settings</button>
+<p class="mini-label" id="mTerrainStatus" role="status"></p>
+<a href="terrain-credits.html" target="_blank" rel="noopener">Terrain data credits</a>
+</details>
 <label class="m-chk"><input type="checkbox" id="mGrat"> Grid lines</label>
 <label>Start view <select id="mRegion"></select></label>
 <div class="two"><label>Zoom<input id="mStartZoom" type="number" min="0" max="12" step=".1"></label><label>Tilt<input id="mStartPitch" type="number" min="0" max="70"></label></div>

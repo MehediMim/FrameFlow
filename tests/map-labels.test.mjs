@@ -162,12 +162,12 @@ const attached = label => {
 // Attached labels are an existing style preset, with the same font inheritance.
 {
   const p = project(), a = E.makeAction('pin', 20);
-  assert.ok(!E.ACTION_TYPES.label || E.ACTION_TYPES.label.hidden, 'no separate label tool is offered');
+  assert.ok(!E.ACTION_TYPES.label.hidden, 'map label tool is available for custom atlas names');
   assert.equal(E.DEFAULT_LABEL_STYLE.placement, 'screen', 'old projects keep their screen-facing labels');
   assert.equal(E.LABEL_PRESETS.map2d.label, '2D · Attached to map');
   assert.equal(E.LABEL_PRESETS.map2d.style.placement, 'map');
   for (const [key, preset] of Object.entries(E.LABEL_PRESETS)) {
-    if (key !== 'map2d') assert.equal(preset.style.placement, 'screen', `${key} switches an attached label back to screen-facing`);
+    if (!['map2d', 'atlasGround'].includes(key)) assert.equal(preset.style.placement, 'screen', `${key} switches an attached label back to screen-facing`);
   }
   p.labelStyle.font = 'Verdana';
   a.labelStyle = { ...E.LABEL_PRESETS.map2d.style };
@@ -491,4 +491,51 @@ for (const mode of ['direct', 'path']) {
   }
 }
 
+// Automatic geographic names use the same anchors and fixed fonts at every zoom.
+{
+  const p = project(); p.atlasLabels = { countries: true, oceans: false, declutter: false, scaleMode: 'fixed' };
+  const a = render(p, 0), country = text(a, 'Westland');
+  p.camera.init.zoom += 1;
+  const b = render(p, 0), closer = text(b, 'Westland');
+  assert.equal(country.font, closer.font, 'zoom leaves fixed label font size unchanged');
+  assert.notDeepEqual(country.matrix.slice(4), closer.matrix.slice(4), 'geographic anchor follows camera zoom');
+  p.camera.init.bearing = 30;
+  const rotated = text(render(p, 0), 'Westland');
+  assert.notEqual(rotated.matrix[1], 0, 'flat atlas text rotates with the map');
+  p.atlasLabels.scaleMode = 'world'; p.atlasLabels.referenceZoom = p.camera.init.zoom;
+  const atReference = text(render(p, 0), 'Westland'); p.camera.init.zoom++;
+  const zoomed = text(render(p, 0), 'Westland');
+  const pixels = t => Number(t.font.match(/([0-9.]+)px/)[1]);
+  assert.ok(Math.abs(pixels(zoomed) - pixels(atReference) * 2) <= 1, 'optional geographic sizing scales with zoom within pixel rounding');
+  const saved = JSON.parse(JSON.stringify(p)); E.validateMapProject(saved);
+  assert.deepEqual(saved.atlasLabels, p.atlasLabels);
+  assert.ok(E.mapFontsUsed(p).includes('Libre Baskerville'));
+  for (const config of [{size: NaN}, {countries: 1}, {scaleMode: 'bad'}, {opacity: 2}, {text: 'red'}]) {
+    const invalid = project(); invalid.atlasLabels = config;
+    assert.throws(() => E.validateMapProject(invalid));
+  }
+  p.atlasLabels = { oceans: true, countries: false, declutter: false };
+  p.camera.init = { lon: -40, lat: 32, zoom: 2, bearing: 0, pitch: 0 };
+  assert.ok(names(render(p, 0)).includes('North Atlantic Ocean'), 'oceans can be enabled separately');
+  p.atlasLabels = {countries: false, oceans: false};
+  assert.deepEqual(names(render(p, 0)), [], 'both label groups can be disabled');
+}
+// Shape fitting follows country proportions and respects interior holes.
+{
+  const { countryLabelLayout } = await import('../map-atlas-labels.mjs');
+  const makeFeature = (width, height, angle = 0) => {
+    const a = angle * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const points = [[-width/2,-height/2],[width/2,-height/2],[width/2,height/2],[-width/2,height/2],[-width/2,-height/2]].map(([x,y])=>[x*c-y*s,x*s+y*c]);
+    return { mainBox: [Math.min(...points.map(p=>p[0])), Math.min(...points.map(p=>p[1])), Math.max(...points.map(p=>p[0])), Math.max(...points.map(p=>p[1]))], rings: [{n:5,xy:new Float64Array(points.flat())}] };
+  };
+  const center = {x:0,y:0}, wide=makeFeature(.2,.04), tall=makeFeature(.04,.2), diagonal=makeFeature(.2,.025,30);
+  const a=countryLabelLayout(wide,center,5), b=countryLabelLayout(tall,center,5), c=countryLabelLayout(diagonal,center,5);
+  assert.equal(a.angle,0,'wide countries get horizontal baselines');
+  assert.equal(Math.abs(b.angle),90,'tall countries get vertical baselines');
+  assert.equal(c.angle,30,'diagonal countries follow their shape');
+  assert.ok(countryLabelLayout(makeFeature(.1,.02),center,5).width < a.width,'smaller countries receive smaller text footprints');
+  assert.equal(countryLabelLayout(tall,center,5,false).angle,0,'automatic angles can be disabled');
+  wide.rings.push({n:5,xy:new Float64Array([-.01,-.01,.01,-.01,.01,.01,-.01,.01,-.01,-.01])});
+  assert.equal(countryLabelLayout(wide,center,4).width,0,'text cannot be fitted across a hole at its anchor');
+}
 console.log('map label tests passed');

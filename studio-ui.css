@@ -115,11 +115,17 @@ body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSet
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) #mAreaBox{display:grid;gap:16px}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) #mAreaBox > button{justify-self:start;margin:0;min-height:36px}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .m-dcs:empty,body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .mini-label:empty{display:none}
-body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details){border:1px solid var(--ff-border);border-radius:8px;padding:14px;background:#1b2024}
-body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details) > summary{margin:0!important;cursor:pointer;letter-spacing:.4px;line-height:1.5}
-body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details) > :is(label,.two,.mini-label){margin-top:16px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details,#mTerrainBox,#mAtlasLabels details){border:1px solid var(--ff-border);border-radius:8px;padding:14px;background:#1b2024}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details,#mTerrainBox,#mAtlasLabels details) > summary{margin:0!important;cursor:pointer;letter-spacing:.4px;line-height:1.5}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTextureSection,#mLabelStyle details,#mTerrainBox,#mAtlasLabels details) > :is(label,.two,.mini-label){margin-top:16px}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label:has(> input[type=range]){flex-wrap:wrap;flex-direction:row;justify-content:space-between}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) input[type=range]{flex:0 0 100%;width:100%;min-height:20px}
+/* Color presets occupy their own row rather than squeezing the field title. */
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label:has(> input[type=color]){display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:8px;align-items:center}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) label > .ff-palette{grid-column:1 / -1;min-width:0;width:100%;margin:0;gap:5px;justify-content:flex-start}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) :is(#mTerrainBox,#mAtlasLabels details) > :not(summary){margin-top:16px}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) #mTerrainBox output{order:1;margin-left:auto}
+body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) #mTerrainBox input[type=range]{order:2}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;border-top:1px solid var(--ff-border);background:#1b2024}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer span{color:#929fa9;font-size:11px}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer button{margin:0;min-height:36px;min-width:80px;padding:8px 20px}

@@ -168,3 +168,4 @@ export async function preloadVectors(scene){
  if(!im.complete||!im.naturalWidth)waits.push(im.decode());}
  await Promise.all(waits);
 }
+                                                                                        

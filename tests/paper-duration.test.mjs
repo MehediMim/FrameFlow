@@ -75,6 +75,8 @@ function editor(p) {
     pause() {}, checkpoint() {}, saveLocal() {}, renderAll() {}, changed() {}, notify() {}, renderTimeline() {}, draw() {},
     items: () => p.parts,
     frameFromEvent: e => e.testFrame,
+    // These handler tests have no rendered clips; browser tests cover magnets.
+    snapTimelineDelta: (_tracks, delta) => delta,
     setTiming: (it, start, dur) => Object.assign(it, { start, dur }),
     isSheet: it => it.kind === 'sheet',
     get: (root, path) => path.split('.').reduce((a, k) => a[k], root),

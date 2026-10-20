@@ -1,3 +1,4 @@
+import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { poseAt } from './engine.mjs?v=sparse-blur-1';
 // FrameFlow Motion Studio: layered 2.5D camera with focus tracking and depth of field.
@@ -260,7 +261,7 @@ export function attachMotionCamera(host){
   for(const el of document.querySelectorAll('[data-cam-select]'))if(!el.closest('[data-camera-clip]'))el.addEventListener('click',()=>{active=el.dataset.camSelect;host.selectLayer(null);host.renderInspector();host.renderTimeline();});
  }
  function timelineRefresh(){document.querySelectorAll('.ff-camera-clip').forEach(el=>el.classList.toggle('selected',el.dataset.cameraClip===active));}
- window.addEventListener('pointermove',e=>{if(!drag)return;const p=host.project(),s=cameraShots(p).find(x=>x.id===drag.id),width=$('#tracks')?.getBoundingClientRect().width||1;if(!s)return;const d=Math.round((e.clientX-drag.startX)/width*(p.frames-1));if(drag.mode==='move')rebaseCameraShot(p,s,clamp(drag.start+d,0,p.frames-s.dur));else if(drag.mode==='left'){const end=drag.start+drag.dur;rebaseCameraShot(p,s,clamp(drag.start+d,0,end-1));s.dur=end-s.start;}else s.dur=clamp(drag.dur+d,1,p.frames-s.start);host.draw();host.renderTimeline();});
+ window.addEventListener('pointermove',e=>{if(!drag)return;const p=host.project(),s=cameraShots(p).find(x=>x.id===drag.id),width=$('#tracks')?.getBoundingClientRect().width||1;if(!s)return;const d=snapTimelineDelta($('#tracks'),Math.round((e.clientX-drag.startX)/width*(p.frames-1)),drag.start,drag.start+drag.dur,drag.mode,drag.id,p.frames-1,p.fps,e);if(drag.mode==='move')rebaseCameraShot(p,s,clamp(drag.start+d,0,p.frames-s.dur));else if(drag.mode==='left'){const end=drag.start+drag.dur;rebaseCameraShot(p,s,clamp(drag.start+d,0,end-1));s.dur=end-s.start;}else s.dur=clamp(drag.dur+d,1,p.frames-s.start);host.draw();host.renderTimeline();});
  window.addEventListener('pointerup',()=>{if(drag){drag=null;host.changed();}});
  return {inspect,timeline,clear:()=>{active=null},select:id=>{active=id;host.selectLayer(null)},isActive:()=>!!find(),removeSelected:()=>{const s=find();if(!s)return false;host.pause();host.checkpoint();const p=host.project();p.cameraShots=p.cameraShots.filter(x=>x.id!==s.id);active=null;host.changed();return true;}};
 }

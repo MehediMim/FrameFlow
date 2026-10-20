@@ -8,6 +8,8 @@
     "test:motion-media": "node tests/motion-media.test.mjs",
     "test:motion-media:browser": "node tests/timeline-rename.browser.test.mjs --media",
     "test:layer-visibility": "node tests/layer-visibility.test.mjs",
+    "test:timeline-magnet": "node tests/timeline-magnet.test.mjs",
+    "test:timeline-magnet:browser": "node tests/timeline-magnet.browser.test.mjs",
     "test:timeline-controls:browser": "node tests/timeline-controls.browser.test.mjs",
     "test:timeline-rename": "node tests/timeline-rename.test.mjs",
     "test:timeline-rename:browser": "node tests/timeline-rename.browser.test.mjs",

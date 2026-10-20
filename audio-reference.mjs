@@ -1,3 +1,4 @@
+import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 // Audio layers share the editor's selection, inspector and timeline. Media stays in this session.
 const studios = new Map();
@@ -115,7 +116,7 @@ export function registerAudioStudio(studio, host) {
   }
   window.addEventListener('pointermove',e=>{
     if(!drag)return;const l=state.layers.find(l=>l.id===drag.id);if(!l)return;
-    const d=Math.round((e.clientX-drag.x)/drag.width*drag.last*host.getFps())/host.getFps(),o=drag.original,min=Math.min(o.duration,1/host.getFps());
+    const o=drag.original,fps=host.getFps(),d=snapTimelineDelta($(host.tracks),Math.round((e.clientX-drag.x)/drag.width*drag.last*fps),o.start*fps,(o.start+o.duration)*fps,drag.mode,drag.id,drag.last*fps,fps,e)/fps,min=Math.min(o.duration,1/fps);
     if(!drag.saved){if(!d)return;checkpoint();drag.saved=true;}
     if(drag.mode==='move')l.start=clamp(o.start+d,0,Math.max(0,duration()-o.duration));
     else if(drag.mode==='left'){const delta=clamp(d,Math.max(-o.start,-o.source),o.duration-min);l.start=o.start+delta;l.source=o.source+delta;l.duration=o.duration-delta;}

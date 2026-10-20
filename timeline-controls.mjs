@@ -1,3 +1,4 @@
+import { installMagneticTimeline } from './timeline-magnet.mjs';
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const paths = {
   visibility: '<path d="M2 8s3-5 6-5 6 5 6 5-3 5-6 5-6-5-6-5Z"/><circle cx="8" cy="8" r="2"/>',
@@ -77,5 +78,6 @@ export function installTimelineControls(spec) {
   }, true);
   for (const selector of spec.oldButtons || []) document.querySelector(selector)?.classList.add('ff-obsolete-layer-action');
   refresh();
+  installMagneticTimeline(timeline);
   return { refresh };
 }

@@ -1,3 +1,4 @@
+import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { installTimelineControls } from './timeline-controls.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
@@ -336,8 +337,8 @@ bindTimelineRename($('#pTrackLabels'), { attribute: 'data-ptl', getItem: id => i
 function renderTimeline() {
   const zoom = +$('#pZoomT').value, its = items(), last = Math.max(1, proj.frames - 1);
   $('#pTracks').style.width = `${zoom * 100}%`;
-  const step = Math.max(1, Math.round(proj.frames / (10 * zoom))); let ticks = '';
-  for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${f}</span>`;
+  const step = Math.max(1, Math.round(proj.frames / proj.fps / (10 * zoom))) * proj.fps; let ticks = '';
+  for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${+(f/proj.fps).toFixed(2)}s</span>`;
   $('#pRuler').innerHTML = ticks;
   $('#pTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-ptl="${esc(it.id)}"><span>${iconOf(it)}</span><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(it.name)}</span></div>`).join('');
   $('#pTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-prow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-pclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div></div>`).join('');
@@ -390,7 +391,7 @@ window.addEventListener('pointermove', e => {
     draw(); for (const k of ['x', 'y', 'w', 'h']) { const f = $(`#pInspector [data-pf="${k}"]`); if (f) f.value = it[k]; } return;
   }
   const it = items().find(i => i.id === drag.id); if (!it) return;
-  const d = frameFromEvent(e) - drag.x0; if (d !== 0) { if (!drag.checkpointed) { checkpoint(); drag.checkpointed = true; } drag.moved = true; } else return;
+  const rawDelta = frameFromEvent(e) - drag.x0; const d = ['move','l','r'].includes(drag.mode) ? snapTimelineDelta($('#pTracks'),rawDelta,drag.start,drag.start+drag.dur,drag.mode,drag.id,proj.frames-1,proj.fps,e) : rawDelta; if (d !== 0) { if (!drag.checkpointed) { checkpoint(); drag.checkpointed = true; } drag.moved = true; } else return;
   let s = drag.start, l = drag.dur;
   if (drag.mode === 'move') s = clamp(drag.start + d, 0, proj.frames - 1); else if (drag.mode === 'r') l = Math.max(1, drag.dur + d); else { const ns = clamp(drag.start + d, 0, drag.start + drag.dur - 1); l = drag.start + drag.dur - ns; s = ns; }
   if (!validTiming(s, l)) return;

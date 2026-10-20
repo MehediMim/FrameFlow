@@ -200,3 +200,7 @@ html, body, * {
 .timeline-labels>.ruler-label{position:relative;z-index:7;background:#1d2125;border-bottom:1px solid #33383d}
 #playhead,#mPlayhead,#pPlayhead{z-index:6}
 #playhead>span,#mPlayhead>span,#pPlayhead>span{position:sticky;top:0;left:auto;display:block;margin-left:-5px}
+
+/* Packed magnetic timeline sections. */
+.ff-track-heading{position:absolute;left:0;right:0;height:24px;display:flex;align-items:center;padding:0 12px;background:#242b32;border-top:1px solid #39434d;color:#b6c5d3;font-size:10px;font-weight:600;letter-spacing:.7px;pointer-events:none}
+.timeline-tools button[aria-pressed="true"]{background:#314936;border-color:#83b665;color:#d7f5c4}

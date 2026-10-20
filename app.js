@@ -1,3 +1,4 @@
+import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { installTimelineControls } from './timeline-controls.mjs';
 import { installLineDrawing } from './motion-lines.mjs?v=inspector-order-1';
 import { migrateBlurClips } from './motion-blur.mjs?v=sparse-blur-1';
@@ -393,7 +394,7 @@ function renderTimeline(){
  $('#trackLabels').innerHTML=ls.map(l=>`<div class="track-label ${l.id===selected?'selected':''}" data-track-label="${esc(l.id)}"><span>${icons[l.type]}</span><span class="ff-layer-name">${esc(l.name)}</span>${l.fxClips?.length?`<span class="ff-fx-count" title="${l.fxClips.length} effects on this layer · select to edit">✦ ${l.fxClips.length}</span>`:''}</div>`).join('');
  $('#trackRows').innerHTML=ls.map(l=>{
   const fs=[...new Set(Object.values(l.keys).flat().map(k=>k.f))].filter(f=>f<project.frames).sort((a,b)=>a-b);
-  const left=l.in/(project.frames-1)*100,right=100-Math.min(l.out,project.frames-1)/(project.frames-1)*100;
+  const left=l.in/(project.frames-1)*100,right=100-Math.min(l.out+1,project.frames-1)/(project.frames-1)*100;
   const hasFx=!!l.fxClips?.length;
   const effects=(l.fxClips||[]).map(fx=>{
    const fxLeft=fx.start/(project.frames-1)*100,fxRight=100-Math.min(project.frames-1,fx.start+fx.dur)/(project.frames-1)*100;
@@ -442,7 +443,7 @@ function updateFxDrag(e){
  const d=fxDrag,l=project.layers.find(q=>q.id===d.layerId),fx=l?.fxClips?.find(q=>q.id===d.id);
  if(!fx)return;
  const width=$('#tracks').getBoundingClientRect().width||1;
- const offset=Math.round((e.clientX-d.startX)/width*(project.frames-1));
+ const offset=snapTimelineDelta($('#tracks'),Math.round((e.clientX-d.startX)/width*(project.frames-1)),d.startIn??d.start,(d.startOut===undefined?d.start+d.dur:d.startOut+1),d.mode,d.id,project.frames-1,project.fps,e);
  if(d.mode==='move')fx.start=Math.max(l.in,Math.min(l.out,project.frames-d.dur,d.start+offset));
  else if(d.mode==='left'){
   const end=d.start+d.dur;fx.start=Math.max(l.in,Math.min(end-1,d.start+offset));fx.dur=end-fx.start;
@@ -458,7 +459,7 @@ function updateClipDrag(e){
 
  const width=$('#tracks').getBoundingClientRect().width;
 
- const offset=Math.round((e.clientX-d.startX)/width*(project.frames-1));
+ const offset=snapTimelineDelta($('#tracks'),Math.round((e.clientX-d.startX)/width*(project.frames-1)),d.startIn??d.start,(d.startOut===undefined?d.start+d.dur:d.startOut+1),d.mode,d.id,project.frames-1,project.fps,e);
 
  if(d.mode==='move'){
 

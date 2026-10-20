@@ -1,3 +1,4 @@
+import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs';
@@ -1194,8 +1195,8 @@ bindTimelineRename($('#mTrackLabels'), { attribute: 'data-mtl', getItem: id => i
 function renderTimeline() {
   const zoom = +$('#mZoomT').value, its = items(), last = proj.frames - 1;
   $('#mTracks').style.width = `${zoom * 100}%`;
-  const step = Math.max(1, Math.round(proj.frames / (10 * zoom)));
-  let ticks = ''; for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${f}</span>`;
+  const step = Math.max(1, Math.round(proj.frames / proj.fps / (10 * zoom))) * proj.fps;
+  let ticks = ''; for (let f = 0; f < proj.frames; f += step) ticks += `<span class="tick" style="left:${f / last * 100}%">${+(f/proj.fps).toFixed(2)}s</span>`;
   $('#mRuler').innerHTML = ticks;
   $('#mTrackLabels').innerHTML = its.map(it => `<div class="track-label ${it.id === sel ? 'selected' : ''}" data-mtl="${esc(it.id)}"><span>${iconOf(it)}</span><span class="ff-layer-name" title="Double-click or double-tap to rename">${esc(it.name)}</span></div>`).join('');
   $('#mTrackRows').innerHTML = its.map(it => `<div class="track-row m-row ${it.id === sel ? 'selected' : ''}" data-mrow="${esc(it.id)}"><div class="m-clip t-${clsOf(it)} ${it.id === sel ? 'selected' : ''}" data-mclip="${esc(it.id)}" style="left:${it.start / last * 100}%;width:${Math.max(.6, it.dur / last * 100)}%" title="${esc(it.name)} · frame ${it.start}–${it.start + it.dur}"><i class="m-h l" data-h="l"></i><span>${esc(it.name)}</span><i class="m-h r" data-h="r"></i></div>${timelineKeys(it, last)}</div>`).join('');
@@ -1217,7 +1218,7 @@ window.addEventListener('pointermove', e => {
   if (!drag) return;
   if (drag.kind === 'scrub') { const next = frameFromEvent(e); if (next !== frame) setFrame(next); return; }
   const it = items().find(i => i.id === drag.id); if (!it) return;
-  const d = frameFromEvent(e) - drag.x0; if (d !== 0) drag.moved = true;
+  const rawDelta = frameFromEvent(e) - drag.x0; const d = ['move','l','r'].includes(drag.mode) ? snapTimelineDelta($('#mTracks'),rawDelta,drag.start,drag.start+drag.dur,drag.mode,drag.id,proj.frames-1,proj.fps,e) : rawDelta; if (d !== 0) drag.moved = true;
   if(drag.mode.startsWith('object:')){const [,field,time]=drag.mode.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);if(drag.lastTo===to)return;drag.lastTo=to;it.objectKeys=clone(drag.objectKeys||[]);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);updateTimelineItem(it);return;}
   if (drag.mode.startsWith('camera:')) {
     const from = +drag.mode.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur);

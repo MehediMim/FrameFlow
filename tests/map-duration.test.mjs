@@ -109,6 +109,8 @@ function editor(p) {
     items: () => [...p.shots, ...p.actions],
     isShot: it => it.kind === 'shot',
     frameFromEvent: e => e.testFrame,
+    // These handler tests have no rendered clips; browser tests cover magnets.
+    snapTimelineDelta: (_tracks, delta) => delta,
     clamp: (v, min, max) => Math.max(min, Math.min(max, v)),
   });
   vm.runInContext(setup + '\nbindSettings();', context);

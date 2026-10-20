@@ -67,7 +67,7 @@ try {
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);
   const {HISTORIC_OBJECTS}=await import('../map-historic-objects.mjs'),E=await import('../map-engine.mjs');
-  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup').length`),5);
+  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup').length`),6);
   for(const [glyph,icon] of Object.entries(HISTORIC_OBJECTS)){
     await change('#mInspector [data-mf="glyph"]',glyph);
     const p=await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);E.validateMapProject(p);
@@ -90,6 +90,19 @@ try {
     return {fpsDiff,motion,png:c.toDataURL().startsWith('data:image/png')};
   })()`);
   assert.equal(integration.fpsDiff,0,'historic ship motion and sails are frame-rate independent');assert.ok(integration.motion>100);assert.ok(integration.png);
+  const leaders=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),{HISTORIC_OBJECTS}=await import('./map-historic-objects.mjs');
+    const list=Object.entries(HISTORIC_OBJECTS).filter(([,o])=>o.group==='leaders');
+    const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json())),p=E.newMapProject();p.theme='paper';p.graticule=false;p.camera.init={lon:0,lat:20,zoom:2,pitch:0,bearing:0};
+    p.actions=list.map(([glyph,ic],i)=>E.makeAction('object',0,{glyph,color:ic.color,enter:'none',exit:'none',dur:120,place:{kind:'point',name:ic.label,lon:-55+(i%3)*55,lat:50-Math.floor(i/3)*30},size:2,objectAngle:10,sizeMode:'map',sizeZoom:2,objectKeys:[{frame:0,values:{size:1.5,objectAngle:0}},{frame:60,values:{size:2.5,objectAngle:35}}]}));
+    E.validateMapProject(p);const c=document.createElement('canvas');c.width=1200;c.height=800;const x=c.getContext('2d');E.drawMap(x,1200,800,p,30,geo);const first=x.getImageData(0,0,1200,800).data;E.drawMap(x,1200,800,p,60,geo);const second=x.getImageData(0,0,1200,800).data;let changes=0;for(let i=0;i<first.length;i+=4)if(first[i]!==second[i]||first[i+1]!==second[i+1])changes++;
+    // Review sheet keeps all nine silhouettes large enough to inspect.
+    x.fillStyle='#172126';x.fillRect(0,0,1200,800);x.fillStyle='#e6dac0';x.font='bold 25px Georgia';x.fillText('LEADERS & CHARACTERS',25,36);
+    list.forEach(([key,ic],i)=>{const left=20+(i%3)*395,top=58+Math.floor(i/3)*242;x.fillStyle='#e8dfcc';x.beginPath();x.roundRect(left,top,375,225,10);x.fill();x.save();x.translate(left+187,top+126);ic.draw(x,57,ic.color,2);x.restore();x.fillStyle='#382e24';x.font='bold 16px Georgia';x.textAlign='center';x.fillText(ic.label,left+187,top+205,350);x.textAlign='left';});
+    return {count:list.length,changes,image:c.toDataURL('image/png')};
+  })()`);
+  assert.equal(leaders.count,9);assert.ok(leaders.changes>1000,'leaders render through map size and rotation keyframes');
+  await writeFile(join(tmpdir(),'frameflow-leaders-review.png'),Buffer.from(leaders.image.split(',')[1],'base64'));
   await evaluate(`(async()=>{
     const {HISTORIC_OBJECTS}=await import('./map-historic-objects.mjs');
     const c=document.createElement('canvas');c.width=1200;c.height=62+Math.ceil(Object.keys(HISTORIC_OBJECTS).length/5)*258+20;const x=c.getContext('2d');

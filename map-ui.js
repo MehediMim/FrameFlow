@@ -515,7 +515,7 @@ function arrangeObjects(operation) {
 }
 function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
+  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Leaders &amp; characters">${options('leaders')}</optgroup><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
 }
 function flagHighlightFields(a) {
   return F.sel('highlightFill','Highlight fill',a.highlightFill||'color',[['color','Color'],['flag','Uploaded flag / image']])

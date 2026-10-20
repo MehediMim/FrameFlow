@@ -119,7 +119,90 @@ function earthwork(c,s,col){
   line(c,s,-.6,-.28,-.6,-.65,wood,.045);line(c,s,.4,-.27,.4,-.72,wood,.045);
 }
 function battery(c,s,col){for(const x of[-.57,.49]){c.save();c.translate(x*s,0);c.scale(.55,.55);cannon(c,s,col);c.restore();}box(c,s,-.95,.44,1.9,.18,wood);}
+// Named protagonists use larger hats, cloaks and equipment than rank-and-file units.
+function feather(c,s,x,y,col,t){
+  const sway=Math.sin(t*2)*.035;
+  path(c,s,[[x,y],[x-.09,y-.24],[x+.02+sway,y-.5],[x+.14+sway,y-.36],[x+.12,y-.15]],col);
+  line(c,s,x,y,x+.06+sway,y-.4,brass,.018);
+}
+function leader(c,s,col,t,role){
+  const royal=role==='monarch'||role==='queen',court=role==='diplomat';
+  const skin=role==='navigator'?'#b98160':'#d9ac81';
+  // A moving cloak sits behind the body; its motion uses seconds like ship sails.
+  const wave=Math.sin(t*2.2)*.05;
+  path(c,s,[[-.23,-.48],[.22,-.48],[.55+wave,.64],[.14,.52],[-.55+wave,.65]],col);
+  line(c,s,-.28,-.29,-.4,.51,'#594538',.025);
+  if(role==='queen')path(c,s,[[-.22,-.35],[.21,-.35],[.5,.69],[-.49,.69]],col);
+  else{box(c,s,-.23,.18,.17,.52,wood);box(c,s,.07,.18,.17,.52,wood);box(c,s,-.29,.62,.25,.13,ink);box(c,s,.04,.62,.28,.13,ink);}
+  path(c,s,[[-.26,-.42],[.25,-.42],[.28,.24],[-.28,.24]],royal?cream:col);
+  if(['conqueror','general'].includes(role)){
+    path(c,s,[[-.22,-.36],[.2,-.36],[.17,.13],[0,.21],[-.19,.11]],steel);
+    line(c,s,-.16,-.28,.15,.1,cream,.055);
+  }else{line(c,s,-.2,-.3,.2,.2,brass,.045);for(let y=-.24;y<.14;y+=.12)circle(c,s,.04,y,.025,brass);}
+  box(c,s,-.27,.15,.55,.09,wood);box(c,s,-.05,.14,.12,.11,brass);
+  circle(c,s,0,-.64,.2,skin);
+  if(role==='queen'){
+    path(c,s,[[-.19,-.76],[-.22,-.49],[-.3,-.41],[-.16,-.42],[-.1,-.55],[-.13,-.75]],wood);
+    path(c,s,[[.13,-.75],[.2,-.74],[.22,-.48],[.3,-.42],[.16,-.42],[.1,-.55]],wood);
+  }else path(c,s,[[-.16,-.55],[-.09,-.4],[.06,-.38],[.16,-.56],[.04,-.48],[-.07,-.49]],wood);
+  circle(c,s,.07,-.67,.018,ink);
+  if(royal){
+    path(c,s,[[-.24,-.78],[-.26,-1.09],[-.1,-.96],[0,-1.17],[.12,-.96],[.25,-1.09],[.22,-.78]],brass);
+    for(const x of[-.14,0,.14])circle(c,s,x,-.83,.035,x===0?'#a8443c':'#557d87');
+    for(const x of[-.27,.23]){line(c,s,x,-.38,x*.7,.44,cream,.09);for(let y=-.32;y<.45;y+=.13)circle(c,s,x*.85,y,.023,ink);}
+  }else if(role==='conqueror'){
+    path(c,s,[[-.3,-.73],[.31,-.73],[.18,-.94],[.05,-1.12],[-.13,-.96]],steel);
+    line(c,s,-.03,-1.09,.04,-.78,brass,.035);feather(c,s,-.09,-1.02,col,t);
+  }else{
+    box(c,s,-.34,-.81,.68,.07,wood);
+    path(c,s,[[-.24,-.81],[-.15,-1.01],[.16,-1.01],[.26,-.81]],role==='general'?ink:col);
+    if(role==='general'||role==='admiral')feather(c,s,.17,-.99,cream,t);
+  }
+  if(role==='conqueror'){
+    line(c,s,.22,-.24,.44,-.04,col,.16);line(c,s,.44,-.04,.75,-1.02,steel,.065);
+    line(c,s,.32,-.12,.61,-.03,brass,.06);circle(c,s,.43,-.04,.07,skin);
+    path(c,s,[[-.62,-.16],[-.35,-.21],[-.29,.26],[-.44,.48],[-.65,.22]],col);line(c,s,-.48,-.1,-.45,.32,brass,.035);
+  }else if(role==='general'){
+    line(c,s,-.23,-.23,-.39,.1,col,.15);line(c,s,.23,-.24,.51,-.43,col,.15);
+    line(c,s,.38,-.4,.85,-.65,wood,.1);line(c,s,.78,-.62,.88,-.67,brass,.12);
+    line(c,s,-.32,.04,-.55,.62,steel,.04);
+  }else if(royal){
+    line(c,s,.21,-.21,.47,-.05,col,.14);line(c,s,.51,.54,.51,-.8,brass,.055);circle(c,s,.51,-.86,.1,brass);
+    line(c,s,-.21,-.2,-.42,.05,col,.13);circle(c,s,-.46,.06,.14,brass);line(c,s,-.46,-.08,-.46,-.3,brass,.04);line(c,s,-.54,-.24,-.38,-.24,brass,.04);
+  }else if(role==='admiral'){
+    line(c,s,.2,-.26,.45,-.33,col,.15);line(c,s,.42,-.35,1,-.53,brass,.15);circle(c,s,1,-.53,.09,wood);
+    line(c,s,-.21,-.2,-.43,.08,col,.14);box(c,s,-.61,.02,.3,.3,cream);line(c,s,-.6,.13,-.33,.13,steel,.018);
+  }else if(role==='navigator'){
+    line(c,s,-.23,-.21,-.46,.06,col,.14);line(c,s,.23,-.2,.46,.07,col,.14);
+    path(c,s,[[-.61,-.05],[.55,.02],[.51,.43],[-.6,.34]],cream);path(c,s,[[-.39,.04],[-.15,.1],[-.25,.26],[-.47,.23]],'#7b9176');
+    circle(c,s,.62,-.08,.17,brass);line(c,s,.62,-.2,.62,.04,ink,.025);line(c,s,.5,-.08,.74,-.08,ink,.025);
+  }else{
+    line(c,s,-.22,-.22,-.4,.07,col,.14);line(c,s,.23,-.22,.47,-.03,col,.14);
+    box(c,s,-.61,-.04,.96,.24,cream);circle(c,s,.07,.18,.075,'#a34438');
+    if(court)line(c,s,-.5,.03,.24,.03,wood,.015);
+  }
+}
+function expeditionLeader(c,s,col,t){
+  path(c,s,[[-.22,-.42],[.1,-.37],[.3,.51],[-.48,.52]],col);
+  explorer(c,s,col);feather(c,s,.18,-1.03,cream,t);
+  box(c,s,-.7,-.33,.24,.38,wood);line(c,s,-.64,-.35,-.39,-.35,brass,.025);
+}
+function mountedGeneral(c,s,col,t){
+  cavalry(c,s,col,t);
+  path(c,s,[[-.2,-.88],[.11,-.84],[.01,-.28],[-.45,-.22]],col);
+  box(c,s,-.19,-1.18,.48,.06,ink);feather(c,s,.15,-1.28,cream,t);
+  line(c,s,.25,-.75,.75,-1.13,brass,.075);
+}
 export const HISTORIC_OBJECTS={
+  conqueror:entry('Conqueror / conquistador','#944b3e','leaders',(c,s,col,t)=>leader(c,s,col,t,'conqueror')),
+  expeditionLeader:entry('Expedition leader','#66794e','leaders',expeditionLeader),
+  general:entry('General / commander','#8c4944','leaders',(c,s,col,t)=>leader(c,s,col,t,'general')),
+  mountedGeneral:entry('Mounted general','#775c8a','leaders',mountedGeneral),
+  admiral:entry('Admiral / naval captain','#435f78','leaders',(c,s,col,t)=>leader(c,s,col,t,'admiral')),
+  monarch:entry('King / monarch','#805283','leaders',(c,s,col,t)=>leader(c,s,col,t,'monarch')),
+  queen:entry('Queen / ruler','#8e4760','leaders',(c,s,col,t)=>leader(c,s,col,t,'queen')),
+  navigator:entry('Navigator / cartographer','#4f7980','leaders',(c,s,col,t)=>leader(c,s,col,t,'navigator')),
+  diplomat:entry('Diplomat / envoy','#796645','leaders',(c,s,col,t)=>leader(c,s,col,t,'diplomat')),
   stoneWall:entry('Stone wall segment','#a09882','defense',wall),
   palisade:entry('Wooden palisade','#8e6945','defense',palisade),
   watchtower:entry('Watchtower','#927449','defense',tower),

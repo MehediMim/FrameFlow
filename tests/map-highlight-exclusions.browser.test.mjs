@@ -67,30 +67,38 @@ try {
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const stored=()=>evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);
   await evaluate(`(async()=>{
-    const E=await import('./map-engine.mjs'),p=E.newMapProject();p.frames=300;p.camera.init={lon:2,lat:46,zoom:5,bearing:0,pitch:0};
-    p.actions=[E.makeAction('highlight',0,{id:'exclude-test',target:{kind:'country',name:'France'},color:'#ff2020',dim:0,pulse:false,showLabel:false,dur:240,animDur:1})];
+    const E=await import('./map-engine.mjs'),p=E.newMapProject();p.frames=300;p.camera.init={lon:90,lat:24,zoom:5,bearing:0,pitch:0};p.area.detailCountries=['Bangladesh'];p.area.detailLevels={Bangladesh:'division'};
+    p.actions=[E.makeAction('highlight',0,{id:'exclude-test',target:{kind:'country',name:'Bangladesh'},color:'#ff2020',dim:0,pulse:false,showLabel:false,dur:240,animDur:1})];
     localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();
   })()`);
-  await waitFor(`document.querySelector('[data-mid="exclude-test"]')&&document.querySelectorAll('#mDlCountry option').length>100`);
+  await waitFor(`document.querySelector('[data-mid="exclude-test"]')&&[...document.querySelectorAll('#mDlCountry option')].some(o=>o.value.includes('Dhaka'))`);
   await evaluate(`document.querySelector('[data-mid="exclude-test"]').click()`);await change('#mFrame','4');
-  await evaluate(`document.querySelector('[data-exclusion-draw]').click()`);
-  // Invalid outlines do not change the highlight.
-  await evaluate(`document.querySelector('[data-exclusion-apply]').click()`);
-  assert.equal((await stored()).actions[0].highlightExclude,undefined);
+  assert.equal(await evaluate(`document.querySelector('[data-exclusion-draw]')`),null,'there is no separate exclusion drawing tool');
+  await change('[data-mexclude]','not-a-real-region');
+  assert.equal((await stored()).actions[0].highlightExclude,undefined,'invalid region names leave the highlight unchanged');
+  await evaluate(`document.querySelector('[data-mexclude-pick]').click()`);
   const mapClick=async(lon,lat)=>{
     const point=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),i=p.camera.init,v=E.makeView({cx:E.lonToX(i.lon),cy:E.latToY(i.lat),...i},p.width,p.height),q=E.project(v,E.lonToX(${lon}),E.latToY(${lat})),b=document.querySelector('#mCanvas').getBoundingClientRect();return{x:b.left+q.x/p.width*b.width,y:b.top+q.y/p.height*b.height};})()`);
     await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1});await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});
   };
-  for(const [lon,lat]of [[1,45],[3,45],[3,47],[1,47]])await mapClick(lon,lat);
-  await change('[data-exclusion-name]','Leave this part unfilled');
-  await evaluate(`document.querySelector('[data-exclusion-apply]').click()`);
-  let a=(await stored()).actions[0];assert.equal(a.target.name,'France');assert.equal(a.highlightExclude.length,1);assert.equal(a.highlightExclude[0].path.length,4);
-  await evaluate(`document.querySelector('#mUndo').click()`);assert.equal((await stored()).actions[0].highlightExclude,undefined);
-  await evaluate(`document.querySelector('#mRedo').click()`);assert.equal((await stored()).actions[0].highlightExclude.length,1);
-  await evaluate(`document.querySelector('[data-exclusion-draw]').click()`);await mapClick(-1,45);await evaluate(`document.querySelector('[data-exclusion-cancel]').click()`);
-  assert.equal((await stored()).actions[0].highlightExclude.length,1,'cancel keeps committed exclusions');
+  await mapClick(90.4,23.8);
+  let a=(await stored()).actions[0];assert.equal(a.target.name,'Bangladesh');assert.equal(a.highlightExclude.length,1);assert.equal(a.highlightExclude[0].kind,'region');
+  assert.equal(a.highlightExclude[0].country,'Bangladesh');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-mexclude-remove]').length`),1);
+  const excludedName=a.highlightExclude[0].name;
+  await mapClick(90.4,23.8);assert.equal((await stored()).actions[0].highlightExclude.length,0,'clicking an excluded region includes it again');
+  await evaluate(`document.querySelector('#mUndo').click()`);assert.equal((await stored()).actions[0].highlightExclude.length,1);
+  await evaluate(`document.querySelector('#mRedo').click()`);assert.equal((await stored()).actions[0].highlightExclude.length,0);
+  await evaluate(`(()=>{const button=document.querySelector('[data-mexclude-pick]');if(!button.classList.contains('active'))button.click();})()`);await mapClick(90.4,23.8);
+  assert.equal((await stored()).actions[0].highlightExclude[0].name,excludedName);
+  await evaluate(`document.querySelector('[data-mexclude-pick]').click()`);
+  await change('[data-mexclude]','Dhaka');assert.equal((await stored()).actions[0].highlightExclude.length,1,'duplicate exclusions are ignored');
+  await change('[data-mexclude]','Chattogram');assert.equal((await stored()).actions[0].highlightExclude.length,2,'regions can also be excluded by name');
+  await evaluate(`document.querySelector('[data-mexclude-remove="1"]').click()`);
+  assert.equal((await stored()).actions[0].highlightExclude.length,1);
   const render=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));
+    p.camera.init={lon:2,lat:46,zoom:5,bearing:0,pitch:0};p.area.detailCountries=[];p.actions=[E.makeAction('highlight',0,{id:'render',target:{kind:'country',name:'France'},color:'#ff2020',dim:0,pulse:false,showLabel:false,dur:240,animDur:1,highlightExclude:[{kind:'polygon',name:'Mask',path:[{lon:1,lat:45},{lon:3,lat:45},{lon:3,lat:47},{lon:1,lat:47}]}]})];
     p.texture={type:'none'};p.atlasLabels={countries:false,oceans:false};p.actions[0].dim=0;p.actions[0].showLabel=false;
     const canvas=document.createElement('canvas');canvas.width=960;canvas.height=600;const ctx=canvas.getContext('2d');
     const sample=actions=>{const v=E.drawMap(ctx,960,600,{...p,actions},120,geo);return [[2,46],[-1,46],[2.5,46]].map(([lon,lat])=>{const q=E.project(v,E.lonToX(lon),E.latToY(lat));return [...ctx.getImageData(Math.round(q.x),Math.round(q.y),1,1).data];});};
@@ -114,10 +122,10 @@ try {
   assert.ok(render.bytes>100);
   await writeFile(join(tmpdir(),'frameflow-highlight-exclusions.png'),Buffer.from(render.png.split(',')[1],'base64'));
   const saved=await stored();await evaluate('location.reload()');await waitFor(`document.querySelector('[data-mid="exclude-test"]')`);assert.deepEqual(await stored(),saved);
-  await evaluate(`document.querySelector('[data-mid="exclude-test"]').click()`);assert.equal(await evaluate(`document.querySelectorAll('[data-exclusion-remove]').length`),1);
-  await evaluate(`document.querySelector('[data-exclusion-remove]').click()`);assert.equal((await stored()).actions[0].highlightExclude.length,0);
+  await evaluate(`document.querySelector('[data-mid="exclude-test"]').click()`);assert.equal(await evaluate(`document.querySelectorAll('[data-mexclude-remove]').length`),1);
+  await evaluate(`document.querySelector('[data-mexclude-remove]').click()`);assert.equal((await stored()).actions[0].highlightExclude.length,0);
   assert.deepEqual(errors,[]);
-  console.log('Country highlight exclusions: drawing, invalid outlines, undo/redo, cancel, overlapping cuts, stacked highlights, flag fills, persistence, removal and export passed');
+  console.log('Country highlight exclusions: region picking, name lookup, toggle, undo/redo, overlapping cuts, stacked highlights, flag fills, persistence, removal and export passed');
 } finally {
   ws?.close(); chrome.kill(); server.closeAllConnections(); server.close();
   await new Promise(r => chrome.exitCode !== null ? r() : chrome.once('exit', r));

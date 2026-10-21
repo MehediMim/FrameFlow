@@ -1,3 +1,4 @@
+import { installDirectMapEditing } from './map-direct-edit.mjs';
 import { paintObjectPreviews } from './map-object-preview.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
@@ -31,6 +32,7 @@ import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from '.
 import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
 import { trimMapHistory } from './map-history.mjs';
 import { installCampaignUI } from './map-campaign-ui.mjs';
+import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
@@ -61,6 +63,7 @@ let proj, sel = null, frame = 0, playing = false, loop = true, raf, startTime, s
 let undoStack = [], redoStack = [], geo = null, geoState = 'idle', geoError = '', pick = null, exporting = false, lastView = null, drag = null;
 let pathDraw = null, pathDrag = null; // pathDraw = { id } while points of a travel path are being clicked on the map
 let previewCamera = null, mapPan = null;
+let directMapEditing=null;
 let arrangeSelection = new Set(), arrangeGap = 80;
 let campaign=null;
 
@@ -125,7 +128,7 @@ const localCities = () => geo ? [...new Map([...CITIES,...detailCountriesOf(area
 const regionCountryOf = t => (t?.kind === 'region' ? t.country || areaCountry() || LEGACY_REGION_COUNTRY : t?.kind === 'all' ? t.country || null : null);
 function packCountries() { // packs the project needs to draw its regions
   const set = new Set(detailCountriesOf(areaOf(proj)));
-  for (const it of [...proj.actions, ...proj.shots]) for (const target of [it.target, it.from, it.to, it.place]) for(const t of targetMembers(target)) { const c = regionCountryOf(t); if (c) set.add(c); }
+  for (const it of [...proj.actions, ...proj.shots]) for (const target of [it.target, it.from, it.to, it.place,...(it.highlightExclude||[])]) for(const t of targetMembers(target)) { const c = regionCountryOf(t); if (c) set.add(c); }
   return [...set].filter(c => !noDetail.has(c));
 }
 const requiresDetail = () => packCountries().length > 0;
@@ -209,11 +212,12 @@ function draw() {
     return;
   }
   lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera, { cacheBase: true });
-  if (pick?.key === '__members') { const a = current(); if (a && regionTarget(a)) drawRegionSelection(ctx, lastView, geo, targetMembers(a.target)); }
+  if (['__members','__excluded'].includes(pick?.key)) { const a = current(); if (a && regionTarget(a)) drawRegionSelection(ctx, lastView, geo, pick.key==='__excluded'?(a.highlightExclude||[]):targetMembers(a.target)); }
   if(!playing&&current()?.visible!==false){drawBorderEndpoints(ctx,lastView,geo,current());drawHighlightExtentHandles(ctx,lastView,geo,current());}
   $('#mResetView').hidden = !previewCamera;
   if (pathDraw) { const a = proj.actions.find(x => x.id === pathDraw.id); if (a) drawPathEditor(ctx, lastView, a); }
   campaign?.overlay(ctx,lastView);
+  directMapEditing?.overlay(ctx,lastView);
 }
 function setFrame(n) {
   if (pick?.kinds === 'cameraCenter' && Math.round(n) !== frame) cancelPick();
@@ -266,6 +270,20 @@ function addMember(a, loc, toggle) {
   else list.push(loc);
   setMembers(a, list); return true;
 }
+function excludeMember(a,loc,toggle=false){
+  const list=[...(a.highlightExclude||[])],index=list.findIndex(t=>regionKey(t)===regionKey(loc));
+  if(index>=0){if(!toggle){notify(`${memberLabel(loc)} is already excluded`);return false;}list.splice(index,1);}
+  else if(list.length>=100){notify('A highlight can exclude up to 100 regions');return false;}
+  else list.push(loc);
+  a.highlightExclude=list;return true;
+}
+function excludedRegionFields(a){
+  if(a.type!=='highlight')return '';
+  const picking=pick?.key==='__excluded'&&pick.id===a.id;
+  return `<div class="m-region-chips">${(a.highlightExclude||[]).map((t,i)=>`<button type="button" data-mexclude-remove="${i}" title="Include this region again">${esc(memberLabel(t))} &times;</button>`).join('')}</div>`
+    +`<div class="m-loc"><label>Exclude region<input data-mexclude list="mDlCountry" placeholder="Type a region or country" autocomplete="off"></label><button type="button" data-mexclude-pick class="${picking?'active':''}" title="Click regions on the map to exclude or include them">&#8982;</button></div>`
+    +(picking?'<p class="mini-label">Click a region to exclude it. Click it again to include it. Shift-click picks a whole country. Press the picker or Esc when done.</p>':'');
+}
 /** "Separately": every selected region becomes its own item (same look and timing) that can then be retimed or partly animated on its own. */
 function splitRegions(a) {
   const list = membersOf(a); if (list.length < 2) return;
@@ -278,11 +296,12 @@ function splitRegions(a) {
 }
 function regionFields(a) {
   const list = membersOf(a), picking = pick?.key === '__members' && pick.id === a.id, border = a.type === 'border';
-  if(a.target.kind==='polygon')return `<p class="mini-label">Custom region: ${esc(a.target.name)} · ${a.target.path.length} boundary points</p>`+campaign.regionFields(a)+`<button type="button" data-mregpick>⌖ Pick existing regions instead</button>`;
+  if(a.target.kind==='polygon')return `<p class="mini-label">Custom region: ${esc(a.target.name)} · ${a.target.path.length} boundary points</p>`+campaign.regionFields(a)+`<button type="button" data-mregpick>⌖ Pick existing regions instead</button>`+excludedRegionFields(a);
   return `<div class="m-regions"><span class="mini-label">${border ? 'Countries / regions' : isDetail() ? 'Regions / countries' : 'Countries'} <b class="m-val">${list.length}</b></span>`
     + `<div class="m-region-chips">${list.map((t, i) => `<button type="button" data-mrm="${i}" title="Remove from this item">${esc(memberLabel(t))} ×</button>`).join('')}</div>`
     + `<div class="m-loc"><label>Add another<input data-madd data-kinds="${border ? 'border' : 'country'}" list="${border ? 'mDlBorder' : 'mDlCountry'}" placeholder="Type a ${isDetail() ? 'region or country' : 'country'}" autocomplete="off"></label><button type="button" data-mregpick class="${picking ? 'active' : ''}" title="Click regions on the map to add or remove them (Shift-click = whole country)">⌖</button></div>`
     + (picking ? '<p class="mini-label">Click the map to add or remove regions. Shift-click picks a whole country. Press ⌖ or Esc when done.</p>' : '')
+    + excludedRegionFields(a)
     + (isDetail() ? '' : '<p class="mini-label">For states, districts and other local regions, add that country under <button type="button" class="link" data-mopenset>Map settings → Country details</button>.</p>')
     + (list.length > 1 ? `<label>Several regions<select data-mcombine><option value="together" selected>Together as one region</option><option value="separate">Separately, as different regions</option></select></label><p class="mini-label">Together draws one outline around all of them. Separately makes one item per region, so each can be timed or partly animated on its own.</p>` : '')
     + campaign.regionFields(a) + '</div>';
@@ -388,8 +407,21 @@ function renderInspector() {
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
   let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>`;
   if(it.type==='group'){
-    h+='<div class="section-title m-sep">GROUP TRANSFORM</div>'+campaign.groupFields(it)+F.sel('easing','Motion',it.easing,EASE_OPTS);
+    const member=proj.actions.find(a=>it.memberIds.includes(a.id)),pose=groupPoseAt(it,frame);
+    h+=F.sel('__groupMove','Movement',it.groupMove||'stay',[['stay','Stay'],['move','Move to destination']])
+      +(it.groupMove==='move'?F.loc('__groupDestination','Destination',it.groupDestination,'place'):'')
+      +F.color('__groupColor','Color',it.color||member?.color||'#a7b887')
+      +F.sel('__groupSizeMode','Sizing',member?.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
+      +(member?.sizeMode==='map'?F.num('__groupSizeZoom','Anchor zoom',member.sizeZoom??3,0,14,.1):'')
+      +F.range('__groupScale','Size',pose.scale,.1,8,.05,x=>x.toFixed(2)+'x')
+      +'<p class="mini-label">Drag any member to move the group. Drag the gold direction point to turn the group.</p>'
+      +'<details><summary>Group animation and transforms</summary>'+campaign.groupFields(it)+F.sel('easing','Motion',it.easing,EASE_OPTS)+'</details>';
+
     box.innerHTML=h;bindInspector(it);campaign.bind(it);return;
+  }
+  if(it.type==='object'){
+    h+=objectFields(it)+'<details><summary>Animation and label style</summary>'+F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']])+F.sel('easing','Motion',it.easing,EASE_OPTS)+labelFields(it)+objectArrangementFields(it)+'</details>';
+    box.innerHTML=h;bindInspector(it);campaign?.bind(it);bindObjectArrangement();bindObjectKeys(it);bindArmyFields(it);updateObjectInspector(it);return;
   }
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
   h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : it.type === 'object' ? F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
@@ -431,24 +463,28 @@ function artworkFields(a) {
 function objectFields(a) {
   const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
-  return objectPicker(a.glyph)
+  const advanced= ''
     + (a.glyph==='army'?armyFields(a):'')
     + (wall?'':F.num('count',a.glyph==='army'?'Army copies':'Count',a.count??1,1,a.glyph==='army'?Math.max(1,Math.floor(100/total)):100,1)+formationFields(a)+`<div class="two">${F.num('gapX','Horizontal gap',a.gapX??defaultObjectGap(a),0,1000)}${F.num('gapY','Vertical gap',a.gapY??defaultObjectGap(a),0,1000)}</div>`)
-    + F.sel('__pinMove','Position',a.mode||'stay',positionOptions)
-    + (['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'From':'Location',a.place,'place')+(a.mode==='move'?F.loc('to','To',a.to,'place'):''))
+    + (['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'From':'Location',a.place,'place'))
     + (wall?F.range('wallSpacing','Segment spacing / overlap',a.wallSpacing??52,12,120,1,x=>x+' px')+F.num('wallTowerEvery','Tower every N segments (0 = off)',a.wallTowerEvery??8,0,50)+F.chk('wallGate','Gate in the middle',!!a.wallGate):'')
     + (['move','path'].includes(a.mode)?F.chk('trail','Draw a trail behind it',a.trail!==false):'')
-    + (a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
     + '<div class="section-title m-sep">SIZE, ROTATION &amp; DAMAGE</div>'
-    + F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
-    + (a.sizeMode==='map'?F.num('sizeZoom','Reference zoom',a.sizeZoom??3,0,14,.1)+'<p class="mini-label">Size is measured at this zoom. Zooming in one level doubles it. Size keyframes still apply.</p>':'')
-    + F.range('size','Size',pose.size,.2,8,.05,x=>x.toFixed(2)+'x')
     + F.range('opacity','Opacity',a.opacity??1,0,1,.05,x=>Math.round(x*100)+'%')
     + F.num('objectAngle',a.formation==='wall'?'Extra facing angle (degrees)':'Rotation (degrees)',pose.objectAngle,-3600,3600,1)
     + (a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
     + objectKeyFields(a)
     + (a.glyph==='image'?'':F.sel('enter','Appears',a.enter,OBJECT_ENTER)+F.sel('idle','While visible',a.idle,OBJECT_IDLE)+F.sel('exit','Disappears',a.exit,OBJECT_EXIT))
     + F.chk('showLabel','Show label',a.showLabel)+(a.showLabel?F.text('label','Label text',a.label,60,'Uses the default name'):'');
+  return objectPicker(a.glyph)
+    +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
+    +(a.mode==='move'?F.loc('to','Destination',a.to,'place'):'')
+    +(a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
+    + F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
+    + (a.sizeMode==='map'?F.num('sizeZoom','Anchor zoom',a.sizeZoom??3,0,14,.1)+'<p class="mini-label">The size is anchored at this zoom level. Zooming in one level doubles it.</p>':'')
+    + F.range('size','Size',pose.size,.2,8,.05,x=>x.toFixed(2)+'x')
+    +'<p class="mini-label">Drag the object on the map to change its fixed or starting position. Drag the gold direction point to turn it. Shift-click objects to select several.</p>'
+    +'<details><summary>More object options</summary>'+advanced+'</details>';
 }
 function objectKeyFields(a) {
   const labels={size:'Size',objectAngle:'Rotation',damageState:'Damage'};
@@ -619,7 +655,7 @@ function actionFields(a) {
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
     case 'highlight': {
       const country = ['country','region','regions','polygon'].includes(a.target.kind);
-      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country?highlightExtentFields(a)+campaign.exclusionFields(a)+flagHighlightFields(a):'') + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || terrainSettingsOf(proj).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? terrainSettingsOf(proj).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country?highlightExtentFields(a)+flagHighlightFields(a):'') + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || terrainSettingsOf(proj).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? terrainSettingsOf(proj).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
@@ -805,10 +841,35 @@ function bindInspector(it) {
     renderInspector();
     $('#mInspector [data-object-type]')?.focus();
   };
+  const updateGroupValue=(key,v,commit)=>{
+        const members=proj.actions.filter(a=>it.memberIds.includes(a.id));
+        if(key==='__groupMove'){
+          const pose=groupPoseAt(it,frame);it.groupMove=v;
+          if(v==='stay'){it.transform={...it.transform,lon:pose.lon,lat:pose.lat};for(const key of it.groupKeys||[]){delete key.values.lon;delete key.values.lat;}it.groupKeys=(it.groupKeys||[]).filter(k=>Object.keys(k.values).length);}
+        }else if(key==='__groupDestination'){
+          const point=resolveLoc(geo,v);if(!point){undoStack.pop();updateHistory();notify('Choose a destination');return;}
+          it.groupDestination=v;const pose=groupPoseAt(it,frame),end=it.start+Math.min(it.animDur??it.dur,it.dur);
+          putGroupKey(it,it.start,{lon:pose.lon,lat:pose.lat});putGroupKey(it,end,{lon:xToLon(point.X),lat:yToLat(point.Y)});
+        }else if(key==='__groupColor'){it.color=v;for(const member of members)member.color=v;}
+        else if(key==='__groupSizeMode')for(const member of members){member.sizeMode=v;if(v==='map')member.sizeZoom=lastView?.cam.zoom??proj.camera.init.zoom;}
+        else if(key==='__groupSizeZoom')for(const member of members)member.sizeZoom=clamp(+v,0,14);
+        else if(key==='__groupScale'){if(it.groupKeys?.some(k=>k.values.scale!==undefined))putGroupKey(it,frame,{scale:clamp(+v,.1,8)});else it.transform={...it.transform,scale:clamp(+v,.1,8)};}
+    changed();if(commit)renderInspector();
+  };
   let gesture = false;
   $$('#mInspector [data-mf]').forEach(el => {
     const key = el.dataset.mf, t = el.dataset.t;
     const read = () => (t === 'chk' ? el.checked : t === 'num' ? Number(el.value) : el.value);
+    if(it.type==='group'&&key.startsWith('__group')){
+      const apply=commit=>{
+        const v=t==='loc'?parseLoc(el.value,el.dataset.kinds):['range','num'].includes(t)?Number(el.value):read();
+        if(v===null||v===undefined){notify('Choose a destination');return;}
+        if(!gesture){checkpoint();gesture=true;}updateGroupValue(key,v,commit);if(commit)gesture=false;
+      };
+      if(t==='range'||t==='color')el.oninput=()=>apply(false);
+      el.onchange=()=>apply(true);return;
+    }
+
     if (t === 'range' || t === 'color') {
       el.oninput = () => {
         if (!gesture) { checkpoint(); gesture = true; }
@@ -853,7 +914,7 @@ function bindInspector(it) {
       if (key === '__pinMove') {
         it.mode = v === 'wallPath' ? 'wallPath' : v === 'path' ? 'path' : v === 'move' ? 'move' : 'stay';
         if(it.mode==='wallPath')it.enter='none';
-        if (it.mode === 'move' && !(it.to && Number.isFinite(it.to.lat))) { const c = (isDetail() ? localCities() : []).find(x => x[0] !== it.place.name); it.to = c ? { kind: 'city', name: c[0], lat: c[1], lon: c[2] } : it.place.name === 'New York' ? { kind: 'city', name: 'London', lat: 51.5072, lon: -0.1276 } : { kind: 'city', name: 'New York', lat: 40.7128, lon: -74.006 }; }
+        if (it.mode === 'move' && !(it.to && Number.isFinite(it.to.lat))) it.to=clone(it.place);
         if (['path','wallPath'].includes(it.mode)) it.path ||= []; else if (pathDraw?.id === it.id) { pathDraw = null; canvas.style.cursor = ''; }
         if (it.mode !== 'stay' && it.dur <= (it.animDur ?? it.dur)) { it.dur = (it.animDur ?? it.dur) + 45; ensureLength(it.start + it.dur); } // leave time to sit at the destination before the bar ends
         changed(); renderInspector(); if (['path','wallPath'].includes(it.mode) && !it.path.length) startPathDraw(it.id); return;
@@ -904,6 +965,19 @@ function bindInspector(it) {
     if (loc.kind === 'all') { it.target = loc; delete it.borderRing; }
     else if (!addMember(it, loc, false)) { undoStack.pop(); updateHistory(); addBox.value = ''; return; }
     changed(); renderInspector();
+  };
+  const excludeBox=$('#mInspector [data-mexclude]');
+  if(excludeBox)excludeBox.onchange=()=>{
+    const loc=parseLoc(excludeBox.value,'country');
+    if(!loc||!['country','region'].includes(loc.kind)){notify('Not found. Type a region or country name');excludeBox.value='';return;}
+    pause();checkpoint();if(!excludeMember(it,loc)){undoStack.pop();updateHistory();return;}changed();renderInspector();
+  };
+  $$('#mInspector [data-mexclude-remove]').forEach(button=>button.onclick=()=>{pause();checkpoint();it.highlightExclude.splice(+button.dataset.mexcludeRemove,1);changed();renderInspector();});
+  const excludePick=$('#mInspector [data-mexclude-pick]');if(excludePick)excludePick.onclick=()=>{
+    if(pick?.key==='__excluded'){cancelPick();return;}
+    pause();endPathDraw(true);campaign?.cancel();startPick('__excluded','country');
+    $('#mHint').textContent='Click regions to exclude or include them; Shift-click for a whole country; Esc to finish';
+    notify('Click regions on the map to exclude or include them');renderInspector();
   };
   $$('#mInspector [data-mregpick]').forEach(el => el.onclick = () => {
     if (pick?.key === '__members') { cancelPick(); return; }
@@ -1012,7 +1086,7 @@ function startPick(key, kinds) {
   pick = { key, kinds, id: sel }; canvas.style.cursor = 'crosshair'; $('#mHint').textContent = 'Click to choose a location · right-drag or middle-drag to pan · scroll to zoom · Esc to cancel';
   notify(kinds === 'highlightRadius' ? 'Click the map to set the highlight radius end point' : kinds === 'cameraCenter' ? 'Click the map to choose the camera center' : kinds === 'borderpoint' ? 'Click near the border to set its endpoint' : kinds === 'any' ? 'Click the map (Shift+click picks a whole country)' : kinds === 'place' ? 'Click the map to choose a place' : isDetail() ? 'Click a region; Shift-click for a whole country' : 'Click a country');
 }
-function cancelPick() { const camera = pick?.kinds === 'cameraCenter'; const was = pick?.key === '__members'; pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; if (was || camera) { renderInspector(); draw(); } }
+function cancelPick() { const camera = pick?.kinds === 'cameraCenter'; const was = ['__members','__excluded'].includes(pick?.key); pick = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; if (was || camera) { renderInspector(); draw(); } }
 const HINT = 'Right-drag or middle-drag to pan · scroll to zoom · scrub the timeline to preview';
 function canvasXY(e) { const b = canvas.getBoundingClientRect(); return { sx: (e.clientX - b.left) / b.width * proj.width, sy: (e.clientY - b.top) / b.height * proj.height }; }
 function finishMapPan(e) {
@@ -1125,6 +1199,10 @@ canvas.onpointerdown = e => {
     }
     loc = best ? { kind: 'city', name: best[0], lat: best[1], lon: best[2] } : { kind: 'point', name: `${ll.lat.toFixed(2)}, ${ll.lon.toFixed(2)}`, lat: +ll.lat.toFixed(4), lon: +ll.lon.toFixed(4) };
   }
+  if(pick.key==='__excluded'){
+    const a=items().find(i=>i.id===pick.id);if(a?.type!=='highlight'||!regionTarget(a)){cancelPick();return;}
+    checkpoint();if(excludeMember(a,loc,true)){changed();renderInspector();notify(`${a.highlightExclude.length} regions excluded`);}else{undoStack.pop();updateHistory();}return;
+  }
   if (pick.key === '__members') { // stays active so several regions can be clicked in a row
     const a = items().find(i => i.id === pick.id); if (!a || !regionTarget(a)) { cancelPick(); return; }
     checkpoint();
@@ -1132,6 +1210,9 @@ canvas.onpointerdown = e => {
     return;
   }
   const it = items().find(i => i.id === pick.id);
+  if(it?.type==='group'&&pick.key==='__groupDestination'){
+    const input=$('#mInspector [data-mf="__groupDestination"]');cancelPick();if(input){input.value=locText(loc);input.dispatchEvent(new Event('change',{bubbles:true}));}return;
+  }
   if (it) { checkpoint(); it[pick.key] = pick.key === 'highlightOrigin' ? { ...loc, kind: 'point' } : loc; changed(); renderInspector(); notify('Location set: ' + locText(loc)); }
   cancelPick();
 };
@@ -1541,6 +1622,7 @@ campaign=installCampaignUI({canvas,F,project:()=>proj,current,frame:()=>frame,ge
   projectPoint:(view,p)=>{const X=lonToX(p.lon);return projectPoint(view,X+Math.round(view.cx-X),latToY(p.lat));},
   pointAt:e=>{if(!lastView||!geo)return null;const{sx,sy}=canvasXY(e);return screenToLonLat(lastView,sx,sy);}
 });
+directMapEditing=installDirectMapEditing({canvas,project:()=>proj,view:()=>lastView,geo:()=>geo,frame:()=>frame,current,select,pause,checkpoint,changed,renderInspector,draw,add:addAction,busy:()=>!!(pick||pathDraw||exporting||mapPan)});
 buildStaticUI(); buildLists(); bindSettings(); bindToolbar(); $('#mHint').textContent = HINT;
 audioUI = registerAudioStudio('map', {
  getSelected:()=>sel, getFrame:()=>frame, getFps:()=>proj.fps, getFrames:()=>proj.frames,

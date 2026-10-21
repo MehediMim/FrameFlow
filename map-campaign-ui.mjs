@@ -9,16 +9,8 @@ export function installCampaignUI(api){
   const inside=a=>api.frame()>=a.start&&api.frame()<=a.start+a.dur;
   const keyList=(a,kind,keys)=>`<div class="m-campaign-keys">${keys.map(k=>`<span><button type="button" data-campaign-seek="${k.frame}">${(k.frame/api.project().fps).toFixed(2)}s</button><button type="button" data-campaign-remove="${kind}:${k.frame}" aria-label="Remove keyframe at ${(k.frame/api.project().fps).toFixed(2)} seconds">×</button></span>`).join('')}</div>`;
   function regionFields(a){
-    const active=draft?.id===a.id&&draft.purpose!=='exclude';
+    const active=draft?.id===a.id;
     return `<div class="m-area-tools"><label>Draw an area<select data-area-mode><option value="select">Select existing regions inside</option><option value="region" ${a.target?.kind==='polygon'?'selected':''}>Use drawn boundary as one region</option></select></label><label data-area-rule-label>Include regions by<select data-area-rule><option value="center">Center inside the area</option><option value="contained">Entire outline inside the area</option></select></label><label>Region name<input data-area-name maxlength="100" value="${esc(a.target?.kind==='polygon'?a.target.name:'Drawn region')}"></label><div class="two"><button type="button" data-area-draw>${active?'Redraw area':'Draw area on map'}</button><button type="button" data-area-apply ${active?'':'disabled'}>Apply area</button></div>${active?'<div class="two"><button type="button" data-area-back>Last point</button><button type="button" data-area-cancel>Cancel</button></div>':''}<p class="mini-label">Click corners or drag a closed area. Select existing countries/loaded regions, or use your exact outline as a new region. Enter applies; Esc cancels.</p></div>`;
-  }
-  function exclusionFields(a){
-    const active=draft?.id===a.id&&draft.purpose==='exclude';
-    return '<div class="section-title m-sep">EXCLUDE FROM HIGHLIGHT</div>'
-      +`<div class="m-region-chips">${(a.highlightExclude||[]).map((part,i)=>`<button type="button" data-exclusion-remove="${i}" title="Include this area again">${esc(part.name)} &times;</button>`).join('')}</div>`
-      +`<button type="button" data-exclusion-draw>${active?'Redraw excluded area':'Draw area to exclude'}</button>`
-      +(active?'<label>Excluded area name<input data-exclusion-name maxlength="100" value="'+esc(draft.name)+'"></label><div class="two"><button type="button" data-exclusion-apply>Apply exclusion</button><button type="button" data-exclusion-back>Last point</button><button type="button" data-exclusion-cancel>Cancel</button></div>':'')
-      +'<p class="mini-label">Keep the full country highlighted while leaving drawn areas unfilled. Click at least three corners, then Apply exclusion. You can exclude several areas.</p>';
   }
   function pathFields(a){
     const network=Object.hasOwn(NETWORK_SHAPES,a.shape),disabled=!inside(a);
@@ -32,11 +24,6 @@ export function installCampaignUI(api){
   function applyArea(){
     const a=item(draft?.id);if(!a)return cancelArea();
     if(!validPolygon(draft.path)){api.notify('Draw at least three corners enclosing an area.');return;}
-    if(draft.purpose==='exclude'){
-      if((a.highlightExclude||[]).length>=100){api.notify('A highlight can exclude up to 100 areas.');return;}
-      const part={kind:'polygon',name:($('[data-exclusion-name]')?.value||draft.name||'Excluded area').trim().slice(0,100)||'Excluded area',path:structuredClone(draft.path)};
-      api.pause();api.checkpoint();a.highlightExclude=[...(a.highlightExclude||[]),part];draft=null;canvas.style.cursor='';refresh();api.notify('Area excluded from highlight');return;
-    }
     const mode=$('[data-area-mode]')?.value||draft.mode,path=draft.path;
     let target;
     if(mode==='region')target={kind:'polygon',name:($('[data-area-name]')?.value||'Drawn region').trim().slice(0,100)||'Drawn region',path:structuredClone(path)};
@@ -50,20 +37,12 @@ export function installCampaignUI(api){
   }
   function bind(a){
     const root=$('#mInspector');
-    const exclude=root.querySelector('[data-exclusion-draw]');if(exclude)exclude.onclick=()=>{
-      api.endPathDraw(true);api.cancelPick();api.pause();draft={id:a.id,path:[],purpose:'exclude',name:'Excluded area '+((a.highlightExclude||[]).length+1),pressed:false};canvas.style.cursor='crosshair';api.renderInspector();api.draw();
-    };
-    const excludeName=root.querySelector('[data-exclusion-name]');if(excludeName)excludeName.oninput=()=>draft.name=excludeName.value;
-    const excludeApply=root.querySelector('[data-exclusion-apply]');if(excludeApply)excludeApply.onclick=applyArea;
-    const excludeBack=root.querySelector('[data-exclusion-back]');if(excludeBack)excludeBack.onclick=()=>{draft?.path.pop();api.draw();};
-    const excludeCancel=root.querySelector('[data-exclusion-cancel]');if(excludeCancel)excludeCancel.onclick=()=>{cancelArea();api.renderInspector();};
-    root.querySelectorAll('[data-exclusion-remove]').forEach(button=>button.onclick=()=>{api.pause();api.checkpoint();a.highlightExclude.splice(+button.dataset.exclusionRemove,1);refresh();});
     const draw=root.querySelector('[data-area-draw]');if(draw)draw.onclick=()=>{
       api.endPathDraw(true);api.cancelPick();api.pause();draft={id:a.id,path:[],mode:$('[data-area-mode]').value,rule:$('[data-area-rule]').value,name:$('[data-area-name]').value,pressed:false};canvas.style.cursor='crosshair';api.renderInspector();api.draw();
     };
-    const mode=root.querySelector('[data-area-mode]');if(mode){const sync=()=>{const custom=mode.value==='region';root.querySelector('[data-area-rule-label]').hidden=custom;root.querySelector('[data-area-name]').closest('label').hidden=!custom;if(draft&&draft.purpose!=='exclude')draft.mode=mode.value;};mode.onchange=sync;if(draft?.id===a.id&&draft.purpose!=='exclude')mode.value=draft.mode;sync();}
+    const mode=root.querySelector('[data-area-mode]');if(mode){const sync=()=>{const custom=mode.value==='region';root.querySelector('[data-area-rule-label]').hidden=custom;root.querySelector('[data-area-name]').closest('label').hidden=!custom;if(draft)draft.mode=mode.value;};mode.onchange=sync;if(draft?.id===a.id)mode.value=draft.mode;sync();}
     const apply=root.querySelector('[data-area-apply]');if(apply)apply.onclick=applyArea;
-    if(draft?.id===a.id&&draft.purpose!=='exclude'){const rule=root.querySelector('[data-area-rule]'),name=root.querySelector('[data-area-name]');if(rule){rule.value=draft.rule;rule.onchange=()=>draft.rule=rule.value;}if(name){name.value=draft.name;name.oninput=()=>draft.name=name.value;}}
+    if(draft?.id===a.id){const rule=root.querySelector('[data-area-rule]'),name=root.querySelector('[data-area-name]');if(rule){rule.value=draft.rule;rule.onchange=()=>draft.rule=rule.value;}if(name){name.value=draft.name;name.oninput=()=>draft.name=name.value;}}
     const back=root.querySelector('[data-area-back]');if(back)back.onclick=()=>{draft?.path.pop();api.draw();};
     const cancel=root.querySelector('[data-area-cancel]');if(cancel)cancel.onclick=()=>{cancelArea();api.renderInspector();};
     root.querySelectorAll('[data-campaign-seek]').forEach(b=>b.onclick=()=>{api.endPathDraw(true);api.pause();api.seek(+b.dataset.campaignSeek);api.renderInspector();});
@@ -132,5 +111,5 @@ export function installCampaignUI(api){
     else if(!typing&&e.key==='Enter'&&draft){e.preventDefault();e.stopImmediatePropagation();applyArea();}
     else if(!typing&&['Backspace','Delete'].includes(e.key)&&draft){e.preventDefault();e.stopImmediatePropagation();draft.path.pop();api.draw();}
   },true);
-  return{regionFields,exclusionFields,pathFields,groupFields,bind,decorateItems,decorateTimeline,overlay,cancel:cancelArea};
+  return{regionFields,pathFields,groupFields,bind,decorateItems,decorateTimeline,overlay,cancel:cancelArea};
 }

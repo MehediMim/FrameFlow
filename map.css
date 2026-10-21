@@ -177,3 +177,7 @@ body.mode-map #mapStudio{display:flex}
 #mInspector .m-object-options .m-object-choice img{width:28px;height:28px}
 #mInspector .m-object-options [aria-selected="true"]{background:#303e2b;box-shadow:inset 3px 0 var(--accent)}
 .m-object-picker summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+#mMapContext{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #596653;border-radius:8px;background:#1b241ff2;box-shadow:0 4px 18px #0007;color:#e3eadc;font-size:12px;white-space:nowrap}
+#mMapContext[hidden]{display:none}
+#mMapContext button{padding:6px 10px;font-size:12px}

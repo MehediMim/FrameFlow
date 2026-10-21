@@ -83,7 +83,7 @@ try {
   assert.equal(await evaluate(`document.querySelector('#mCanvas').style.cursor`),'','placement ends after the first click');
   await placeObjectAt(-3,49);
   assert.deepEqual((await saved()).actions[0].place,firstPosition,'later map clicks do not move the object automatically');
-  await evaluate(`document.querySelector('[data-mpick="place"]').click()`);
+  await evaluate(`document.querySelector('#mItems [data-mid]').click();document.querySelector('[data-mpick="place"]').click()`);
   await placeObjectAt(-3,49);
   assert.notDeepEqual((await saved()).actions[0].place,firstPosition,'the existing Position button allows repositioning');
   await change('#mInspector [data-mf="glyph"]','stoneFort');

@@ -1,3 +1,4 @@
+import { surface, polygonSurface } from './map-object-materials.mjs';
 // Time props use elapsed timeline seconds, including during scrubbing and export.
 const TAU = Math.PI * 2, ink = '#293b48', paper = '#fff8e9';
 function line(c, x, y, X, Y, color = ink, width = .035) {
@@ -5,14 +6,14 @@ function line(c, x, y, X, Y, color = ink, width = .035) {
   c.strokeStyle = color; c.lineWidth = width; c.lineCap = 'round'; c.stroke();
 }
 function circle(c, x, y, r, color) {
-  c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = color; c.fill();
+  c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = surface(c,color,x-r,y-r,r*2,r*2); c.fill();
 }
 function box(c, x, y, w, h, color, r = .06) {
-  c.beginPath(); c.roundRect(x, y, w, h, r); c.fillStyle = color; c.fill();
+  c.beginPath(); c.roundRect(x, y, w, h, r); c.fillStyle = surface(c,color,x,y,w,h); c.fill();
 }
 function polygon(c, points, color) {
   c.beginPath(); points.forEach(([x,y],i) => i ? c.lineTo(x,y) : c.moveTo(x,y));
-  c.closePath(); c.fillStyle = color; c.fill();
+  c.closePath(); c.fillStyle = polygonSurface(c,color,1,points); c.fill();
 }
 function hand(c, angle, length, color, width) {
   line(c, 0, 0, Math.sin(angle)*length, -Math.cos(angle)*length, color, width);

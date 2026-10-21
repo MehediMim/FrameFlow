@@ -1,16 +1,17 @@
+import { surface, polygonSurface } from './map-object-materials.mjs';
 // Small vector illustrations for Age of Sail exploration and early modern war maps.
 const ink='#332b24',wood='#775138',cream='#e8dab4',brass='#c5a052',steel='#9baba9';
-function path(c,s,points,fill){c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x*s,y*s):c.moveTo(x*s,y*s));c.closePath();c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.045;c.lineJoin='round';c.stroke();}
-function box(c,s,x,y,w,h,fill){c.beginPath();c.roundRect(x*s,y*s,w*s,h*s,s*.035);c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.04;c.stroke();}
+function path(c,s,points,fill){c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x*s,y*s):c.moveTo(x*s,y*s));c.closePath();c.fillStyle=polygonSurface(c,fill,s,points);c.fill();c.strokeStyle=ink;c.lineWidth=s*.045;c.lineJoin='round';c.stroke();}
+function box(c,s,x,y,w,h,fill){c.beginPath();c.roundRect(x*s,y*s,w*s,h*s,s*.035);c.fillStyle=surface(c,fill,x*s,y*s,w*s,h*s);c.fill();c.strokeStyle=ink;c.lineWidth=s*.04;c.stroke();}
 function line(c,s,x,y,X,Y,fill=ink,w=.045){c.beginPath();c.moveTo(x*s,y*s);c.lineTo(X*s,Y*s);c.strokeStyle=fill;c.lineWidth=s*w;c.lineCap='round';c.stroke();}
-function circle(c,s,x,y,r,fill){c.beginPath();c.arc(x*s,y*s,r*s,0,Math.PI*2);c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.04;c.stroke();}
+function circle(c,s,x,y,r,fill){c.beginPath();c.arc(x*s,y*s,r*s,0,Math.PI*2);c.fillStyle=surface(c,fill,(x-r)*s,(y-r)*s,r*2*s,r*2*s);c.fill();c.strokeStyle=ink;c.lineWidth=s*.04;c.stroke();}
 function wheel(c,s,x,y,r){circle(c,s,x,y,r,wood);circle(c,s,x,y,r*.66,'#b88b56');for(let i=0;i<6;i++){const a=i*Math.PI/3;line(c,s,x,y,x+Math.cos(a)*r*.7,y+Math.sin(a)*r*.7,ink,.025);}circle(c,s,x,y,.055,brass);}
 function sail(c,s,x,y,w,h,t){
   const billow=Math.sin(t*2.4+x*3)*.035;
   c.beginPath();c.moveTo((x-w/2)*s,y*s);c.quadraticCurveTo(x*s,(y+.06)*s,(x+w/2)*s,y*s);
   c.bezierCurveTo((x+w*.37+billow)*s,(y+h*.4)*s,(x+w*.43)*s,(y+h*.8)*s,(x+w*.52)*s,(y+h)*s);
   c.quadraticCurveTo(x*s,(y+h+.06)*s,(x-w*.52)*s,(y+h)*s);
-  c.quadraticCurveTo((x-w*.34+billow)*s,(y+h*.5)*s,(x-w/2)*s,y*s);c.fillStyle=cream;c.fill();c.strokeStyle=ink;c.lineWidth=s*.035;c.stroke();
+  c.quadraticCurveTo((x-w*.34+billow)*s,(y+h*.5)*s,(x-w/2)*s,y*s);c.fillStyle=surface(c,cream,(x-w/2)*s,y*s,w*s,h*s);c.fill();c.strokeStyle=ink;c.lineWidth=s*.035;c.stroke();
   line(c,s,x-w*.3,y+.08,x-w*.3,y+h-.03,'#c4b38d',.018);line(c,s,x+w*.3,y+.08,x+w*.3,y+h-.03,'#c4b38d',.018);
 }
 function pennant(c,s,x,y,col,t){const wave=Math.sin(t*3)*.04;path(c,s,[[x,y],[x+.32,y+.08+wave],[x,y+.16]],col);}

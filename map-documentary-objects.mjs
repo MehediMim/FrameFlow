@@ -1,18 +1,19 @@
+import { surface, polygonSurface } from './map-object-materials.mjs';
 // Layered vector miniatures remain sharp in close-ups and video exports.
 const ink='#30352a', leather='#6b5136', skin='#d3af85', cloth='#b9b08a', steel='#74776d';
 function shape(c,s,points,fill){
   c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x*s,y*s):c.moveTo(x*s,y*s));
-  c.closePath();c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.025;c.lineJoin='round';c.stroke();
+  c.closePath();c.fillStyle=polygonSurface(c,fill,s,points);c.fill();c.strokeStyle=ink;c.lineWidth=s*.025;c.lineJoin='round';c.stroke();
 }
 function box(c,s,x,y,w,h,fill,r=.025){
-  c.beginPath();c.roundRect(x*s,y*s,w*s,h*s,r*s);c.fillStyle=fill;c.fill();
+  c.beginPath();c.roundRect(x*s,y*s,w*s,h*s,r*s);c.fillStyle=surface(c,fill,x*s,y*s,w*s,h*s);c.fill();
   c.strokeStyle=ink;c.lineWidth=s*.025;c.stroke();
 }
 function line(c,s,x,y,X,Y,color=ink,width=.025){
   c.beginPath();c.moveTo(x*s,y*s);c.lineTo(X*s,Y*s);c.strokeStyle=color;c.lineWidth=s*width;c.lineCap='round';c.stroke();
 }
 function oval(c,s,x,y,rx,ry,fill){
-  c.beginPath();c.ellipse(x*s,y*s,rx*s,ry*s,0,0,Math.PI*2);c.fillStyle=fill;c.fill();
+  c.beginPath();c.ellipse(x*s,y*s,rx*s,ry*s,0,0,Math.PI*2);c.fillStyle=surface(c,fill,(x-rx)*s,(y-ry)*s,rx*2*s,ry*2*s);c.fill();
   c.strokeStyle=ink;c.lineWidth=s*.025;c.stroke();
 }
 export function drawDocumentarySoldier(c,s,col,role='rifleman'){

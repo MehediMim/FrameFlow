@@ -1,3 +1,4 @@
+import { surface, polygonSurface } from './map-object-materials.mjs';
 // Map objects, effects and shapes: units, places and hazards you can place, move and animate
 // (war maps, disasters, logistics...). Everything is drawn as vector shapes in code, so it looks the
 // same on every device and in exported video. The engine passes its helpers in as `H`.
@@ -14,9 +15,9 @@ import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-e
 import { drawDamage, drawRubble } from './map-damage.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
 const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = Math.max(1, s * .05); c.stroke(); };
-const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = fill; c.fill(); stroke(c, s); };
-const rect = (c, x, y, w, h, fill, s, r = .06) => { c.beginPath(); c.roundRect(x * s, y * s, w * s, h * s, r * s); c.fillStyle = fill; c.fill(); stroke(c, s); };
-const circ = (c, x, y, r, fill, s) => { c.beginPath(); c.arc(x * s, y * s, r * s, 0, TAU); c.fillStyle = fill; c.fill(); stroke(c, s); };
+const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = polygonSurface(c,fill,s,pts); c.fill(); stroke(c, s); };
+const rect = (c, x, y, w, h, fill, s, r = .06) => { c.beginPath(); c.roundRect(x * s, y * s, w * s, h * s, r * s); c.fillStyle = surface(c,fill,x*s,y*s,w*s,h*s); c.fill(); stroke(c, s); };
+const circ = (c, x, y, r, fill, s) => { c.beginPath(); c.arc(x * s, y * s, r * s, 0, TAU); c.fillStyle = surface(c,fill,(x-r)*s,(y-r)*s,r*2*s,r*2*s); c.fill(); stroke(c, s); };
 
 // Each icon is drawn in a box of about -1..1 (s = half size in px), facing right.
 // rot: turns fully to its heading when it moves; otherwise it just mirrors. air: floats above the ground.

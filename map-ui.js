@@ -1,3 +1,4 @@
+import { paintObjectPreviews } from './map-object-preview.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
@@ -335,7 +336,8 @@ function captureCamera() {
 function renderItems() {
   const its = items();
   $('#mItemCount').textContent = its.length;
-  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Nothing yet. Add an animation or a camera preset above.</p>';
+  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Nothing yet. Add an animation or a camera preset above.</p>';
+  paintObjectPreviews($('#mItems'));
   $$('[data-mid]').forEach(el => el.onclick = () => select(el.dataset.mid));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current();
   audioUI?.renderList();
@@ -550,11 +552,13 @@ function arrangeObjects(operation) {
 }
 function objectPicker(glyph) {
   const filter = objectTypeFilters.get(sel) || 'all';
+  const entries = Object.entries(OBJECT_ICONS).sort((a,b) => a[1].label.localeCompare(b[1].label));
+  const groups = OBJECT_CATEGORIES.filter(([key]) => filter === 'all' || key === filter);
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  const types = [['all', 'All types'], ...OBJECT_CATEGORIES];
   const outside = filter !== 'all' && (OBJECT_ICONS[glyph]?.group || 'general') !== filter;
-  return `<label>Object type<select data-object-type>${types.map(([key,label]) => `<option value="${key}" ${key === filter ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
-    + `<label>Object<select data-mf="glyph" data-t="sel">${outside ? `<option value="${glyph}" selected disabled>Current: ${esc(OBJECT_ICONS[glyph].label)}</option>` : ''}${OBJECT_CATEGORIES.filter(([key]) => filter === 'all' || key === filter).map(([key,label]) => `<optgroup label="${esc(label)}">${options(key)}</optgroup>`).join('')}</select></label>`;
+  return `<label>Object type<select data-object-type>${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label]) => `<option value="${key}" ${key === filter ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
+    + `<label>Object<select data-mf="glyph" data-t="sel">${outside ? `<option value="${glyph}" selected disabled>Current: ${esc(OBJECT_ICONS[glyph].label)}</option>` : ''}${groups.map(([key,label]) => `<optgroup label="${esc(label)}">${options(key)}</optgroup>`).join('')}</select></label>`
+    + `<label>Find an object<input type="search" data-object-search placeholder="Search names or categories" autocomplete="off"></label><div class="m-object-library" aria-label="Object library">${groups.map(([group,label]) => `<section data-object-category><h4>${esc(label)}</h4>${entries.filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<button type="button" class="m-object-choice" data-object-choice="${key}" data-object-match="${esc((icon.label+' '+label).toLowerCase())}" aria-pressed="${key === glyph}"><img data-object-preview="${key}" alt=""><span>${esc(icon.label)}</span>${key === glyph ? '<span class="m-object-selected" aria-hidden="true">?</span>' : ''}</button>`).join('')}</section>`).join('')}<p data-object-empty hidden>No matching objects.</p></div>`;
 }
 function highlightExtentFields(a) {
   const mode = a.highlightExtent || 'full';
@@ -762,6 +766,25 @@ function shotFields(s) {
 
 function bindInspector(it) {
   bindCameraInspector(it);
+  paintObjectPreviews($('#mInspector'));
+  $$('#mInspector [data-object-choice]').forEach(button => button.onclick = () => {
+    const input = $('#mInspector [data-mf="glyph"]');
+    input.value = button.dataset.objectChoice;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const selected = $('#mInspector [aria-pressed="true"][data-object-choice]');
+    selected?.scrollIntoView({ block: 'nearest' }); selected?.focus({ preventScroll: true });
+  });
+  const search = $('#mInspector [data-object-search]');
+  if (search) search.oninput = () => {
+    const words = search.value.toLowerCase().trim().split(/\s+/);
+    let matches = 0;
+    $$('#mInspector [data-object-choice]').forEach(button => {
+      button.hidden = !words.every(word => button.dataset.objectMatch.includes(word));
+      if (!button.hidden) matches++;
+    });
+    $$('#mInspector [data-object-category]').forEach(section => section.hidden = !section.querySelector('[data-object-choice]:not([hidden])'));
+    $('#mInspector [data-object-empty]').hidden = matches > 0;
+  };
   const objectType = $('#mInspector [data-object-type]');
   if (objectType) objectType.onchange = () => {
     objectTypeFilters.set(it.id, objectType.value);

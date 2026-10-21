@@ -1,13 +1,19 @@
+import { surface, polygonSurface } from './map-object-materials.mjs';
 // Layered map miniatures. Coordinates are normalized to roughly -1..1;
 // time is seconds so animation matches in previews and frame-by-frame exports.
 const ink='#28343b',glass='#a9d4df',cream='#e8e4d5',metal='#87969b';
 const tau=Math.PI*2;
 function tint(hex,n){return '#'+[1,3,5].map(i=>Math.max(0,Math.min(255,parseInt(hex.slice(i,i+2),16)+n)).toString(16).padStart(2,'0')).join('');}
-function shape(c,s,points,fill){c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x*s,y*s):c.moveTo(x*s,y*s));c.closePath();c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.023;c.lineJoin='round';c.stroke();}
-function box(c,s,x,y,w,h,fill,r=.025){c.beginPath();c.roundRect(x*s,y*s,w*s,h*s,r*s);c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.023;c.stroke();}
+function shape(c,s,points,fill){c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x*s,y*s):c.moveTo(x*s,y*s));c.closePath();c.fillStyle=polygonSurface(c,fill,s,points);c.fill();c.strokeStyle=ink;c.lineWidth=s*.023;c.lineJoin='round';c.stroke();}
+function box(c,s,x,y,w,h,fill,r=.025){c.beginPath();c.roundRect(x*s,y*s,w*s,h*s,r*s);c.fillStyle=surface(c,fill,x*s,y*s,w*s,h*s);c.fill();c.strokeStyle=ink;c.lineWidth=s*.023;c.stroke();}
 function line(c,s,x,y,X,Y,color=ink,w=.02){c.beginPath();c.moveTo(x*s,y*s);c.lineTo(X*s,Y*s);c.strokeStyle=color;c.lineWidth=w*s;c.lineCap='round';c.stroke();}
-function oval(c,s,x,y,rx,ry,fill){c.beginPath();c.ellipse(x*s,y*s,rx*s,ry*s,0,0,tau);c.fillStyle=fill;c.fill();c.strokeStyle=ink;c.lineWidth=s*.023;c.stroke();}
-function wheel(c,s,x,y,r=.16){oval(c,s,x,y,r,r,ink);oval(c,s,x,y,r*.56,r*.56,metal);oval(c,s,x,y,r*.2,r*.2,cream);}
+function oval(c,s,x,y,rx,ry,fill){c.beginPath();c.ellipse(x*s,y*s,rx*s,ry*s,0,0,tau);c.fillStyle=surface(c,fill,(x-rx)*s,(y-ry)*s,rx*2*s,ry*2*s);c.fill();c.strokeStyle=ink;c.lineWidth=s*.023;c.stroke();}
+function wheel(c,s,x,y,r=.16){
+  oval(c,s,x,y,r,r,ink);oval(c,s,x,y,r*.72,r*.72,'#465056');
+  oval(c,s,x,y,r*.56,r*.56,metal);
+  for(let i=0;i<5;i++){const a=i*tau/5;oval(c,s,x+Math.cos(a)*r*.35,y+Math.sin(a)*r*.35,r*.07,r*.07,cream);}
+  oval(c,s,x,y,r*.2,r*.2,cream);
+}
 function windows(c,s,x,y,n,w=.13,h=.16,gap=.05){for(let i=0;i<n;i++){box(c,s,x+i*(w+gap),y,w,h,glass,.015);line(c,s,x+i*(w+gap)+.02,y+.035,x+i*(w+gap)+w-.02,y+.035,'#dfedf0',.012);}}
 function wake(c,s,t,y=.5){for(let j=0;j<3;j++){const x=-1.02-((t*.16+j*.16)%.35);line(c,s,x,y+j*.06,x+.25,y+j*.06,'#accbd0',.018);}}
 function tank(c,s,col,t){
@@ -24,6 +30,10 @@ function tank(c,s,col,t){
   line(c,s,-.4,-.45,-.46,-.88,ink,.015);line(c,s,.02,-.61,.24,-.61,ink,.025);
   for(let i=0;i<3;i++)line(c,s,-.65+i*.07,-.07,-.65+i*.07,.01,ink,.02);
   oval(c,s,.78,.13,.035,.035,'#f2d794');
+  // Bolted armor seams, engine grilles, and a recessed sight.
+  for(let i=0;i<7;i++)oval(c,s,-.68+i*.19,.04,.012,.012,'#c0c6a9');
+  for(let i=0;i<5;i++)line(c,s,-.75+i*.065,-.02,-.72+i*.065,-.07,ink,.014);
+  box(c,s,.17,-.38,.13,.065,ink);box(c,s,.19,-.37,.08,.035,glass);
 }
 function ship(c,s,col,t,civilian=false){
   wake(c,s,t);
@@ -101,6 +111,15 @@ function building(c,s,col,kind='house'){
   box(c,s,.14,.22,.29,.43,tint(col,-40));line(c,s,.28,.24,.28,.64,cream,.015);
   if(hospital){box(c,s,-.12,-.64,.16,.34,'#be6558');box(c,s,-.21,-.55,.34,.16,'#be6558');}
   line(c,s,-.83,.66,.96,.66,metal,.03);
+  // Masonry courses, a recessed door frame, sill, and side glazing.
+  for(let row=0;row<4;row++){
+    const y=-.19+row*.21;
+    line(c,s,-.72,y,.7,y,tint(col,-18),.009);
+    for(let j=0;j<5;j++){const x=-.65+j*.29+(row%2)*.1;if(x<.68)line(c,s,x,y,x,y+.07,tint(col,-18),.008);}
+  }
+  line(c,s,.12,.2,.12,.65,tint(col,35),.025);
+  box(c,s,.11,.64,.36,.045,metal);oval(c,s,.37,.43,.018,.018,'#d9c89d');
+  shape(c,s,[[.77,-.12],[.85,-.2],[.85,.02],[.77,.1]],glass);
 }
 function city(c,s,col){
   for(const [x,y,w,h] of[[-.96,-.25,.42,.88],[-.51,-.91,.48,1.54],[.02,-.52,.43,1.15],[.49,-.12,.43,.75]]){

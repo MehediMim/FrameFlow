@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Make every frame count</title><meta name="description" content="Create motion graphics with a frame based timeline, keyframes and video export."><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=image-badges-1"><link rel="stylesheet" href="paper.css"><style>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=image-badges-1"><link rel="stylesheet" href="paper.css"><style>
 /* Color presets across Motion and Map Studio; native picker remains available. */
 .ff-palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 12px;max-width:100%;line-height:1}
 .ff-color-chip{appearance:none;display:inline-block;position:relative;flex:0 0 19px;width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;margin:0!important;padding:0!important;border:1px solid #ffffff66!important;border-radius:5px!important;background:var(--chip-color)!important;cursor:pointer;box-shadow:0 1px 3px #0004;transition:transform .1s,box-shadow .1s}
@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=builder-3"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=map-settings-layout-2"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=builder-3"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=map-settings-layout-2"><link rel="stylesheet" href="landing-map.css"></head><body class="landing">
 <style>
 /* Support links shared by both studios and landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -28,224 +28,93 @@ input,textarea,[contenteditable="true"],[contenteditable="true"] *{-webkit-user-
 body.landing{min-width:0;height:auto;min-height:100dvh;display:block;overflow:auto;background:#101311}
 body.landing> :not(#landing):not(script):not(style){display:none!important}
 body.landing #landing{display:block}
-#landing{font-family:'DM Sans',sans-serif;color:#eef2e8;background:radial-gradient(ellipse at 75% 28%,#26361b66,transparent 55%)}
-#landing a{color:inherit;text-decoration:none}
-#landing a:focus-visible{outline:2px solid #b6f36e;outline-offset:6px}
-.home-nav{max-width:1240px;margin:auto;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff15}
-.home-brand{font:800 24px Manrope,sans-serif;letter-spacing:-1px;display:flex;gap:10px;align-items:center}
-.home-brand span{color:#b6f36e;font-size:32px}
-.home-nav-links{display:flex;gap:26px;font-size:12px;color:#b4beb1;align-items:center}
-#landing .home-nav-cta{padding:12px 18px;border:1px solid #b6f36e66;border-radius:7px;color:#d9f6bc}
-.home-hero{max-width:1240px;margin:auto;padding:80px 36px 70px;display:grid;grid-template-columns:1fr 1fr;gap:55px;align-items:center}
-.home-kicker{display:flex;align-items:center;gap:9px;font-size:10px;letter-spacing:2px;color:#b6f36e;font-weight:700}
-.home-kicker:before{content:'';width:6px;height:6px;border-radius:50%;background:#b6f36e}
-#landing h1{font:800 clamp(46px,5.3vw,76px)/1.04 Manrope,sans-serif;letter-spacing:-4px;margin:24px 0}
-#landing h1 em{font-style:normal;color:#b6f36e}
-.home-description{font-size:16px;color:#a7b0a4;line-height:1.8;max-width:450px}
-.home-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
-#landing .home-button{display:inline-flex;align-items:center;justify-content:space-between;gap:24px;border:1px solid #ffffff26;padding:16px 20px;border-radius:7px;font-size:13px;font-weight:700;background:#1b201a;transition:transform .2s,background .2s}
-#landing .home-button:hover{transform:translateY(-2px);background:#2b3525}
-#landing .home-button.primary{background:#b6f36e;color:#1c2913;border-color:#b6f36e}
-.home-note{font-size:11px;color:#7d8978;line-height:1.8;margin-top:20px}
-.home-preview{border:1px solid #ffffff24;border-radius:14px;overflow:hidden;background:#1b201b;box-shadow:0 35px 100px #0006;transform:rotate(-2deg)}
-.preview-top{display:flex;justify-content:space-between;font:10px monospace;padding:15px 18px;border-bottom:1px solid #ffffff14;color:#96a08f}
-.preview-top i{font-style:normal;color:#b6f36e}
-.preview-scene{height:300px;position:relative;background:#dfe7d7;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#1d2b19}
-.preview-scene:before{content:'';position:absolute;inset:0;background:linear-gradient(#293d1c12 1px,transparent 1px),linear-gradient(90deg,#293d1c12 1px,transparent 1px);background-size:28px 28px}
-.preview-orbit{position:absolute;width:240px;height:240px;border-radius:50%;border:1px solid #4b623b55}
-.preview-orbit:before{content:'';position:absolute;inset:23px;border:1px solid #4b623b33;border-radius:50%}
-.preview-shape{position:absolute;right:20%;top:35px;width:56px;height:56px;background:#8cbc58;border-radius:14px;transform:rotate(20deg);animation:float-shape 7s ease-in-out infinite}
-.preview-word{z-index:1;font:800 62px/.92 Manrope,sans-serif;letter-spacing:-4px;text-align:center;transform:rotate(2deg)}
-.preview-word span{display:block;font-size:13px;letter-spacing:8px;margin:15px 0}
-.preview-badge{position:absolute;bottom:17px;left:18px;font:10px monospace;color:#536349;letter-spacing:1px}
-.preview-timeline{padding:17px 18px 22px;position:relative;background:#191e18}
-.preview-ruler{display:flex;justify-content:space-between;color:#73816c;font:9px monospace;margin-left:63px;margin-bottom:13px}
-.preview-row{display:flex;align-items:center;gap:14px;font-size:9px;color:#8f9a89;margin-top:9px}
-.preview-row>span{width:50px}
-.preview-track{height:18px;flex:1;background:#a6ce7820;border:1px solid #a6ce7838;border-radius:3px;position:relative}
-.preview-track b{position:absolute;top:5px;width:6px;height:6px;background:#b6f36e;transform:rotate(45deg);left:8%}
-.preview-track b:nth-child(2){left:53%}.preview-track b:nth-child(3){left:90%}
-.preview-playhead{position:absolute;top:35px;bottom:12px;width:1px;background:#e1ffc2;left:66%;animation:playhead 8s ease-in-out infinite}
-.home-workflows{max-width:1168px;margin:0 auto;padding:50px 0 70px;border-top:1px solid #ffffff16}
-.home-section-heading{display:flex;justify-content:space-between;gap:20px;align-items:baseline;margin-bottom:28px}
-#landing h2{font:700 27px Manrope,sans-serif;letter-spacing:-1px;margin:0}
-.home-section-heading>span{color:#84917e;font-size:12px}
-.home-studios{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.home-studio{padding:30px;border:1px solid #ffffff1c;border-radius:10px;background:#1a20186e;display:block;transition:border-color .2s}
-.home-studio:hover{border-color:#b6f36e88}
-.studio-number{font:11px monospace;letter-spacing:1px;color:#9aaf8b}
-#landing h3{font:700 23px Manrope,sans-serif;margin:20px 0 12px}
-.home-studio p{font-size:13px;color:#9da995;line-height:1.8;max-width:410px;margin:0}
-.studio-link{display:block;margin-top:25px;color:#b6f36e;font-size:12px;font-weight:700}
-.home-steps{display:flex;gap:30px;margin-top:34px;color:#929e8b;font-size:12px;line-height:1.8}
-.home-steps b{color:#d7e3cd;margin-right:7px;font-weight:500}
-.home-footer{max-width:1168px;margin:auto;padding:25px 0 30px;border-top:1px solid #ffffff16;color:#697761;font-size:11px;display:flex;justify-content:space-between;gap:20px}
-.scene-card{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:30px;align-items:center;margin-top:20px}
-.scene-card p{max-width:480px}
-.studio-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px}
-.studio-tags em{font:600 10px monospace;font-style:normal;letter-spacing:.5px;color:#c9fa92;border:1px solid #b6f36e44;background:#b6f36e12;border-radius:20px;padding:5px 10px}
-.cast{display:flex;align-items:flex-end;justify-content:center;gap:22px;height:190px;padding:18px 18px 12px;border-radius:12px;border:1px solid #ffffff14;background:linear-gradient(#232b21,#1a1f19)}
-.fig{position:relative;display:flex;flex-direction:column;align-items:center;width:46px;height:var(--h);transition:transform .25s}
-.scene-card:hover .fig{transform:translateY(-6px)}
-.scene-card:hover .fig:nth-child(2){transition-delay:.05s}.scene-card:hover .fig:nth-child(3){transition-delay:.1s}.scene-card:hover .fig:nth-child(4){transition-delay:.15s}
-.fig i{display:block}
-.fh{position:relative;width:20px;height:22px;border-radius:50% 50% 46% 46%;background:var(--skin);box-shadow:inset 0 7px 0 -1px var(--hair)}
-.fb{width:30px;flex:1;border-radius:9px 9px 3px 3px;background:var(--top);margin-top:2px}
-.fl{width:20px;height:34%;background:linear-gradient(90deg,var(--bottom) 46%,transparent 46% 54%,var(--bottom) 54%);border-radius:0 0 3px 3px}
-.fig b{position:absolute;bottom:-17px;font:600 9px monospace;color:#8f9a89;letter-spacing:.5px}
-.woman .fb{border-radius:9px 9px 14px 14px;clip-path:polygon(18% 0,82% 0,100% 100%,0 100%)}
-.woman .fh{box-shadow:inset 0 7px 0 -1px var(--hair),-5px 9px 0 -2px var(--hair),5px 9px 0 -2px var(--hair)}
-.woman .fl{height:30%;width:14px}
-.boy .fh{width:22px;height:23px;box-shadow:inset 0 8px 0 -1px var(--hair)}
-.boy .fb{width:26px}.boy .fl{width:16px}
-.girl .fh{width:22px;height:23px;box-shadow:inset 0 7px 0 -1px var(--hair),11px 7px 0 -3px var(--hair)}
-.girl .fb{width:26px}.girl .fl{width:16px}
-.man .fb{width:34px;border-radius:7px 7px 3px 3px}
-.round .fh{position:relative;width:32px;height:30px;border-radius:50%;box-shadow:none;background:radial-gradient(circle at 34% 54%,#1d1f22 0 2px,#fff 2.5px 5px,transparent 5.5px),radial-gradient(circle at 66% 54%,#1d1f22 0 2px,#fff 2.5px 5px,transparent 5.5px),var(--skin)}
-.round .fh:before,.round .fh:after{content:'';position:absolute;top:-6px;width:11px;height:11px;border-radius:50%;background:var(--skin)}
-.round .fh:before{left:1px}.round .fh:after{right:1px}
-.round .fb{width:36px;border-radius:50% 50% 46% 46%;margin-top:-3px}
-.round .fl{width:18px;height:20%}
-@media(max-width:700px){.scene-card{grid-template-columns:1fr}.cast{gap:14px}}
-@media(prefers-reduced-motion:reduce){.fig{transition:none}}
-@keyframes float-shape{50%{transform:translate(-24px,18px) rotate(65deg)}}
-@keyframes playhead{50%{left:35%}}
-@media(prefers-reduced-motion:reduce){.preview-shape,.preview-playhead{animation:none}}
-@media(max-width:900px){.home-hero{grid-template-columns:1fr;padding-top:48px;gap:45px}.home-preview{max-width:650px;width:100%;margin:auto;transform:none}.home-workflows,.home-footer{margin:0 36px}.home-hero h1{max-width:650px}.home-description{max-width:550px}.home-nav-links>a:first-child{display:none}}
-@media(max-width:560px){.home-nav{padding:20px}.home-nav-links{gap:12px;font-size:11px}.home-brand{font-size:21px}.home-hero{padding:45px 20px}#landing h1{letter-spacing:-2.5px}.home-workflows,.home-footer{margin:0 20px}.home-section-heading{display:block}.home-section-heading>span{display:block;margin-top:12px}.home-studios{grid-template-columns:1fr}.home-steps{flex-direction:column;gap:10px}.home-footer{flex-direction:column;gap:8px}.preview-scene{height:260px}.home-studio{padding:24px}.home-nav-cta{padding:10px!important}}
 </style>
-<style>
-/* Landing v2: full studio sections, features, steps, coffee section, hover + reveal. */
-#landing{scroll-behavior:smooth}
-#landing .home-nav-links a:not(.support-link):not(.home-nav-cta){position:relative;padding:4px 0}
-#landing .home-nav-links a:not(.support-link):not(.home-nav-cta):after{content:'';position:absolute;left:0;right:0;bottom:-2px;height:1px;background:#b6f36e;transform:scaleX(0);transform-origin:left;transition:transform .25s}
-#landing .home-nav-cta{transition:background .2s,transform .2s}
-#landing .support-link{transition:background .2s,border-color .2s,transform .2s,box-shadow .2s}
-#landing .home-button span,#landing .studio-link i{display:inline-block;font-style:normal;transition:transform .2s}
-.sf-list{display:grid;gap:20px}
-#landing .sf{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:34px;align-items:center;padding:34px;margin:0;transition:border-color .2s,transform .25s,box-shadow .25s}
-#landing .sf.flip{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
-#landing .sf.flip>.sf-art,#landing .sf.flip>.cast{order:-1}
-#landing .sf:before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),#b6f36e1f,transparent 60%)}
-#landing .sf>*{position:relative}
-#landing .sf p{max-width:480px}
-#landing .sf:focus-visible{outline:2px solid #b6f36e;outline-offset:4px}
-.studio-tags em{transition:background .2s,transform .2s}
-.sf-art{min-height:190px;border-radius:12px;border:1px solid #ffffff14;overflow:hidden;position:relative}
-/* motion art */
-.art-motion{background:#191e18;display:flex;flex-direction:column}
-.am-stage{height:150px;position:relative;background:#dfe7d7;overflow:hidden;color:#1d2b19}
-.am-stage:before{content:'';position:absolute;inset:0;background:linear-gradient(#293d1c12 1px,transparent 1px),linear-gradient(90deg,#293d1c12 1px,transparent 1px);background-size:24px 24px}
-.am-sq{position:absolute;left:10%;top:24px;width:46px;height:46px;border-radius:12px;background:#8cbc58;animation:am-sq calc(5s/var(--s,1)) ease-in-out infinite}
-.am-ci{position:absolute;right:14%;bottom:20px;width:34px;height:34px;border-radius:50%;background:#1d2b19;animation:am-ci calc(3s/var(--s,1)) ease-in-out infinite}
-.am-tx{position:absolute;left:50%;top:50%;translate:-50% -50%;font:800 46px Manrope,sans-serif;letter-spacing:-2px;animation:am-tx calc(4s/var(--s,1)) ease-in-out infinite}
-.am-tl{padding:12px 14px 14px;position:relative}
-.am-tl>div{height:14px;margin-top:8px;background:#a6ce7820;border:1px solid #a6ce7838;border-radius:3px;position:relative}
-.am-tl u{position:absolute;top:3px;width:6px;height:6px;background:#b6f36e;transform:rotate(45deg);text-decoration:none;left:8%}
-.am-tl u:nth-child(2){left:50%}.am-tl u:nth-child(3){left:90%}
-.am-tl s{position:absolute;top:6px;bottom:8px;width:1px;background:#e1ffc2;left:10%;text-decoration:none;animation:am-ph calc(5s/var(--s,1)) ease-in-out infinite}
-@keyframes am-sq{50%{transform:translateX(150px) rotate(90deg)}}
-@keyframes am-ci{50%{transform:translateY(-60px) scale(.6)}}
-@keyframes am-tx{50%{transform:scale(1.25) rotate(-4deg)}}
-@keyframes am-ph{50%{left:90%}}
-/* map art */
-.art-map{background:#101a22}
-.art-map svg{display:block;width:100%;height:auto}
-.route{animation:route-dash 1.2s linear infinite}
-.ripple{animation:ripple 2s ease-out infinite}
-@keyframes route-dash{to{stroke-dashoffset:-18}}
-@keyframes ripple{from{r:4;opacity:1}to{r:20;opacity:0}}
-/* paper art */
-.art-paper{background:linear-gradient(#232b21,#1a1f19);display:flex;align-items:center;justify-content:center;padding:24px 0;min-height:210px}
-.ap-sheet{position:relative;width:62%;background:#ece3c8;color:#2a2418;padding:12px 14px 14px;border-radius:3px;box-shadow:0 14px 34px #0007;transform:rotate(-3deg);transition:transform .35s;animation:ap-float 6s ease-in-out infinite}
-.ap-mast{font:800 15px Georgia,serif;text-align:center;letter-spacing:1px;border-bottom:2px solid #2a2418;padding-bottom:4px}
-.ap-meta{display:flex;justify-content:space-between;font:8px monospace;padding:3px 0;border-bottom:1px solid #2a241866}
-.ap-head{font:800 17px/1.05 Georgia,serif;margin:8px 0}
-.ap-body{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.ap-photo{height:52px;background:linear-gradient(135deg,#9b9277,#6f684f)}
-.ap-cols i{display:block;height:3px;background:#2a241855;margin-bottom:5px}
-.ap-stamp{position:absolute;right:-10px;top:74px;border:2px solid #c1272d;color:#c1272d;font:800 11px monospace;padding:2px 6px;transform:rotate(12deg);letter-spacing:1px}
-@keyframes ap-float{50%{translate:0 -6px}}
-@keyframes ap-slap{from{transform:rotate(12deg) scale(2.4);opacity:0}to{transform:rotate(12deg) scale(1);opacity:1}}
-/* features */
-.ft-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.ft{padding:26px;border:1px solid #ffffff1c;border-radius:10px;background:#1a20186e;transition:transform .25s,border-color .2s,background .2s}
-.ft b{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:#b6f36e18;color:#b6f36e;font-size:19px;font-weight:400;transition:transform .2s,background .2s,color .2s}
-#landing h4{font:700 16px Manrope,sans-serif;margin:18px 0 8px}
-.ft p,.how p{font-size:12.5px;color:#9da995;line-height:1.75;margin:0}
-/* how it works */
-.how{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;list-style:none;padding:0;margin:0}
-.how li{padding:22px 4px 0;border-top:2px solid #ffffff1c;transition:border-color .25s}
-.how li b{display:block;font:800 36px Manrope,sans-serif;letter-spacing:-2px;color:#33422e;transition:color .25s}
-.how h4{margin-top:12px}
-/* coffee */
-.home-coffee{max-width:1168px;margin:0 auto 64px;padding:48px;border:1px solid #b6f36e44;border-radius:16px;display:grid;grid-template-columns:210px minmax(0,1fr);gap:48px;align-items:center;background:radial-gradient(ellipse at 15% 20%,#b6f36e22,transparent 55%),#161b15;position:relative;overflow:hidden}
-.cf-cup{position:relative;height:180px;display:flex;align-items:flex-end;justify-content:center}
-.cup{position:relative;width:100px;height:80px;margin-bottom:8px;background:#f2ecd9;border-radius:6px 6px 46px 46px;transition:transform .35s;transform-origin:80% 100%}
-.cup:before{content:'';position:absolute;left:6px;right:6px;top:7px;height:10px;border-radius:50%;background:#5a3a22}
-.cup:after{content:'';position:absolute;right:-27px;top:14px;width:30px;height:36px;border:7px solid #f2ecd9;border-left:0;border-radius:0 22px 22px 0}
-.saucer{position:absolute;bottom:0;left:50%;translate:-50% 0;width:150px;height:11px;border-radius:50%;background:#2f382c}
-.steam{position:absolute;top:8px;left:50%;translate:-50% 0;display:flex;gap:14px}
-.steam i{display:block;width:6px;height:46px;border-radius:6px;background:linear-gradient(#fff0,#ffffff70);opacity:0;animation:steam 3s ease-in-out infinite}
-.steam i:nth-child(2){height:58px;animation-delay:.8s}.steam i:nth-child(3){animation-delay:1.6s}
-@keyframes steam{0%{opacity:0;transform:translateY(18px) scaleX(1)}40%{opacity:.8}100%{opacity:0;transform:translateY(-14px) scaleX(1.8)}}
-#landing .home-coffee h2{font-size:clamp(32px,4.2vw,46px);letter-spacing:-2px;margin:14px 0}
-.cf-copy p{font-size:14px;color:#a7b0a4;line-height:1.8;max-width:520px;margin:0}
-.cf-points{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:8px;font-size:13px;color:#cfd9c8}
-.cf-points li:before{content:'✓';color:#b6f36e;margin-right:10px;font-weight:800}
-.cf-actions{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-top:28px}
-#landing .support-link.cf-btn{font-size:15px;padding:16px 26px;background:#b6f36e;color:#1c2913;border-color:#b6f36e}
-.cf-note{font-size:11px;color:#7d8978}
-.hf-links{display:flex;flex-wrap:wrap;align-items:center;gap:18px}
-.hf-links a:not(.support-link){transition:color .2s}
-/* hover (pointer devices only) */
-@media(hover:hover){
-#landing .home-nav-links a:not(.support-link):not(.home-nav-cta):hover:after{transform:scaleX(1)}
-#landing .home-nav-links a:not(.support-link):not(.home-nav-cta):hover{color:#eef2e8}
-#landing .home-nav-cta:hover{background:#b6f36e1f;transform:translateY(-1px)}
-#landing .support-link:hover{transform:translateY(-1px)}
-#landing .home-button:hover span{transform:translate(3px,-3px)}
-#landing .sf:hover{transform:translateY(-4px);border-color:#b6f36eaa;box-shadow:0 26px 60px #0006}
-#landing .sf:hover:before{opacity:1}
-#landing .sf:hover .studio-link i{transform:translate(4px,-4px)}
-#landing .sf:hover .studio-tags em{background:#b6f36e22}
-#landing .studio-tags em:hover{transform:translateY(-2px);background:#b6f36e38}
-#landing .sf:hover .art-motion{--s:2.2}
-#landing .sf:hover .ap-sheet{transform:rotate(0) scale(1.06);animation-play-state:paused}
-#landing .sf:hover .ap-stamp{animation:ap-slap .4s cubic-bezier(.3,1.6,.5,1)}
-#landing .sf:hover .route{animation-duration:.5s}
-.ft:hover{transform:translateY(-4px);border-color:#b6f36e88;background:#222b1f}
-.ft:hover b{background:#b6f36e;color:#1c2913;transform:rotate(-8deg) scale(1.08)}
-.how li:hover{border-color:#b6f36e}.how li:hover b{color:#b6f36e}
-.home-coffee:hover .cup{transform:rotate(-9deg)}
-.home-coffee:hover .steam i{animation-duration:1.5s}
-#landing .support-link.cf-btn:hover{background:#caff8a;box-shadow:0 12px 34px #b6f36e55;transform:translateY(-2px)}
-.hf-links a:not(.support-link):hover{color:#d9f6bc}
-}
-#landing .support-link:active,#landing .home-button:active,#landing .sf:active{transform:translateY(0) scale(.99)}
-/* reveal on scroll (only when JS is running) */
-#landing.js [data-reveal]{opacity:0;translate:0 24px;transition:opacity .6s,translate .6s,transform .25s,border-color .2s,box-shadow .25s}
-#landing.js [data-reveal].in{opacity:1;translate:0 0}
-@media(max-width:900px){#landing .sf,#landing .sf.flip{grid-template-columns:1fr;padding:26px}#landing .sf.flip>.sf-art,#landing .sf.flip>.cast{order:0}.ft-grid{grid-template-columns:1fr 1fr}.how{grid-template-columns:1fr 1fr}.home-coffee{margin:0 36px 56px;grid-template-columns:1fr;padding:34px;gap:26px}.cf-cup{height:150px}.home-nav-links>a.nl-opt{display:none}}
-@media(max-width:560px){.ft-grid,.how{grid-template-columns:1fr}.home-coffee{margin:0 20px 48px;padding:26px}.home-nav-links>a.nl-opt{display:none}.hf-links{gap:12px}}
-@media(prefers-reduced-motion:reduce){.sf-art *,.steam i,.ap-sheet{animation:none!important}#landing.js [data-reveal]{opacity:1;translate:none;transition:none}#landing{scroll-behavior:auto}}
-</style>
-<section id="landing" aria-label="FrameFlow home">
-  <nav class="home-nav" aria-label="Main navigation"><a class="home-brand" href="#home"><span aria-hidden="true">◈</span>FrameFlow</a><div class="home-nav-links"><a class="nl-opt" href="#studios">Studios</a><a class="nl-opt" href="#features">Features</a><a class="nl-opt" href="#how">How it works</a><a class="support-link" href="#support" aria-label="Jump to the Buy me a coffee section">☕ Buy me a coffee ↗</a><a class="home-nav-cta" href="#motion">Open editor ↗</a></div></nav>
-  <div class="home-hero">
-    <div><div class="home-kicker">YOUR IDEAS. IN MOTION.</div><h1>Make every<br>frame <em>count.</em></h1><p class="home-description">Turn a simple idea into moving type, animated shapes, a journey across the map, or a character walking down the street. Create it all, one frame at a time.</p><div class="home-actions"><a class="home-button primary" href="#motion">Motion Studio <span>↗</span></a><a class="home-button" href="#map">Map Studio <span>↗</span></a><a class="home-button" href="#paper">Paper Studio <span>↗</span></a><a class="home-button" href="#scene">Scene Studio <span>↗</span></a></div><p class="home-note">Works in your browser · No account needed<br>Projects save locally. Download a project file to keep a backup.</p></div>
-    <div class="home-preview" role="img" aria-label="Illustration of an animated title with a three-layer keyframe timeline"><div class="preview-top"><span>COMPOSITION / MAKE YOUR MOVE</span><i>● 30 FPS</i></div><div class="preview-scene"><div class="preview-orbit"></div><div class="preview-shape"></div><div class="preview-word">MAKE<span>YOUR</span>MOVE.</div><span class="preview-badge">A LITTLE MOVEMENT. A BIG IMPRESSION.</span></div><div class="preview-timeline"><div class="preview-ruler"><span>000</span><span>030</span><span>060</span><span>090</span><span>120</span></div><div class="preview-row"><span>Headline</span><div class="preview-track"><b></b><b></b><b></b></div></div><div class="preview-row"><span>Shape</span><div class="preview-track"><b></b><b></b></div></div><div class="preview-row"><span>Backdrop</span><div class="preview-track"><b></b></div></div><div class="preview-playhead"></div></div></div>
-  </div>
-  <section class="home-workflows" id="studios"><div class="home-section-heading"><h2>Four studios. Endless directions.</h2><span>Choose where your story starts.</span></div><div class="sf-list"><a class="home-studio sf " href="#motion" data-reveal><div class="sf-copy"><span class="studio-number">01 / MOTION DESIGN</span><h3>Give your ideas a rhythm.</h3><p>Layer text, shapes, and images. Set keyframes, adjust easing, and build your animation on a frame-based timeline.</p><span class="studio-tags"><em>Text</em><em>Shapes</em><em>Images</em><em>Keyframes</em><em>Easing</em><em>Auto-key</em><em>Undo / redo</em><em>24 · 30 · 60 FPS</em><em>Video + PNG export</em></span><span class="studio-link">Open Motion Studio <i>↗</i></span></div><div class="sf-art art-motion" aria-hidden="true"><div class="am-stage"><i class="am-sq"></i><i class="am-ci"></i><b class="am-tx">Aa</b></div><div class="am-tl"><div><u></u><u></u><u></u></div><div><u></u><u></u></div><s></s></div></div></a><a class="home-studio sf flip" href="#map" data-reveal><div class="sf-copy"><span class="studio-number">02 / MAP ANIMATION</span><h3>Take your story somewhere.</h3><p>Trace routes, highlight countries, and fly between places. Add camera moves, map styles, and textures, then export your journey.</p><span class="studio-tags"><em>Border draw</em><em>Plane routes</em><em>Highlights</em><em>Pins</em><em>10 camera moves</em><em>4 map styles</em><em>3D tilt</em><em>WebM / MP4</em></span><span class="studio-link">Open Map Studio <i>↗</i></span></div><div class="sf-art art-map" aria-hidden="true"><svg viewBox="0 0 320 190"><defs><pattern id="mg" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#7fb4d122"/></pattern></defs><rect width="320" height="190" fill="url(#mg)"/><path d="M28 60l30-22 40 6 22 26-14 30-34 8-30-20zM190 50l36-14 48 10 18 28-30 24-40-6-24-26zM120 130l24-8 20 14-8 24-26 4z" fill="#233b2e" stroke="#4d8a5f"/><path id="route" class="route" d="M70 78Q150 -10 235 70" fill="none" stroke="#b6f36e" stroke-width="1.6" stroke-dasharray="4 5"/><circle cx="70" cy="78" r="4" fill="#b6f36e"/><circle cx="235" cy="70" r="4" fill="#ef476f"/><circle class="ripple" cx="235" cy="70" r="4" fill="none" stroke="#ef476f"/><g><path d="M-8-5L9 0-8 5-5 0z" fill="#fff"/><animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath href="#route"/></animateMotion></g></svg></div></a><a class="home-studio sf " href="#paper" data-reveal><div class="sf-copy"><span class="studio-number">03 / PAPER ANIMATION</span><h3>Make the news move.</h3><p>Start from a front page, breaking news or a vintage extra. Edit every headline, photo and column, then spin, slap and zoom the paper into view.</p><span class="studio-tags"><em>Front page</em><em>Breaking news</em><em>Vintage extra</em><em>Headlines</em><em>Photos</em><em>Columns</em><em>Stamps</em><em>Tickers</em></span><span class="studio-link">Open Paper Studio <i>↗</i></span></div><div class="sf-art art-paper" aria-hidden="true"><div class="ap-sheet"><div class="ap-mast">THE DAILY FRAME</div><div class="ap-meta"><span>VOL. 1</span><span>EXTRA EDITION</span></div><div class="ap-head">STOP THE PRESSES:<br>IT MOVES!</div><div class="ap-body"><div class="ap-photo"></div><div class="ap-cols"><i></i><i></i><i></i><i></i><i></i></div></div><span class="ap-stamp">BREAKING</span></div></div></a><a class="home-studio sf flip scene-card" href="#scene" data-reveal><div class="sf-copy"><span class="studio-number">04 / SCENE ANIMATION</span><h3>Build a world in motion.</h3><p>Cast boys, girls, men and women, then dress them: pick hair styles, hair and skin colors, and outfits like suits, hoodies, sports kits and dresses. Add a round toy-style character built from circles, wrap everything in grain, halftone, stripes, checks or waves, then walk, run, wave and bow them along a road with cars and buses, then direct your camera.</p><span class="studio-tags"><em>Boy</em><em>Girl</em><em>Man</em><em>Woman</em><em>Round toy</em><em>8 hair styles</em><em>5 outfits</em><em>6 skin tones</em><em>9 gestures</em><em>6 scalable textures</em></span><span class="studio-link">Open Scene Studio ↗</span></div><div class="cast" role="img" aria-label="Five characters: a man in a suit, a woman in a dress, a boy in a hoodie, a girl with a ponytail and a round toy character"><span class="fig man" style="--hair:#38291f;--skin:#ebbf98;--top:#4a6fa5;--bottom:#272b34;--h:104px" aria-hidden="true"><i class="fh"></i><i class="fb"></i><i class="fl"></i><b>Man</b></span><span class="fig woman" style="--hair:#6b4423;--skin:#d4a173;--top:#c0506a;--bottom:#d4a173;--h:96px" aria-hidden="true"><i class="fh"></i><i class="fb"></i><i class="fl"></i><b>Woman</b></span><span class="fig boy" style="--hair:#17120f;--skin:#80532f;--top:#e0a030;--bottom:#4a4f57;--h:72px" aria-hidden="true"><i class="fh"></i><i class="fb"></i><i class="fl"></i><b>Boy</b></span><span class="fig girl" style="--hair:#d8b26a;--skin:#f6d7c0;--top:#6fbf8b;--bottom:#3c4757;--h:70px" aria-hidden="true"><i class="fh"></i><i class="fb"></i><i class="fl"></i><b>Girl</b></span><span class="fig round" style="--hair:#2f8f9d;--skin:#4cc9f0;--top:#4cc9f0;--bottom:#2f8f9d;--h:74px" aria-hidden="true"><i class="fh"></i><i class="fb"></i><i class="fl"></i><b>Round</b></span></div></a></div></section><section class="home-workflows" id="features"><div class="home-section-heading"><h2>Everything a studio needs.</h2><span>Shared by all four studios.</span></div><div class="ft-grid"><div class="ft" data-reveal><b aria-hidden="true">◫</b><h4>Frame-based timeline</h4><p>Scrub, retime and trim on a real frame ruler. Space plays, arrows step one frame, Shift jumps ten.</p></div><div class="ft" data-reveal><b aria-hidden="true">◇</b><h4>Keyframes & easing</h4><p>Key any property, pick easing per keyframe, or turn on auto-key and just move things.</p></div><div class="ft" data-reveal><b aria-hidden="true">↶</b><h4>Undo, redo, shortcuts</h4><p>Ctrl/Cmd+Z and Shift+Z, plus K to key a transform. Mistakes are cheap.</p></div><div class="ft" data-reveal><b aria-hidden="true">⌂</b><h4>Saves on your device</h4><p>Your latest project is kept in the browser. Download a project file for a portable backup.</p></div><div class="ft" data-reveal><b aria-hidden="true">▶</b><h4>Video and PNG export</h4><p>Record WebM (or MP4 where the browser allows) and export any frame as a clean PNG.</p></div><div class="ft" data-reveal><b aria-hidden="true">∅</b><h4>No account, no backend</h4><p>Plain HTML, CSS and JavaScript in your browser. Nothing to install, nothing to sign up for.</p></div></div></section><section class="home-workflows" id="how"><div class="home-section-heading"><h2>From idea to export in four steps.</h2><span>No tutorial required.</span></div><ol class="how"><li data-reveal><b>01</b><h4>Pick a studio</h4><p>Motion, Map, Paper or Scene. Each one opens in a click.</p></li><li data-reveal><b>02</b><h4>Start your way</h4><p>Load a demo or begin with an empty project.</p></li><li data-reveal><b>03</b><h4>Shape the motion</h4><p>Add layers, set keyframes and tune the timeline.</p></li><li data-reveal><b>04</b><h4>Export it</h4><p>Download a video, or a PNG of any frame.</p></li></ol></section><section class="home-coffee" id="support" data-reveal aria-labelledby="cfTitle"><div class="cf-cup" aria-hidden="true"><span class="steam"><i></i><i></i><i></i></span><div class="cup"></div><span class="saucer"></span></div><div class="cf-copy"><div class="home-kicker">SUPPORT FRAMEFLOW</div><h2 id="cfTitle">Fuel the next frame.</h2><p>FrameFlow is free to use, with no ads and no account. If it saved you time or helped you make something you love, a coffee is a small way to say thanks.</p><ul class="cf-points"><li>Keeps FrameFlow free for everyone</li><li>Helps me build new templates, presets and fixes</li><li>No pressure. Sharing it with a friend helps too</li></ul><div class="cf-actions"><a class="support-link cf-btn" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer" aria-label="Buy me a coffee on SupportKori (opens in a new tab)">☕ Buy me a coffee ↗</a><span class="cf-note">Opens SupportKori in a new tab. Entirely optional.</span></div></div></section><script>
-(()=>{const root=document.getElementById('landing');root.classList.add('js');
-const items=root.querySelectorAll('[data-reveal]');
-if(!('IntersectionObserver' in window)){items.forEach(e=>e.classList.add('in'))}
-else{const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});items.forEach(e=>io.observe(e))}
-root.querySelectorAll('.sf').forEach(c=>c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();c.style.setProperty('--mx',e.clientX-r.left+'px');c.style.setProperty('--my',e.clientY-r.top+'px')}));
-if(matchMedia('(prefers-reduced-motion:reduce)').matches)root.querySelectorAll('svg').forEach(s=>s.pauseAnimations&&s.pauseAnimations())})();
-</script>
-  <div class="home-footer"><span>◈ FrameFlow — a space for things that move.</span><span class="hf-links"><a href="#studios">Studios</a><a href="#features">Features</a><a href="#how">How it works</a><a class="support-link" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee ↗</a></span></div>
+<section id="landing" aria-label="FrameFlow Map Studio home">
+  <nav class="mh-nav" aria-label="Main navigation">
+    <a class="mh-brand" href="#home" aria-label="FrameFlow Map Studio home"><span class="mh-brand-mark" aria-hidden="true">◈</span><span>FrameFlow<small>MAP STUDIO</small></span></a>
+    <div class="mh-nav-links"><a href="#features">Explore features</a><a href="#how">How it works</a><a href="#support">Support</a></div>
+    <a class="mh-button mh-button-small mh-primary" href="#map">Open Map Studio <span aria-hidden="true">↗</span></a>
+  </nav>
+  <main class="mh-main" id="homeContent">
+    <section class="mh-hero mh-container" aria-labelledby="mhTitle">
+      <div class="mh-hero-heading"><div><p class="mh-eyebrow"><span></span> THE WORLD. IN YOUR TIMELINE.</p><h1 id="mhTitle">Every place has a story.<br><em>Put yours on the map.</em></h1></div><div class="mh-hero-intro"><p>Create animated maps for documentaries, journeys, and stories that cross borders. Shape the terrain, direct the camera, and make every movement count.</p><a class="mh-button mh-primary" href="#map">Start your map <span aria-hidden="true">↗</span></a><span class="mh-small-note">In your browser. No account needed.</span></div></div>
+      <div class="mh-preview" aria-label="Interactive example of a campaign map animation">
+        <div class="mh-preview-bar"><span><i class="mh-live-dot"></i> MAP PREVIEW <b> / THE EUROPEAN THEATER</b></span><span class="mh-preview-meta">DOCUMENTARY STYLE <i>30 FPS</i></span></div>
+        <div class="mh-preview-stage">
+          <img class="mh-map-image" src="assets/map-documentary-preview.png" width="1280" height="720" alt="A rendered map of Europe with khaki elevation relief, country labels, troop illustrations, and an advance arrow" fetchpriority="high" decoding="async">
+          <svg class="mh-map-overlay" viewBox="0 0 1280 720" aria-hidden="true"><path class="mh-front-shadow" data-demo-front d="M590 246 Q640 360 560 510"/><path class="mh-front" data-demo-front d="M590 246 Q640 360 560 510"/><circle class="mh-map-marker" data-demo-marker cx="630" cy="350" r="8"/><circle class="mh-map-ring" data-demo-marker cx="630" cy="350" r="15"/></svg>
+          <span class="mh-preview-caption">An illustrative campaign. Your map, your story.</span>
+          <span class="mh-map-coordinate" aria-hidden="true">48° N / 12° E</span>
+        </div>
+        <div class="mh-preview-controls"><button id="mhPreviewPlay" type="button" aria-pressed="false" aria-label="Play map preview"><span data-play-icon aria-hidden="true">▶</span><span data-play-text>Play preview</span></button><span class="mh-demo-time" id="mhPreviewTime">00:02.40</span><label class="mh-scrubber"><span class="mh-sr-only">Scrub the map preview timeline</span><input id="mhPreviewSeek" type="range" min="0" max="100" step="0.1" value="30" aria-describedby="mhDemoHelp"></label><span class="mh-preview-length">8 SEC</span></div>
+        <p class="mh-sr-only" id="mhDemoHelp">This demonstration moves the front line and map marker. Play it or drag the timeline to explore the animation.</p>
+      </div>
+      <div class="mh-proof-strip"><span><i aria-hidden="true">◎</i> Real elevation relief</span><span><i aria-hidden="true">◇</i> Shape &amp; camera keyframes</span><span><i aria-hidden="true">▣</i> Animated object groups</span><span><i aria-hidden="true">↗</i> Video &amp; PNG export</span></div>
+    </section>
+
+    <section class="mh-section mh-container" id="features" aria-labelledby="mhFeaturesTitle">
+      <div class="mh-section-heading"><div><p class="mh-eyebrow">A COMPLETE MAP STORYTELLING WORKSPACE</p><h2 id="mhFeaturesTitle">From the big picture<br>to the smallest movement.</h2></div><p>Build your map in layers. Give each layer a purpose, a place, and a moment on the timeline.</p></div>
+      <div class="mh-feature-index">
+        <a href="#terrain"><span>01</span><h3>Terrain &amp; styles</h3><p>Relief, satellite imagery, light, color, and texture.</p><i aria-hidden="true">↗</i></a>
+        <a href="#regions"><span>02</span><h3>Regions &amp; labels</h3><p>Draw boundaries, highlight places, and name your world.</p><i aria-hidden="true">↗</i></a>
+        <a href="#campaign"><span>03</span><h3>Campaign storytelling</h3><p>Moving front lines, battle effects, and documentary titles.</p><i aria-hidden="true">↗</i></a>
+        <a href="#networks"><span>04</span><h3>Routes &amp; networks</h3><p>Journeys, roads, railways, and flowing rivers.</p><i aria-hidden="true">↗</i></a>
+        <a href="#units"><span>05</span><h3>Objects &amp; groups</h3><p>Detailed units, formations, flags, and shared animation.</p><i aria-hidden="true">↗</i></a>
+        <a href="#animation"><span>06</span><h3>Camera &amp; timeline</h3><p>Direct the view, reshape paths, and time every layer.</p><i aria-hidden="true">↗</i></a>
+      </div>
+    </section>
+
+    <section class="mh-section mh-container mh-split" id="terrain" aria-labelledby="mhTerrainTitle">
+      <div class="mh-section-copy"><p class="mh-eyebrow">01 / SET THE SCENE</p><h2 id="mhTerrainTitle">Give the landscape<br>some character.</h2><p>Build on real elevation data, then make the map your own. Bring mountains into focus, soften the water, or give your story the look of an archival field map.</p><ul class="mh-check-list"><li><b>Cartographic terrain</b><span>Adjust sun direction, shadows, elevation colors, and bathymetry.</span></li><li><b>War documentary styling</b><span>Khaki relief, muted water, paper grain, and military lettering in one editable look.</span></li><li><b>A style for every story</b><span>Earth, natural terrain, paper atlas, night, blueprint, and satellite imagery.</span></li><li><b>Surface and atmosphere</b><span>Layer paper, film grain, linen, halftone, brush strokes, and other textures.</span></li></ul><a class="mh-text-link" href="#map">Find your map style <span aria-hidden="true">↗</span></a></div>
+      <div class="mh-terrain-art"><img src="assets/map-documentary-preview.png" width="1280" height="720" loading="lazy" alt="Documentary terrain showing mountain relief across the Alps and the Mediterranean coastline"><div class="mh-terrain-caption"><span>THE LANDSCAPE TELLS HALF THE STORY.</span><b>Make it visible.</b></div><div class="mh-style-swatches" aria-label="Map style palettes"><span style="--swatch:#b9ad82">Documentary</span><span style="--swatch:#568461">Terrain</span><span style="--swatch:#28445a">Night</span><span style="--swatch:#dfd0ae">Atlas</span></div></div>
+    </section>
+
+    <section class="mh-section mh-container" id="regions" aria-labelledby="mhRegionsTitle">
+      <div class="mh-section-heading"><div><p class="mh-eyebrow">02 / DEFINE THE DETAILS</p><h2 id="mhRegionsTitle">A country. A region.<br>Or a boundary of your own.</h2></div><p>Go from the world view to loaded local regions. Select, combine, label, and animate the places that matter.</p></div>
+      <div class="mh-region-grid">
+        <article class="mh-card"><div class="mh-region-visual" aria-hidden="true"><svg viewBox="0 0 420 190"><g class="mh-region-cells"><path d="M32 43L114 23 140 84 96 125 26 104Z"/><path class="selected" d="M114 23L209 33 230 101 140 84Z"/><path class="selected" d="M140 84L230 101 210 166 122 174 96 125Z"/><path d="M209 33L303 16 326 83 284 120 230 101Z"/><path d="M230 101L284 120 322 178 210 166Z"/><path d="M303 16L390 48 384 132 326 83Z"/></g><path class="mh-draw-area" d="M100 14L231 20 245 122 211 183 108 178 83 115Z"/></svg><span>SELECT WHAT'S INSIDE</span></div><h3>Draw to select regions</h3><p>Click corners or drag an area around the map. Select existing countries or loaded regions by their centers, or include only fully enclosed outlines.</p><div class="mh-tags"><span>Multi-region selection</span><span>Combine or separate</span></div></article>
+        <article class="mh-card"><div class="mh-region-visual mh-custom-region" aria-hidden="true"><svg viewBox="0 0 420 190"><path class="mh-faint-line" d="M0 58L95 30 163 95 249 39 420 72M0 145L97 111 156 174 295 130 420 165M95 30L97 111M249 39L295 130"/><path class="mh-custom-area" d="M90 71L176 32 292 66 320 127 215 166 114 138Z"/><g class="mh-handle-points"><circle cx="90" cy="71" r="4"/><circle cx="176" cy="32" r="4"/><circle cx="292" cy="66" r="4"/><circle cx="320" cy="127" r="4"/><circle cx="215" cy="166" r="4"/><circle cx="114" cy="138" r="4"/></g></svg><span>YOUR EXACT OUTLINE</span></div><h3>Make a custom region</h3><p>Use the boundary you draw as a single named region. Animate its border, highlight its area, or trace just part of the outline.</p><div class="mh-tags"><span>Custom boundaries</span><span>Partial border animation</span></div></article>
+        <article class="mh-label-card"><span class="mh-label-specimen" aria-hidden="true">WESTERN<br><i>SECTOR</i></span><div><h3>Let the labels tell the story.</h3><p>Automatic country and ocean names, custom historical labels, curved text, outlines, and map-attached lettering. Mark locations with pins, image badges, and uploaded artwork.</p><div class="mh-tags"><span>Typography &amp; spacing</span><span>Curved atlas text</span><span>Geographic anchors</span></div></div></article>
+      </div>
+    </section>
+
+    <section class="mh-campaign-band" id="campaign" aria-labelledby="mhCampaignTitle"><div class="mh-container">
+      <div class="mh-section-heading"><div><p class="mh-eyebrow">03 / MAKE HISTORY MOVE</p><h2 id="mhCampaignTitle">Show how the story unfolds.</h2></div><p>Turn static positions into a sequence: a shifting front, an advancing formation, a turning point.</p></div>
+      <div class="mh-campaign-grid"><div class="mh-front-demo" aria-label="Illustration of a front line changing shape between keyframes"><svg viewBox="0 0 560 300" aria-hidden="true"><defs><pattern id="mhFieldGrid" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M35 0H0V35" fill="none" stroke="#9ba78c22"/></pattern></defs><rect width="560" height="300" fill="url(#mhFieldGrid)"/><path d="M0 240L76 204 123 223 190 180 226 193 287 137 344 160 392 98 470 111 560 48" class="mh-faint-line"/><path d="M275 44Q260 155 285 260" class="mh-ghost-front"/><path d="M340 44Q405 155 325 260" class="mh-ghost-front"/><path id="mhFrontDemo" d="M290 44Q300 155 297 260" class="mh-front-demo-line"/><g class="mh-campaign-pin" id="mhGroupDemo"><circle r="17"/><path d="M-6-5L6 5M-6 5L6-5"/><path d="M-28-4H-17M17 4H28"/></g><text x="26" y="34">FRONT LINE / SHAPE KEYFRAMES</text><text x="26" y="278">DRAW → KEY → RESHAPE</text></svg><div class="mh-demo-key-strip"><span>◇ INITIAL POSITION</span><i></i><span>◇ NEXT POSITION</span></div></div>
+      <div class="mh-campaign-copy"><h3>Draw the front.<br>Then move it forward.</h3><p>Set the initial line, move the playhead, and reshape it on the map. The line blends between keyed positions, even when you change the number of points. Choose which side its teeth face.</p><p class="mh-demo-tip">Try the timeline preview at the top of the page to move between positions.</p><a class="mh-text-link" href="#map">Build a campaign map <span aria-hidden="true">↗</span></a></div></div>
+      <div class="mh-detail-grid"><article><span class="mh-mini-icon" aria-hidden="true">✳</span><h3>Battle &amp; atmosphere</h3><p>Artillery, musket and arrow volleys, explosions, smoke, fire, shockwaves, and targeted attacks.</p></article><article><span class="mh-mini-icon" aria-hidden="true">▱</span><h3>Zones &amp; changing states</h3><p>Attack and retreat arrows, occupied or restricted zones, and keyed unit damage states.</p></article><article><span class="mh-mini-icon" aria-hidden="true">T</span><h3>Documentary chapters</h3><p>Scene panels with animated years, event titles, descriptions, gradients, and editable typography.</p></article></div>
+    </div></section>
+
+    <section class="mh-section mh-container" id="networks" aria-labelledby="mhNetworksTitle">
+      <div class="mh-section-heading"><div><p class="mh-eyebrow">04 / CONNECT THE PLACES</p><h2 id="mhNetworksTitle">Every route has a direction.</h2></div><p>Draw your own geographic paths to explain movement, transport, supply, and the landscape itself.</p></div>
+      <div class="mh-network-grid">
+        <article class="mh-card"><svg class="mh-network-art" viewBox="0 0 340 170" aria-hidden="true"><path class="mh-road-edge" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-road" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-road-flow mh-flow" d="M-20 136Q120 160 160 80T365 34"/></svg><span class="mh-card-number">01 / ROADS</span><h3>Trace the advance.</h3><p>Draw curved or straight roads. Reveal the route over time and animate traffic in either direction.</p></article>
+        <article class="mh-card"><svg class="mh-network-art" viewBox="0 0 340 170" aria-hidden="true"><path class="mh-rail-ties" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-rail-edge" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-rail-core" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-rail-flow mh-flow" d="M-20 136Q120 160 160 80T365 34"/></svg><span class="mh-card-number">02 / RAILWAYS</span><h3>Follow the supply line.</h3><p>Build railways with rails and sleepers, progressive drawing, and moving traffic markers.</p></article>
+        <article class="mh-card"><svg class="mh-network-art" viewBox="0 0 340 170" aria-hidden="true"><path class="mh-river-edge" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-river" d="M-20 136Q120 160 160 80T365 34"/><path class="mh-river-flow mh-flow" d="M-20 136Q120 160 160 80T365 34"/></svg><span class="mh-card-number">03 / RIVERS</span><h3>Let the current move.</h3><p>Trace rivers with visible banks, a progressive reveal, and adjustable current speed and direction.</p></article>
+      </div>
+      <div class="mh-travel-callout"><span class="mh-travel-icon" aria-hidden="true">↝</span><div><h3>And every journey gets its own story.</h3><p>Move planes, ships, vehicles, pins, or objects between places and along drawn paths. Add trails, waypoints, and labels for the countries or regions crossed.</p></div><a class="mh-text-link" href="#map">Map a journey <span aria-hidden="true">↗</span></a></div>
+    </section>
+
+    <section class="mh-section mh-container" id="units" aria-labelledby="mhUnitsTitle">
+      <div class="mh-section-heading"><div><p class="mh-eyebrow">05 / POPULATE THE MAP</p><h2 id="mhUnitsTitle">Small details.<br>A much bigger story.</h2></div><p>Place a single marker or assemble an army. Use editable illustrations, images, and formations to make the map readable.</p></div>
+      <div class="mh-troop-sheet"><span class="mh-sheet-label">FIELD TROOPS / VECTOR MINIATURES</span><img src="assets/map-field-troops.png" width="1200" height="480" loading="lazy" alt="Detailed rifleman, field officer with binoculars, radio operator with a backpack set, and field medic with a medical satchel"></div>
+      <div class="mh-group-grid"><article class="mh-card mh-unit-copy"><h3>More than a symbol.</h3><p>Helmets, webbing, packs, boots, and role-specific equipment. Add tanks, ships, aircraft, bases, historical units, commanders, and defensive structures alongside them.</p><div class="mh-tags"><span>Editable colors</span><span>Size &amp; rotation keys</span><span>Imported SVG / PNG</span><span>Image flags with wind</span></div></article><article class="mh-card mh-group-card"><div><h3>One group. A coordinated move.</h3><p>Select multiple objects and turn them into a collapsible group layer. Animate their shared position, rotation, scale, and opacity while keeping each object's own animation.</p><div class="mh-tags"><span>Army formations</span><span>Duplicate &amp; split</span><span>Ungroup at playhead</span></div></div><div class="mh-layer-stack" aria-hidden="true"><div><b>▾</b> ARMY GROUP <i>◇</i></div><span>↳ Rifle company</span><span>↳ Armored column</span><span>↳ Signals unit</span></div></article></div>
+    </section>
+
+    <section class="mh-section mh-container mh-split" id="animation" aria-labelledby="mhAnimationTitle">
+      <div class="mh-section-copy"><p class="mh-eyebrow">06 / DIRECT THE MOVEMENT</p><h2 id="mhAnimationTitle">Your map.<br>Your point of view.</h2><p>Pull back to show the context. Fly in to explain a detail. Use camera presets or key position, zoom, tilt, and rotation at the playhead.</p><ul class="mh-check-list"><li><b>Camera moves</b><span>Fly to, swoop, pan, orbit, push in, pull back, and follow a traveler.</span></li><li><b>A frame-based timeline</b><span>Scrub, trim, split, move clips, and retime keyframes with draggable diamonds.</span></li><li><b>Room for every format</b><span>Landscape, full HD, square, and portrait. Vertical projects get a dedicated editing layout.</span></li><li><b>A smoother workflow</b><span>Preview zoom, fullscreen, snapping, layer visibility, undo, redo, and keyboard shortcuts.</span></li></ul></div>
+      <div class="mh-editor-diagram" aria-label="Illustration of camera, front-line, route, and group tracks on a frame-based timeline"><div class="mh-diagram-top"><span>MAP / TIMELINE</span><span>00:02:12 <i>30 FPS</i></span></div><div class="mh-diagram-view"><span class="mh-view-frame"></span><span class="mh-orbit-ring"></span><span class="mh-orbit-center">◎</span><span class="mh-view-label">ZOOM · TILT · ROTATE</span></div><div class="mh-diagram-ruler"><span>0s</span><span>2s</span><span>4s</span><span>6s</span></div><div class="mh-diagram-track"><span>Camera</span><div class="mh-track-camera"><i></i><i></i><i></i></div></div><div class="mh-diagram-track"><span>Front line</span><div class="mh-track-front"><i></i><i></i></div></div><div class="mh-diagram-track"><span>Road / rail</span><div class="mh-track-road"><i></i><i></i></div></div><div class="mh-diagram-track"><span>Army group</span><div class="mh-track-group"><i></i><i></i><i></i></div></div><span class="mh-diagram-playhead" id="mhDiagramPlayhead"></span></div>
+    </section>
+
+    <section class="mh-section mh-container" id="sharing" aria-labelledby="mhExportTitle"><div class="mh-export-panel"><div><p class="mh-eyebrow">07 / FROM YOUR TIMELINE TO THEIR SCREEN</p><h2 id="mhExportTitle">Made to be shared.</h2><p>Export your map as a video or capture any frame as a clean PNG. Download the project to keep editing later.</p></div><div class="mh-export-options"><article><span aria-hidden="true">▶</span><h3>Video &amp; stills</h3><p>Frame-by-frame WebM video and PNG snapshots, with the map's styling and animation intact.</p></article><article><span aria-hidden="true">♫</span><h3>Audio for your edit</h3><p>Add reference audio and include retained audio parts in video exports. Audio imports stay in the current session.</p></article><article><span aria-hidden="true">↧</span><h3>Keep the project</h3><p>Local browser saving plus downloadable project files for backups and future edits.</p></article></div></div></section>
+
+    <section class="mh-section mh-container" id="how" aria-labelledby="mhHowTitle"><div class="mh-section-heading"><div><p class="mh-eyebrow">YOUR FIRST MAP</p><h2 id="mhHowTitle">Start with a place.<br>Finish with a story.</h2></div><a class="mh-button mh-primary" href="#map">Open Map Studio <span aria-hidden="true">↗</span></a></div><ol class="mh-steps"><li><span>01</span><h3>Choose your canvas</h3><p>Start fresh or explore a demo. Set your format, duration, and map style.</p></li><li><span>02</span><h3>Build the map</h3><p>Add regions, labels, paths, objects, and the details your story needs.</p></li><li><span>03</span><h3>Set it in motion</h3><p>Key the camera, reshape front lines, animate routes, and coordinate groups.</p></li><li><span>04</span><h3>Share the result</h3><p>Export video or PNG, then download a project backup for your next edit.</p></li></ol></section>
+
+    <section class="mh-support mh-container" id="support" aria-labelledby="mhSupportTitle"><div><p class="mh-eyebrow">INDEPENDENTLY BUILT. FREE TO USE.</p><h2 id="mhSupportTitle">Help the next story take shape.</h2><p>If FrameFlow helps you tell a better story, you can support its development with a coffee. Sharing it with another creator helps, too.</p></div><a class="mh-button mh-support-button" href="https://www.supportkori.com/mehedimim" target="_blank" rel="noopener noreferrer">☕ Buy me a coffee <span aria-hidden="true">↗</span></a></section>
+  </main>
+  <footer class="mh-footer mh-container"><a class="mh-brand" href="#home"><span class="mh-brand-mark" aria-hidden="true">◈</span><span>FrameFlow<small>MAP STUDIO</small></span></a><p>A world of stories. A map for yours.</p><div><a href="#features">Features</a><a href="#map">Open editor</a><a href="terrain-credits.html" target="_blank" rel="noopener noreferrer">Map &amp; terrain credits</a></div></footer>
 </section>
+<script type="module" src="landing-map.mjs"></script>
 
 <header><a class="brand" id="homeLink" href="#home" title="Back to home" aria-label="FrameFlow home"><span class="logo">◈</span> FrameFlow <small>MOTION STUDIO</small></a><nav class="modes" aria-label="Studio mode"><button data-mode="motion" class="on">Motion</button><button data-mode="map">Map Studio</button><button data-mode="paper">Paper Studio</button><button data-mode="scene">Scene Studio</button></nav><input id="projectName" class="motion-only" aria-label="Project name" value="Make your move"><span id="saveState" class="muted motion-only">Saved locally</span><button id="undo" class="motion-only" title="Undo (Ctrl Z)">↶</button><button id="redo" class="motion-only" title="Redo (Ctrl Shift Z)">↷</button><button id="open" class="motion-only">Open</button><button id="save" class="motion-only">Save project</button><button id="export" class="primary motion-only">Export video ↗</button><input id="mProjectName" class="map-only" aria-label="Map project name" value="Untitled map"><span id="mSaveState" class="muted map-only">Saved locally</span><button id="mUndo" class="map-only" title="Undo (Ctrl Z)">↶</button><button id="mRedo" class="map-only" title="Redo (Ctrl Shift Z)">↷</button><button id="mOpen" class="map-only">Open</button><button id="mSave" class="map-only">Save project</button><button id="mExport" class="map-only primary">Export video ↗</button><input id="pProjectName" class="paper-only" aria-label="Paper project name" value="Untitled newspaper"><span id="pSaveState" class="muted paper-only">Saved locally</span><button id="pUndo" class="paper-only" title="Undo (Ctrl Z)">↶</button><button id="pRedo" class="paper-only" title="Redo (Ctrl Shift Z)">↷</button><button id="pOpen" class="paper-only">Open</button><button id="pSave" class="paper-only">Save project</button><button id="pExport" class="paper-only primary">Export video ↗</button></header>
 <div class="workspace motion-only"><aside class="left"><div class="section-title">CREATE <span>＋</span></div><div class="add-grid"><button data-add="text"><b>T</b>Text</button><button data-add="rect"><b>▢</b>Rectangle</button><button data-add="circle"><b>○</b>Ellipse</button><button id="image"><b>▧</b>Image</button></div><div class="section-title">LAYERS <span id="layerCount"></span></div><div id="layers"></div><div class="layer-actions"><button id="duplicate" title="Duplicate layer">Duplicate</button><button id="delete" title="Delete layer">Delete</button><button id="up" title="Move forward">↑</button><button id="down" title="Move backward">↓</button></div><div class="starter"><span class="eyebrow">START SOMETHING</span><h3>A little movement.<br>A big impression.</h3><p>Start with this composition, or make it entirely yours.</p><button id="new">＋ Empty composition</button><button id="demo">↻ Load demo</button></div><button id="help" class="help">⌘ Shortcuts & quick guide</button></aside>
@@ -384,8 +253,8 @@ function routeStudio() {
     document.getElementById('homeLink').focus({ preventScroll: true });
     window.dispatchEvent(new Event('resize'));
   } else {
-    document.title = 'FrameFlow — Make every frame count';
-    const section = ['studios', 'features', 'how', 'support'].includes(mode) && document.getElementById(mode);
+    document.title = 'FrameFlow — Map Animation Studio';
+    const section = ['features', 'terrain', 'regions', 'campaign', 'networks', 'units', 'animation', 'sharing', 'how', 'support'].includes(mode) && document.getElementById(mode);
     if (section) section.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' });
     else window.scrollTo(0, 0);
   }

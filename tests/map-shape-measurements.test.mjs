@@ -74,3 +74,21 @@ for(const source of [arrow,square]){
   assert.deepEqual(first,later,'measurement position and text do not animate');
   assert.ok(strokes>before,'arrow and zone geometry remains visible, including previously saved text-only items');
 }
+
+// Dedicated dropdown shapes measure without a measurement property on other shapes.
+const distance=makeAction('shape',0,{shape:'distance',path:arrow.path});
+const areaShape=makeAction('shape',0,{shape:'area',path:square.path});
+near(measure(distance).value,measure(arrow).value);
+near(measure(areaShape).value,measure(square).value);
+assert.equal(shapeLabel(distance,route(distance)),'111.2 km');
+const project=newMapProject();project.actions=[distance,areaShape];
+assert.doesNotThrow(()=>validateMapProject(project));
+for(const source of [distance,areaShape]){
+  const labels=[],before=strokes;
+  drawShape(H,c,view,null,source,0,labels);
+  assert.equal(labels.length,1);
+  assert.equal(strokes,before,'measurement shapes default to static text');
+  const withGeometry={...source,showDistanceArrow:true,showAreaBoundary:true};
+  drawShape(H,c,view,null,withGeometry,0,[]);
+  assert.ok(strokes>before,'distance arrow and area boundary are optional');
+}

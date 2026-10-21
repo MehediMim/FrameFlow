@@ -2,7 +2,7 @@
 const R=6371.0088, RAD=Math.PI/180, MILE=1.609344;
 const lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y)));
 const logCosh=z=>Math.abs(z)+Math.log1p(Math.exp(-2*Math.abs(z)))-Math.LN2;
-const zone=a=>['zone','noFly'].includes(a.shape);
+const zone=a=>['zone','noFly','area'].includes(a.shape);
 export function measureShape(a,route){
   const area=zone(a),imperial=a.measurementUnit==='imperial';
   let km=0;
@@ -31,9 +31,10 @@ export function measurementText(m){
   return `${number} ${m.unit}`;
 }
 export function shapeLabel(a,route){
-  return [a.showLabel&&a.label,a.showMeasurement&&measurementText(measureShape(a,route))].filter(Boolean).join(' · ');
+  return [a.showLabel&&a.label,(a.showMeasurement||['distance','area'].includes(a.shape))&&measurementText(measureShape(a,route))].filter(Boolean).join(' · ');
 }
 export function validateShapeMeasurement(a){
+  for(const key of ['showDistanceArrow','showAreaBoundary'])if(a[key]!==undefined&&typeof a[key]!=='boolean')throw Error('Invalid measurement appearance.');
   if(a.showMeasurement!==undefined&&typeof a.showMeasurement!=='boolean')throw Error('Invalid measurement label.');
   if(a.measurementUnit!==undefined&&!['metric','imperial'].includes(a.measurementUnit))throw Error('Invalid measurement units.');
 }

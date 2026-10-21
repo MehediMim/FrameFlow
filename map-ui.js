@@ -595,14 +595,12 @@ function scenePanelFields(a) {
     + F.range('fadeSeconds','Fade in / out (seconds)',d.fadeSeconds,0,2,.05,x=>x.toFixed(2)+'s');
 }
 function shapeMeasurementFields(a) {
-  const area=['zone','noFly'].includes(a.shape);
-  const toggle=F.chk('showMeasurement', 'Show measurement', !!a.showMeasurement);
-  if(!a.showMeasurement)return toggle;
-  const path=pathDraw?.id===a.id?a.path:pathAt(a,frame),current={...a,path};
+  const area=a.shape==='area',current={...a,curve:'straight'};
   const measurement=measureShape(current,planeRoute(geo,current));
-  return toggle
-    +F.sel('measurementUnit','Measurement units',a.measurementUnit||'metric',[['metric','Kilometres / km\u00b2'],['imperial','Miles / mi\u00b2']])
-    +`<p class="mini-label" data-shape-measurement>${area?'Area':'Distance'}: ${measurementText(measurement)}</p>`;
+  return F.sel('measurementUnit','Units',a.measurementUnit||'metric',[['metric','Kilometres / km\u00b2'],['imperial','Miles / mi\u00b2']])
+    +(area?F.chk('showAreaBoundary','Show zone boundary',!!a.showAreaBoundary):F.chk('showDistanceArrow','Show arrow between points',!!a.showDistanceArrow))
+    +`<p class="mini-label" data-shape-measurement>${area?'Area':'Distance'}: ${measurementText(measurement)}</p>`
+    +`<p class="mini-label">${area?'Draw at least three corners to measure a zone.':'Pick two points to measure their distance.'} The measurement is static text on the map.</p>`;
 }
 
 function actionFields(a) {
@@ -618,7 +616,17 @@ function actionFields(a) {
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
-    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + shapeMeasurementFields(a) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '') + '<details><summary>Optional animation</summary>' + campaign.pathFields(a) + '</details>';
+    case 'shape': {
+      const measurement=['distance','area'].includes(a.shape);
+      return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a)
+        + (measurement?shapeMeasurementFields(a):'')
+        + F.color('color', 'Color', a.color)
+        + (!measurement||a.showDistanceArrow||a.showAreaBoundary?F.range('width', 'Line width', a.width, 1, 16, .5):'')
+        + (['zone','noFly'].includes(a.shape)||a.shape==='area'&&a.showAreaBoundary?F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%'):'')
+        + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60) : '')
+        + (measurement?'':'<details><summary>Optional animation</summary>' + campaign.pathFields(a) + '</details>');
+    }
+
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
       const mv = a.mode === 'move' || a.mode === 'path' ? a.mode : 'stay', ownColor = a.badge || a.showIcon === false;
@@ -650,7 +658,7 @@ function placeAt(p) {
 function syncPathEnds(a) { const p = a.path || []; if (p.length) { a.from = placeAt(p[0]); a.to = placeAt(p[p.length - 1]); if (a.type === 'pin') a.place = a.from; } if(a.type==='shape'&&a.pathKeys?.length&&p.length>=2&&frame>=a.start&&frame<=a.start+a.dur)putPathKey(a,frame,p); }
 function pathFields(a) {
   const drawing = pathDraw?.id === a.id,pts = a.type==='shape'&&a.pathKeys?.length&&!drawing?pathAt(a,frame):a.path||[];
-  return F.sel('curve', 'Path shape', a.curve === 'straight' ? 'straight' : 'smooth', Object.entries(PATH_CURVES)) +
+  return (['distance','area'].includes(a.shape)?'':F.sel('curve', 'Path shape', a.curve === 'straight' ? 'straight' : 'smooth', Object.entries(PATH_CURVES))) +
     `<div class="m-path-actions"><button type="button" data-mpath="draw" class="${drawing ? 'active' : ''}" title="Click the map to add points. Drag a point to move it. Alt+click removes it.">${drawing ? '✓ Finish drawing' : '✎ Draw path on map'}</button>` +
     `<button type="button" data-mpath="undo" ${pts.length ? '' : 'disabled'} title="Remove the last point">↶ Last point</button>` +
     `<button type="button" data-mpath="reverse" ${pts.length > 1 ? '' : 'disabled'} title="Travel the path the other way">⇄ Reverse</button>` +
@@ -809,7 +817,8 @@ function bindInspector(it) {
       for (const [k, cat, base] of [['glyph', OBJECT_ICONS, 'Object'], ['fx', EFFECTS, 'Effect'], ['shape', SHAPES, 'Arrow / zone']]) if (key === k) { // new look: follow its default color and name unless the user changed them
         const old = cat[it[k]], nu = cat[v]; if (!nu) return;
         if (it.color === old?.color) it.color = nu.color; if (!it.name || it.name === base || it.name === old?.label) it.name = nu.label;
-        it[k] = v; if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
+        if(k==='shape'&&['distance','area'].includes(v)&&it.pathKeys?.length){it.path=pathAt(it,frame);delete it.pathKeys;}
+        it[k] = v; if(k==='shape'&&['distance','area'].includes(v)){it.curve='straight';if(v==='distance'&&it.path?.length>2)it.path=[it.path[0],it.path.at(-1)];} if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
       }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__pinMove') {
@@ -848,7 +857,7 @@ function bindInspector(it) {
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
-      writeObjectValue(it,key,v); changed(); if (key === 'measurementUnit' || key === 'showMeasurement' || (key === 'curve' && it.type === 'shape') || key === 'highlightExtent' || key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      writeObjectValue(it,key,v); changed(); if (key === 'measurementUnit' || key === 'showDistanceArrow' || key === 'showAreaBoundary' || (key === 'curve' && it.type === 'shape') || key === 'highlightExtent' || key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
@@ -1010,6 +1019,7 @@ function pathPointerDown(e) {
   const ll = screenToLonLat(lastView, sx, sy);
   if (!ll) { notify('Click on the map surface'); return; }
   if ((a.path || []).length >= 120) { notify('A path can have up to 120 points'); return; }
+  if(a.shape==='distance'&&a.path?.length>=2){notify('Distance uses two points. Drag a point or clear to pick again.');return;}
   checkpoint(); (a.path ||= []).push({ lat: +ll.lat.toFixed(4), lon: +ll.lon.toFixed(4) });
   syncPathEnds(a); changed(); renderInspector();
 }

@@ -49,6 +49,7 @@ export const EFFECTS = {
 };
 export const SHAPES = {
   ...NETWORK_SHAPES,
+  distance: { label: 'Distance', color: '#e9c46a' }, area: { label: 'Area', color: '#e9c46a' },
   arrow: { label: 'Attack arrow', color: '#e63946' }, retreat: { label: 'Retreat arrow', color: '#f4a261' }, front: { label: 'Front line', color: '#d62828' },
   zone: { label: 'Zone / occupied area', color: '#e9c46a' }, noFly: { label: 'No-fly / restricted zone', color: '#ff595e' },
 };
@@ -164,6 +165,9 @@ export function drawEffect(H, c, v, geo, a, frame, labels) {
 
 // ---------------------------------------------------------------- shapes (arrows, front lines, zones)
 export function drawShape(H, c, v, geo, a, frame, labels) {
+  const measurementShape=['distance','area'].includes(a.shape);
+  const textOnly=measurementShape&&(a.shape==='distance'?!a.showDistanceArrow:!a.showAreaBoundary);
+  if(measurementShape)a={...a,shape:a.shape==='area'?'zone':'arrow',showMeasurement:true,revealPath:false,curve:'straight',pathKeys:[]};
   if(a.pathKeys?.length)a={...a,path:pathAt(a,frame)};
   if (!H.actAlpha(a, frame) || a.mode !== 'path' || (a.path || []).length < 2) return;
   const r = H.planeRoute(geo, a); if (!r) return;
@@ -177,6 +181,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     const label=shapeLabel(a,r);
     if(label&&anchor&&(zone||anchor.z>=v.near))labels.push({x:anchor.x,y:anchor.y,text:label,alpha:1,scale:1});
   }
+  if(textOnly)return;
   let text = null;
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
   if(Object.hasOwn(NETWORK_SHAPES,a.shape)){

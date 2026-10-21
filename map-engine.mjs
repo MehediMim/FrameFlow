@@ -1726,7 +1726,7 @@ export const ACTION_TYPES = {
   pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin, text or picture, and move it from place to place' },
   object: { label: 'Object', icon: '◆', dur: 90, hint: 'Place a tank, ship, jet, soldier, base, city… and move or animate it' },
   effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Explosion, fire, smoke, shockwave, earthquake, missile strike' },
-  shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Arrows, front lines and zones with optional distance or area labels' },
+  shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Arrows, roads, zones, distance and area measurements' },
   label: { label: 'Map label', icon: 'Aa', dur: 90, hint: 'Place outlined atlas text on the map' },
 };
 const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });
@@ -1759,7 +1759,7 @@ export function makeAction(type, start, extra = {}) {
     shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, fillAlpha: .28, showLabel: false, label: '' },
     label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
   }[type];
-  const a = { ...base, ...own, ...extra };
+  const a = { ...base, ...own, ...(type==='shape'&&['distance','area'].includes(extra.shape)?{curve:'straight'}:{}), ...extra };
   a.animDur ??= a.dur;
   return a;
 }

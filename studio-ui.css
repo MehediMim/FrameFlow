@@ -1,5 +1,5 @@
 /* One visual contract for Motion, Map, Paper and Scene. Loaded after studio CSS. */
-:root{--ff-control:#24282c;--ff-border:#363e43;--ff-surface:#202529;--ff-radius:6px;--ff-left:260px;--ff-right:255px;--ff-timeline:238px}
+:root{--ff-control:#242d27;--ff-border:#39473d;--ff-surface:#202823;--ff-radius:6px;--ff-left:260px;--ff-right:255px;--ff-timeline:238px}
 .ff-unified > header{height:auto;min-height:62px;flex:0 0 auto;gap:8px;flex-wrap:wrap;padding:10px 16px}
 .ff-unified > header :is(#projectName,#mProjectName,#pProjectName,#scName){width:clamp(110px,12vw,190px);margin:0;padding:8px 10px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:#22262a;font-size:12px}
 .ff-unified > header :is(#saveState,#mSaveState,#pSaveState,#scStatus){font-size:10px;margin-right:auto;white-space:nowrap}
@@ -146,3 +146,19 @@ body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSet
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-footer button{margin:0;min-height:36px;min-width:80px;padding:8px 20px}
 @media(max-width:520px){body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .two{grid-template-columns:minmax(0,1fr)}body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) .ff-settings-body{padding:20px}}
 @media(max-height:600px){body.ff-unified dialog.ff-dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel){max-height:calc(100dvh - 24px)}body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) > .section-title{padding:14px 24px}}
+
+/* Common editor fields and actions, irrespective of the selected layer type. */
+body.ff-unified{--bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border);--text:var(--ff-text);--muted:var(--ff-muted);--accent:var(--ff-accent);font-family:var(--ff-font-body)}
+.ff-unified #mapStudio :is(input,select,textarea){background:var(--ff-control);color:var(--ff-text);border-color:var(--ff-border);border-radius:var(--ff-radius)}
+.ff-unified #mapStudio :is(.add-grid,.m-presets){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:14px}
+.ff-unified #mapStudio :is(.add-grid,.m-presets) button{min-height:40px;display:flex;align-items:center;gap:8px;padding:8px;font-size:10px;line-height:1.4;white-space:normal;background:var(--ff-surface);border:1px solid var(--ff-border);border-radius:var(--ff-radius)}
+.ff-unified #mapStudio :is(.add-grid,.m-presets) button:hover{background:#303e2c;border-color:#687d57}
+.ff-unified #mapStudio :is(.add-grid,.m-presets) b{width:19px;flex:0 0 19px;text-align:center;font-size:18px;color:var(--ff-accent)}
+.ff-unified #mapStudio :is(.m-item,.track-label,.m-clip).multi-selected{background:#2b3b25;border-color:#718b59;box-shadow:inset 3px 0 var(--ff-accent)}
+.ff-unified #mapStudio .m-clip.multi-selected{box-shadow:inset 0 0 0 1px var(--ff-accent)}
+.ff-unified #mInspector :is(.m-chk,.color-row){min-height:28px;align-items:center}
+.ff-unified #mInspector .ff-inspector-content input[type=color]{height:28px;min-height:28px;width:36px}
+.ff-unified #mInspector .ff-inspector-content input[type=checkbox]{width:14px;height:14px;flex:none}
+.ff-unified #mInspector .ff-inspector-content>label:has(>input[type=color]),.ff-unified #mInspector .ff-inspector-content>label.m-chk{grid-column:span 1}
+.ff-unified #mInspector .ff-inspector-content .two{gap:8px}
+.ff-unified #mInspector .ff-inspector-content :is(button,input,select,textarea){box-sizing:border-box}

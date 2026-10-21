@@ -1,4 +1,4 @@
-﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=image-badges-1"><style>
+﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="design-tokens.css?v=consistent-editor-1"><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=paired-camera-1"><style>
 /* Map Studio color presets; native picker remains available. */
 .ff-palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 12px;max-width:100%;line-height:1}
 .ff-color-chip{appearance:none;display:inline-block;position:relative;flex:0 0 19px;width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;margin:0!important;padding:0!important;border:1px solid #ffffff66!important;border-radius:5px!important;background:var(--chip-color)!important;cursor:pointer;box-shadow:0 1px 3px #0004;transition:transform .1s,box-shadow .1s}
@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=map-settings-layout-2"><link rel="stylesheet" href="landing-map.css"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=consistent-editor-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"></head><body class="landing">
 <style>
 /* Support links for Map Studio and the landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -205,16 +205,16 @@ body.landing #landing{display:block}
 <div id="mapStudio">
 <div class="workspace">
 <aside class="left">
-<div class="section-title">ANIMATE <span>＋</span></div><div class="add-grid" id="mAddGrid"></div>
-<div class="section-title">CAMERA PRESETS <span>▣</span></div><div class="m-presets" id="mPresets"></div>
-<div class="section-title">TIMELINE ITEMS <span id="mItemCount"></span></div><div id="mItems"></div>
+<div class="section-title">ADD LAYER <span>＋</span></div><div class="add-grid" id="mAddGrid"></div>
+<div class="section-title">CAMERA <span>▣</span></div><div class="m-presets" id="mPresets"></div>
+<div class="section-title">LAYERS <span id="mItemCount"></span></div><div id="mItems"></div>
 <div class="layer-actions"><button id="mMoveUp" title="Move up in the list. Items higher up draw underneath overlapping travel, pins, objects and effects.">▲ Up</button><button id="mMoveDown" title="Move down in the list. Items lower down draw on top of overlapping travel, pins, objects and effects.">▼ Down</button><button id="mDuplicate" title="Duplicate item">Duplicate</button><button id="mDelete" title="Delete item">Delete</button></div>
 <div class="starter m-starter"><button id="mNew">＋ Empty map</button><button id="mDemo">↻ Load demo</button></div>
 <button id="mHelp" class="help">⌘ Quick guide</button>
 </aside>
 <main>
 <div class="stagebar"><span><i class="dot"></i> Map <b id="mCompLabel">1280 × 720</b></span><div><button id="mSettingsButton" type="button" aria-expanded="false" aria-controls="mSettingsPanel">⚙ Map settings</button><button id="mGraticule" title="Toggle grid lines">▦ Grid lines</button><button id="mSnapshot">PNG ↓</button><button id="mapFullscreen" type="button" title="Show map fullscreen (F)">⛶ Fullscreen</button></div></div>
-<div class="stage-area"><div class="canvas-wrap"><canvas id="mCanvas" width="1280" height="720" aria-label="Map canvas"></canvas></div><button id="mResetView" type="button" hidden title="Return to the animation camera. Mouse navigation only changes the editor preview.">Reset view</button><div class="stage-hint" id="mHint"></div></div>
+<div class="m-stage-viewport"><div class="stage-area"><div class="canvas-wrap"><canvas id="mCanvas" width="1280" height="720" aria-label="Map canvas"></canvas></div><button id="mResetView" type="button" hidden title="Return to the animation camera. Mouse navigation only changes the editor preview.">Reset view</button><div class="stage-hint" id="mHint"></div></div><button id="mCaptureView" type="button" title="Use current map view at playhead" aria-label="Use current map view at playhead"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5l1.5-2h5L16 5h4a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><circle cx="12" cy="12" r="4"/></svg></button></div>
 <div class="transport"><span class="time" id="mTimecode">00:00:00</span><div class="play-controls"><button id="mStart" title="First frame">|◀</button><button id="mPrev" title="Previous frame">‹</button><button id="mPlay" class="play" title="Play / pause (Space)">▶</button><button id="mNext" title="Next frame">›</button><button id="mEnd" title="Last frame">▶|</button><button id="mLoop" class="active" title="Loop playback">↻</button></div><label>FRAME <input id="mFrame" type="number" min="0" value="0"></label></div><div class="ff-audio-slot" data-audio-studio="map"></div>
 </main>
 <aside class="right">
@@ -273,7 +273,7 @@ body.landing #landing{display:block}
 <input hidden type="file" id="mProjectFile" accept="application/json,.json">
 <dialog id="mModal"><div id="mModalBody"></div><button id="mCloseModal">Close</button></dialog>
 </div>
-<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=map-only-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
+<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=paired-camera-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {
@@ -332,7 +332,7 @@ const PRESETS = [
   ['#ef4444','Red'],['#f97316','Orange'],['#facc15','Yellow'],['#a16207','Brown']
 ];
 function decorate(picker) {
-  if (picker.dataset.ffColorSwatches || picker.closest('.ff-palette')) return;
+  if (picker.dataset.ffColorSwatches || picker.closest('.ff-palette, #mMapContext')) return;
   picker.dataset.ffColorSwatches = 'true';
   const palette = document.createElement('span');
   palette.className = 'ff-palette';
@@ -381,4 +381,4 @@ new MutationObserver(records => {
   for (const record of records) for (const node of record.addedNodes) scan(node);
 }).observe(document.documentElement, { childList: true, subtree: true });
 
-</script><script type="module" src="inspector-panels.mjs?v=inspector-order-1"></script><script type="module" src="left-panels.mjs"></script></body></html>
+</script><script type="module" src="inspector-panels.mjs?v=merged-tools-1"></script><script type="module" src="left-panels.mjs"></script></body></html>

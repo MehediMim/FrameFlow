@@ -128,12 +128,6 @@ body.mode-map #mapStudio{display:flex}
 #mTerrainBox summary{cursor:pointer;margin-bottom:10px}
 #mTerrainBox output{font-size:11px;color:#b6c4b5;font-variant-numeric:tabular-nums}
 #mTerrainBox a{font-size:11px;color:var(--accent)}
-.m-arrange{margin-top:16px;padding-top:12px;border-top:1px solid #394146}
-.m-arrange summary{cursor:pointer}
-.m-arrange-list{max-height:160px;overflow-y:auto;padding:6px 0;margin-bottom:10px}
-.m-arrange-list label.m-chk{display:flex;align-items:center;gap:8px;overflow-wrap:anywhere}
-.m-arrange-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:10px 0}
-.m-arrange-buttons button{min-width:0;padding:7px 3px;font-size:10px;white-space:normal}
 .m-object-key-buttons{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
 .m-object-key-buttons button{font-size:10px;padding:7px}
 .m-object-key-buttons button.current{border-color:var(--accent);color:var(--accent)}
@@ -178,6 +172,60 @@ body.mode-map #mapStudio{display:flex}
 #mInspector .m-object-options [aria-selected="true"]{background:#303e2b;box-shadow:inset 3px 0 var(--accent)}
 .m-object-picker summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-#mMapContext{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #596653;border-radius:8px;background:#1b241ff2;box-shadow:0 4px 18px #0007;color:#e3eadc;font-size:12px;white-space:nowrap}
-#mMapContext[hidden]{display:none}
-#mMapContext button{padding:6px 10px;font-size:12px}
+/* One fixed selection bar, shared by objects, regions and other spatial layers. */
+#mMapContext{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:20;display:flex;align-items:stretch;gap:8px;max-width:calc(100% - 24px);padding:8px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:#1b241ff5;box-shadow:0 4px 18px #0007;color:var(--ff-text);box-sizing:border-box}
+#mMapContext[hidden],.m-map-add-context[hidden]{display:none}
+#mMapContext.m-map-object-context{width:min(520px,calc(100% - 24px))}
+#mMapContext.m-map-group-context{width:min(280px,calc(100% - 24px))}
+#mMapContext .m-map-object-controls{width:100%;display:grid;grid-template-columns:minmax(78px,1fr) minmax(100px,1.15fr) 42px minmax(108px,1fr);gap:8px;align-items:end}
+#mMapContext .m-map-group-controls{grid-template-columns:42px minmax(130px,1fr)}
+#mMapContext .m-map-layer-controls{grid-template-columns:repeat(auto-fit,minmax(78px,1fr))}
+#mMapContext .m-map-land-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px}
+#mMapContext .m-map-land-controls>span{align-self:center;font-size:10px;color:var(--ff-muted);padding:0 3px}
+#mMapContext label,#mMapContext .m-object-picker{display:flex;flex-direction:column;gap:4px;margin:0;min-width:0;font-size:9px;line-height:12px;color:var(--ff-muted)}
+#mMapContext :is(select,input:not([type=checkbox]),.m-object-picker summary){width:100%;height:28px;min-height:28px;margin:0;padding:3px 6px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:var(--ff-control);color:var(--ff-text);font-size:10px;box-sizing:border-box}
+#mMapContext input[type=color]{width:34px;padding:2px}
+#mMapContext input[type=checkbox]{width:14px;height:14px;margin:7px 0;accent-color:var(--ff-accent)}
+#mMapContext input[type=text]{min-width:80px}
+#mMapContext .m-map-land-controls input[type=text]{width:130px}
+#mMapContext .m-map-land-controls input[type=number]{width:58px}
+#mMapContext .m-object-picker>.mini-label{font-size:9px;line-height:12px;margin:0;color:var(--ff-muted)}
+#mMapContext .m-object-picker summary{display:flex;align-items:center;gap:5px;cursor:pointer}
+#mMapContext .m-object-picker summary>span:not(.m-object-caret){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mMapContext .m-object-picker summary img{width:20px;height:20px}
+#mMapContext .m-object-options{max-height:min(280px,calc(100dvh - 240px));border-color:var(--ff-border);background:var(--ff-surface)}
+#mMapContext .m-object-options .m-object-choice{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:4px 7px;border:0;border-bottom:1px solid var(--ff-border);border-radius:0;background:var(--ff-control);color:var(--ff-text);text-align:left;font-size:10px;white-space:normal}
+#mMapContext .m-object-options .m-object-choice img{width:26px;height:26px;object-fit:contain;flex:none}
+#mMapContext .m-object-options :is(.m-object-choice:hover,[aria-selected=true]){background:#36492b}
+.m-map-add-context{position:fixed;z-index:1000;min-width:172px;padding:4px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:var(--ff-surface);box-shadow:0 5px 18px #0008}
+.m-map-add-context button{display:block;width:100%;min-height:32px;padding:7px 10px;border:0;border-radius:4px;background:transparent;color:var(--ff-text);text-align:left;font-size:11px}
+.m-map-add-context button:hover,.m-map-add-context button:focus-visible{background:#36492b;outline:2px solid var(--ff-accent);outline-offset:-2px}
+.m-map-add-context [data-direct-context-delete]{color:#ffada3}
+@media(max-width:650px){#mMapContext .m-map-object-controls{grid-template-columns:repeat(2,minmax(80px,1fr))}}
+
+#mInspector.ff-inspector-accordion{padding-top:8px!important}
+#mInspector .ff-inspector-section{margin-bottom:6px;border-radius:6px}
+#mInspector .ff-inspector-summary{padding:7px 9px;font-size:9px;letter-spacing:.65px}
+#mInspector .ff-inspector-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;padding:8px}
+#mInspector .ff-inspector-content>*{grid-column:1/-1;min-width:0;margin-top:0;margin-bottom:0}
+#mInspector .ff-inspector-content>label:has(>input[type="number"]){grid-column:span 1}
+#mInspector .ff-inspector-content label{font-size:10px;gap:4px;line-height:1.35}
+#mInspector .ff-inspector-content input:not([type="checkbox"]):not([type="range"]),#mInspector .ff-inspector-content select{min-height:29px;padding-top:4px;padding-bottom:4px;font-size:11px}
+#mInspector .ff-inspector-content .mini-label{font-size:9px;line-height:1.4;margin:3px 0}
+#mInspector .m-object-key-buttons{gap:4px;margin:3px 0}
+#mInspector .m-object-key-buttons button{padding:5px 7px}
+
+#mInspector .m-object-key-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+#mInspector .m-object-key-buttons button{min-width:0;padding:4px 3px;font-size:9px;line-height:1.3;white-space:normal}
+
+#mCaptureView{position:absolute;bottom:12px;left:12px;z-index:3;width:30px;height:30px;padding:5px;display:grid;place-items:center;background:#20262de6;box-shadow:0 2px 8px #0005}
+
+/* Keep camera capture outside the scrollable, magnified canvas content. */
+.m-stage-viewport{position:relative;flex:1 1 0;min-width:0;min-height:0;overflow:hidden}
+.m-stage-viewport>.stage-area{width:100%;height:100%}
+
+.m-key.m-camera-paired::before{background:#86ccef;border-color:#d3f0ff}
+#mInspector [data-camera-delete]{width:100%;margin-top:6px;color:#ffada4;font-size:11px}
+
+.m-key.m-camera-key{width:18px;height:16px}
+.m-key.m-camera-key::before{left:2px;top:1px}

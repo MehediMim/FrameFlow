@@ -1,0 +1,7 @@
+/* Shared visual language for the public page and Map Studio. */
+:root{
+  --ff-bg:#111713;--ff-panel:#191f1c;--ff-surface:#202823;--ff-control:#242d27;
+  --ff-border:#39473d;--ff-text:#e9efe5;--ff-muted:#9aa99c;--ff-accent:#b6f36e;
+  --ff-radius:6px;--ff-space:8px;--ff-font-body:'DM Sans',sans-serif;--ff-font-heading:Manrope,sans-serif;
+  --bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border);--text:var(--ff-text);--muted:var(--ff-muted);--accent:var(--ff-accent);
+}

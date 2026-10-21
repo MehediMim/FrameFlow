@@ -1,10 +1,10 @@
 import { pathAt, putPathKey, NETWORK_SHAPES, NETWORK_ANIMATIONS } from './map-path-animation.mjs';
 import { regionsInsidePolygon, validPolygon } from './map-area-selection.mjs';
-import { GROUP_FIELDS, groupPoseAt, putGroupKey, makeObjectGroup, ungroupObjects } from './map-object-groups.mjs';
+import { GROUP_FIELDS, groupPoseAt, putGroupKey, ungroupObjects } from './map-object-groups.mjs';
 
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function installCampaignUI(api){
-  const {canvas}=api,$=s=>document.querySelector(s);let draft=null,groupPick=null;const selection=new Set(),collapsed=new Set();
+  const {canvas}=api,$=s=>document.querySelector(s);let draft=null,groupPick=null;const collapsed=new Set();
   const item=id=>api.project().actions.find(a=>a.id===id),refresh=()=>{api.changed();api.renderInspector();};
   const inside=a=>api.frame()>=a.start&&api.frame()<=a.start+a.dur;
   const keyList=(a,kind,keys)=>`<div class="m-campaign-keys">${keys.map(k=>`<span><button type="button" data-campaign-seek="${k.frame}">${(k.frame/api.project().fps).toFixed(2)}s</button><button type="button" data-campaign-remove="${kind}:${k.frame}" aria-label="Remove keyframe at ${(k.frame/api.project().fps).toFixed(2)} seconds">×</button></span>`).join('')}</div>`;
@@ -63,26 +63,13 @@ export function installCampaignUI(api){
     };
   }
   function decorateItems(){
-    const objects=api.project().actions.filter(a=>a.type==='object'),groups=api.project().actions.filter(a=>a.type==='group');
-    for(const id of selection)if(!objects.some(a=>a.id===id))selection.delete(id);
-    let bar=$('#mGroupTools');if(!bar){bar=document.createElement('div');bar.id='mGroupTools';bar.className='m-group-tools';$('#mItems').before(bar);}
-    bar.innerHTML=`<button type="button" data-group-create ${selection.size<2?'disabled':''}>Group selected (${selection.size})</button><button type="button" data-group-clear>Clear</button>`;
-    bar.querySelector('[data-group-clear]').onclick=()=>{selection.clear();decorateItems();};
-    bar.querySelector('[data-group-create]').onclick=()=>{
-      try{
-        const selected=objects.filter(a=>selection.has(a.id));if(selected.length<2)return;
-        api.pause();const snapshot=structuredClone(api.project());
-        const group=makeObjectGroup(snapshot,[...selection],a=>{const p=api.resolve(a.place);return p&&{lon:p.X*360-180,lat:Math.atan(Math.sinh(Math.PI*(1-2*p.Y)))*180/Math.PI};},crypto.randomUUID());
-        api.checkpoint();api.project().actions=snapshot.actions;collapsed.add(group.id);selection.clear();api.select(group.id);refresh();api.notify('Objects grouped. Edit the group at the playhead to animate them together.');
-      }catch(e){api.notify(e.message);}
-    };
+    const groups=api.project().actions.filter(a=>a.type==='group');
     for(const row of document.querySelectorAll('#mItems [data-mid]')){
       const a=item(row.dataset.mid);row.querySelectorAll('[data-group-check],[data-group-collapse]').forEach(e=>e.remove());row.hidden=false;
       if(a?.type==='group'){
         const toggle=document.createElement('button');toggle.type='button';toggle.dataset.groupCollapse=a.id;toggle.textContent=collapsed.has(a.id)?'▸':'▾';toggle.title='Expand or collapse group';toggle.setAttribute('aria-expanded',String(!collapsed.has(a.id)));toggle.onclick=e=>{e.stopPropagation();if(collapsed.has(a.id))collapsed.delete(a.id);else collapsed.add(a.id);decorateItems();decorateTimeline();};row.prepend(toggle);
       }
       if(a?.type!=='object')continue;const parent=groups.find(g=>g.memberIds.includes(a.id));row.classList.toggle('m-group-child',!!parent);if(parent){row.hidden=collapsed.has(parent.id);row.title=`In ${parent.name}`;continue;}
-      const check=document.createElement('input');check.type='checkbox';check.dataset.groupCheck=a.id;check.checked=selection.has(a.id);check.setAttribute('aria-label',`Select ${a.name} for grouping`);check.onclick=e=>e.stopPropagation();check.onchange=()=>{if(check.checked)selection.add(a.id);else selection.delete(a.id);decorateItems();};row.prepend(check);
     }
   }
   function decorateTimeline(){

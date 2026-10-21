@@ -1,5 +1,6 @@
 // Move absolute movement keys with their clip; clamp them when trimming it.
 export function retimeMapItem(item, start, duration, moveKeys = true) {
+  if (item.fullTimelineCamera) return;
   const shift = moveKeys ? start - item.start : 0;
   if (item.sourceStart !== undefined) {
     item.sourceStart += shift;
@@ -35,6 +36,7 @@ export function animationKeysOf(item) {
 
 // Retain the source clock so cutting a clip never restarts its animation.
 export function splitMapItem(item, frame, id) {
+  if (item.fullTimelineCamera) return null;
   if (!Number.isSafeInteger(frame) || frame <= item.start || frame >= item.start + item.dur) return null;
   const right = structuredClone(item), end = item.start + item.dur;
   item.sourceStart ??= item.start; item.sourceDur ??= item.dur;

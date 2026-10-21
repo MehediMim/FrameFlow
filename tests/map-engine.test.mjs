@@ -31,4 +31,6 @@ assert.ok(Math.abs(r.X[r.n - 1] - r.X[0]) < .5, 'crosses the Pacific, not the wh
 // validation
 E.validateMapProject(JSON.parse(JSON.stringify(p)));
 assert.throws(() => E.validateMapProject({ version: 1, layers: [] }));
+const highlight=E.makeAction('highlight',0);assert.equal(highlight.dim,0);assert.equal(highlight.pulse,false);
+const customHighlight=E.makeAction('highlight',0,{dim:.6,pulse:true});assert.equal(customHighlight.dim,.6);assert.equal(customHighlight.pulse,true);
 console.log('map engine tests passed');

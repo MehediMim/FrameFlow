@@ -162,7 +162,7 @@ const attached = label => {
 // Attached labels are an existing style preset, with the same font inheritance.
 {
   const p = project(), a = E.makeAction('pin', 20);
-  assert.ok(!E.ACTION_TYPES.label.hidden, 'map label tool is available for custom atlas names');
+  assert.ok(E.ACTION_TYPES.label.hidden && !E.ACTION_TYPES.pin.hidden, 'map labels use the merged Pin / label tool');
   assert.equal(E.DEFAULT_LABEL_STYLE.placement, 'screen', 'old projects keep their screen-facing labels');
   assert.equal(E.LABEL_PRESETS.map2d.label, '2D · Attached to map');
   assert.equal(E.LABEL_PRESETS.map2d.style.placement, 'map');
@@ -540,3 +540,23 @@ for (const mode of ['direct', 'path']) {
   assert.equal(countryLabelLayout(wide,center,4).width,0,'text cannot be fitted across a hole at its anchor');
 }
 console.log('map label tests passed');
+
+// The merged tool retains geographic and screen text layout from standalone labels.
+for (const anchor of ['map','screen']) {
+  const p=project(),settings={labelPlacement:anchor,place:place('Anchor',5),x:35,y:42,offsetX:10,offsetY:0,labelStyle:{...E.DEFAULT_LABEL_STYLE,...E.LABEL_PRESETS.atlasGround.style}};
+  const old=E.makeAction('label',0,{...settings,text:'Merged label',dur:90});
+  p.actions=[old];const original=render(p,89).texts;
+  const merged=E.makeAction('pin',0,{...settings,label:'Merged label',showIcon:false,showLabel:true,dur:90});
+  p.actions=[merged];assert.deepEqual(render(p,89).texts,original,`${anchor} text layout survives the merged tool`);
+  E.validateMapProject(JSON.parse(JSON.stringify(p)));
+}
+
+// Region names and country fill are independent options on one layer.
+{
+  const p=project(),a=E.makeAction('highlight',0,{dur:90,showFill:false,regionLabels:true,showLabel:true,color:'#123abc',target:{kind:'regions',name:'Selected regions',members:[{kind:'country',name:'Westland'},{kind:'country',name:'Eastland'}]}});
+  p.actions=[a];const output=render(p,89);
+  assert.ok(output.texts.some(t=>t.text==='Westland')&&output.texts.some(t=>t.text==='Eastland'),'each selected region gets its own name');
+  assert.ok(!output.commands.some(c=>c[0]==='set'&&c[1]==='fillStyle'&&c[2]==='#123abc'),'label-only region does not paint a highlight');
+  a.showFill=true;assert.ok(render(p,89).commands.some(c=>c[0]==='set'&&c[1]==='fillStyle'&&c[2]==='#123abc'),'enabling Fill paints the same region layer');
+  E.validateMapProject(JSON.parse(JSON.stringify(p)));
+}

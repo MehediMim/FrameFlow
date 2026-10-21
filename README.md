@@ -34,3 +34,18 @@ Run `npm test` for map unit tests and `npm run check` for JavaScript syntax chec
 ## GitHub Pages
 
 Publish this directory from your chosen branch and repository root in Settings → Pages. Include `.nojekyll`. All application asset paths are relative and work with GitHub project sites or custom domains. Map and terrain attribution is in `terrain-credits.html`.
+
+
+### Consistent editor interactions
+
+Click a spatial layer on the canvas or in Layers to select it. Shift-click adds or removes layers from the selection in either place. Common canvas fields apply to the selection; controls specific to one kind of layer appear for selections of that kind. Dragging moves the start anchor of an object, pin or traveler, the location of an effect or label, or the entire geometry of an arrow/zone. The Size handle resizes objects, groups, pins, effects and text; direction handles apply to objects and groups.
+
+The selection bar and camera capture stay pinned to the viewport during zoom and scroll. Right-click offers Duplicate, Hide/Show and Delete for selected layers. Region selections additionally offer Highlight, Border and Label, with independent fill/text settings. Right-click without a selection offers placement tools. Ctrl/Cmd+D duplicates; Ctrl/Cmd+G groups eligible objects; Ctrl/Cmd+Shift+G ungroups. Groups stay intact until explicitly ungrouped. Batch actions create one undo step.
+
+Visual tokens live in `design-tokens.css`; shared layer duplication/deletion live in `map-layer-actions.mjs`. Run `npm run test:map-layer-actions`, `npm run test:map-editor-consistency:browser`, and `npm run test:map-direct-edit:browser` to check the shared behavior.
+
+
+Pakistan provincial detail is included in `map-data/pakistan-detail.json`. Enable Pakistan under Canvas settings ? Country details, then choose Provinces / territories. The pack contains Punjab, Sindh, Balochistan, Khyber Pakhtunkhwa, Islamabad Capital Territory, Azad Kashmir and Gilgit-Baltistan. It uses the public-domain [geoBoundaries PAK ADM1 dataset](https://www.geoboundaries.org/api/current/gbOpen/PAK/ADM1/) representing 2019; administrative and disputed boundaries follow that source. The country outline is dissolved from the same seven regions, and region keys are country-qualified so Pakistan's Punjab remains distinct from India's Punjab.
+
+
+Camera movements share the permanent keyframed camera layer. Preset buttons add a linked start/end pair with the preset motion curve; they do not add timeline layers. Delete/Backspace on a camera marker, right-click ? Delete, or Properties ? Delete camera keyframe removes that key. For a preset endpoint, either deletion removes both members of its pair. Captured/manual keys remain independent, including frame zero and keys that share a frame with a preset endpoint. Saved separate camera preset layers are converted to pairs when opened. Blue markers identify paired movements; green markers are manual keys.

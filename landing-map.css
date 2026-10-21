@@ -1,5 +1,5 @@
 /* Map Studio's public page. All rules are scoped away from the editor. */
-#landing{--mh-bg:#101713;--mh-surface:#18211b;--mh-border:#d3e3ca22;--mh-text:#eef0e5;--mh-muted:#a1afa0;--mh-accent:#c1ec91;color:var(--mh-text);background:radial-gradient(ellipse at 82% 5%,#354c2938,transparent 30%),var(--mh-bg);font:14px/1.65 'DM Sans',sans-serif;overflow:clip}
+#landing{--mh-bg:var(--ff-bg);--mh-surface:var(--ff-panel);--mh-border:var(--ff-border);--mh-text:var(--ff-text);--mh-muted:var(--ff-muted);--mh-accent:var(--ff-accent);color:var(--mh-text);background:radial-gradient(ellipse at 82% 5%,#354c2938,transparent 30%),var(--mh-bg);font:14px/1.65 'DM Sans',sans-serif;overflow:clip}
 #landing a{color:inherit;text-decoration:none}
 #landing :is(h1,h2,h3,p,li){user-select:text}
 #landing :is(a,button,input):focus-visible{outline:2px solid var(--mh-accent);outline-offset:5px}

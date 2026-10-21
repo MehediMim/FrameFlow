@@ -1,5 +1,5 @@
 import { easings } from './easings.mjs';
-import { retimeMapItem } from './map-timing.mjs?v=map-split-1';
+import { retimeMapItem } from './map-timing.mjs?v=full-timeline-1';
 import { OBJECT_ICONS } from './map-objects.mjs';
 export const GROUP_FIELDS={lon:[-540,540],lat:[-85,85],scale:[.1,8],rotation:[-3600,3600],opacity:[0,1]};
 const toX=lon=>(lon+180)/360,toY=lat=>(1-Math.log(Math.tan(Math.PI/4+Math.max(-85,Math.min(85,lat))*Math.PI/360))/Math.PI)/2;

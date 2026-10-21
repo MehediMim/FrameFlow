@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { newMapProject, makeShot, cameraAt, validateMapProject, lonToX, latToY, actionProgress } from '../map-engine.mjs';
-import { retimeMapItem, setAnimationKey } from '../map-timing.mjs';
-import { cameraPoseAt, cameraKeysOf, putCameraKey, removeCameraKey, moveCameraKey } from '../map-camera.mjs';
+import { retimeMapItem, splitMapItem, setAnimationKey } from '../map-timing.mjs';
+import { syncCameraTimeline, cameraPoseAt, cameraKeysOf, putCameraKey, removeCameraKey, moveCameraKey } from '../map-camera.mjs';
 
 const emptyCamera = makeShot('keyframed', 0);
 assert.deepEqual(cameraKeysOf(emptyCamera), [], 'new camera has no default keyframes');
@@ -82,3 +82,22 @@ p.shots[0].animStart = 50; p.shots[0].animEnd = 90;
 assert.deepEqual(cameraAt(p, {}, 1280, 720, 40), start, 'camera holds initial pose before animation key');
 assert.deepEqual(cameraAt(p, {}, 1280, 720, 100), end, 'camera completes before shot bar ends');
 validateMapProject(JSON.parse(JSON.stringify(p)));
+
+const permanentProject = newMapProject();
+const permanent = syncCameraTimeline(permanentProject, pose => makeShot('keyframed',0,{cameraFrom:pose,cameraTo:pose,cameraKeys:[]}));
+assert.equal(permanent.dur,permanentProject.frames);
+putCameraKey(permanent,200,{zoom:6});
+assert.equal(splitMapItem(permanent,100,'copy'),null);
+retimeMapItem(permanent,40,20);
+assert.equal(permanent.start,0);assert.equal(permanent.dur,240);
+permanentProject.frames=120;syncCameraTimeline(permanentProject);
+assert.equal(permanent.dur,120);assert.equal(permanent.cameraKeys[0].frame,119);
+permanentProject.frames=360;syncCameraTimeline(permanentProject);
+assert.equal(permanent.dur,360);assert.equal(permanentProject.shots.length,1);
+validateMapProject(JSON.parse(JSON.stringify(permanentProject)));
+
+permanentProject.shots.push(makeShot('pushIn',0,{amount:4}));
+permanentProject.camera.activeTrack=permanent.id;
+assert.equal(cameraAt(permanentProject,{},1280,720,119).zoom,6,'camera capture remains authoritative when a preset also exists');
+delete permanentProject.camera.activeTrack;
+assert.ok(cameraAt(permanentProject,{},1280,720,119).zoom>6,'choosing presets restores the preset camera sequence');

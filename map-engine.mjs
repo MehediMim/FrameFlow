@@ -5,7 +5,7 @@ import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-
 import { easings } from './easings.mjs';
 import { fontStack, cleanFont } from './fonts.mjs';
 import { routePlaceLabels } from './map-route-labels.mjs';
-import { animationKeysOf, mapSourceItem } from './map-timing.mjs?v=map-split-1';
+import { animationKeysOf, mapSourceItem } from './map-timing.mjs?v=paired-camera-1';
 import { objectOffsets, FORMATIONS } from './map-formations.mjs';
 import { objectPoseAt, objectSizeAt, validateObjectKeys } from './map-object-keys.mjs';
 import { armyCopies, validateArmyUnits } from './map-armies.mjs';
@@ -16,7 +16,7 @@ import { validatePathAnimation } from './map-path-animation.mjs';
 import { validPolygon } from './map-area-selection.mjs';
 import { transformGroupObject, validateObjectGroups } from './map-object-groups.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
-import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
+import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
@@ -615,9 +615,20 @@ function evalShot(s, from, frame, c) {
   return shotState(s, from, clamp01((frame - keys.start) / Math.max(1, keys.end - keys.start)), Math.min(frame, end), c);
 }
 
+/** Sample a preset into two visible endpoint keys, retaining its motion curve inside the pair. */
+export function sampleCameraPreset(proj,geo,W,H,shot,fromPose) {
+  const from=camFrom(fromPose),c={geo,W,H,project:{...proj,actions:proj.actions.map(mapSourceItem)}},samples=[];
+  const count=Math.min(180,Math.max(1,shot.dur));
+  for(let i=0;i<=count;i++){
+    const t=i/count,pose=evalShot({...shot,sourceFrom:shot.sourceFrom||from},from,shot.start+t*shot.dur,c);
+    samples.push({t,values:{lon:clamp(xToLon(pose.cx),-540,540),lat:clamp(yToLat(pose.cy),-85,85),zoom:clamp(pose.zoom,0,14),pitch:clamp(pose.pitch,0,75),bearing:clamp(pose.bearing,-3600,3600)}});
+  }
+  return samples;
+}
+
 /** Camera state at a frame: start view followed by each preset shot in order. */
 export function cameraAt(proj, geo, W, H, frame) {
-  const init = startCam(proj, geo, W, H), shots = proj.shots.filter(s => s.visible !== false).sort((a, b) => a.start - b.start), c = { geo, W, H, project: { ...proj, actions: proj.actions.map(mapSourceItem) } };
+  const init = startCam(proj, geo, W, H), shots = proj.shots.filter(s => s.visible !== false && (!proj.camera.activeTrack || !proj.shots.some(a=>a.id===proj.camera.activeTrack) || s.id===proj.camera.activeTrack)).sort((a, b) => a.start - b.start), c = { geo, W, H, project: { ...proj, actions: proj.actions.map(mapSourceItem) } };
   let prev = null;
   for (const s of shots) {
     if (frame < s.start) break;
@@ -1147,7 +1158,7 @@ export function highlightExtent(a, f) {
   return { x, y, radius };
 }
 export function drawHighlightExtentHandles(ctx, v, geo, a) {
-  if (a?.type !== 'highlight' || !['country', 'region', 'regions', 'polygon'].includes(a.target?.kind)) return;
+  if (a?.type !== 'highlight' || a.showFill === false || !['country', 'region', 'regions', 'polygon'].includes(a.target?.kind)) return;
   const f = featureForTarget(geo, a.target); if (!f) return;
   const { x, y, radius } = highlightExtent(a, f), off = Math.round(v.cx - f.cx);
   const center = project(v, x + off, y), end = project(v, x + off + radius, y);
@@ -1184,8 +1195,8 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
       for(const ring of cut.rings){loadXY(v,ring.xy,ring.n,cutOff);emit(ctx,v,ring.n,true);}
       ctx.clip('evenodd');
     }
-    if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
-    if (rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
+    if (a.showFill !== false && a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
+    if (a.showFill !== false && rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
       ctx.save(); ctx.beginPath(); groundCircle(ctx, v, x, y, rad, off); ctx.clip();
       path(); ctx.globalAlpha = alpha * (th.relief ? (a.reliefOpacity ?? v.terrain.highlightOpacity) : (a.reliefOpacity ?? .78));
       ctx.fillStyle = th.relief ? (a.reliefColor || v.terrain.highlightColor) : a.color;
@@ -1218,7 +1229,10 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
       ctx.restore();
     }
     ctx.restore();
-    if (a.showLabel && pop > 0) labels.push({ x: c.x, y: c.y, ground: { X: f.cx + off, Y: f.cy }, text: a.label || f.name, alpha: alpha * clamp01(pop * 1.5), scale: 1.1 * (.9 + .2 * pop) });
+    if (a.showLabel && pop > 0) {
+      const features=a.regionLabels&&a.target.kind==='regions'?a.target.members.map(target=>featureForTarget(geo,target)).filter(Boolean):[f];
+      for(const feature of features){const shift=Math.round(v.cx-feature.cx),point=project(v,feature.cx+shift,feature.cy);labels.push({x:point.x,y:point.y,ground:{X:feature.cx+shift,Y:feature.cy},text:a.label||feature.name,alpha:alpha*clamp01(pop*1.5),scale:1.1*(.9+.2*pop)});}
+    }
     return;
   }
   const r = resolveLoc(geo, a.target, v.cx); if (!r) return;
@@ -1578,6 +1592,10 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
 // ---------------------------------------------------------------- Animation: pin
 function drawPin(ctx, v, geo, th, a, frame, labels) {
   if (a.badge) { drawBadge(ctx, v, geo, a, frame, labels); return; }
+  if (a.showIcon === false && a.labelPlacement && (!a.mode || a.mode === 'stay')) {
+    if (a.showLabel !== false) queueTextLabel(v, geo, {...a, text:a.label || a.place.name}, frame, labels);
+    return;
+  }
   const alpha = actAlpha(a, frame), r = pinSpot(v, geo, a, frame); if (!r || alpha <= 0) return;
   const t = pinAppear(a, r, frame), showIcon = a.showIcon !== false;
   const g = project(v, r.X, r.Y, 0), s = a.size * v.unit * 24;
@@ -1688,7 +1706,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     if(newer.some(b=>!b.highlightExclude?.length&&JSON.stringify(b.target)===JSON.stringify(a.target)))continue;
     ctx.save();
     for(const b of newer) {
-      if(!['country','region','regions','polygon'].includes(b.target?.kind))continue;
+      if(b.showFill===false||!['country','region','regions','polygon'].includes(b.target?.kind))continue;
       const f=featureForTarget(geo,b.target);
       if(!f)continue;
       ctx.beginPath();ctx.rect(0,0,W,H);
@@ -1729,6 +1747,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     else if (a.type === 'effect') tag(a, () => drawEffect(OBJ_H, ctx, v, geo, a, frame, labels));
   }
   for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
+  v.labels = labels;
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   vignette(ctx, v, th);
   for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
@@ -1742,13 +1761,13 @@ export const ACTION_TYPES = {
   group: { label: 'Object group', icon: '▣', dur: 90, hidden: true, hint: 'Animate multiple objects as one layer' },
   scene: { label: 'Scene panel', icon: 'T', dur: 240, hint: 'Side gradient with an automatic year, event title and description' },
   border: { label: 'Border', icon: '▱', dur: 60, hint: 'Draw a country outline, or sweep every border' },
-  plane: { label: 'Travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
+  plane: { hidden: true, label: 'Object travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
   highlight: { label: 'Highlight', icon: '◎', dur: 45, hint: 'Light up a country or a place' },
-  pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin, text or picture, and move it from place to place' },
+  pin: { label: 'Pin / label', icon: '⌖', dur: 45, hint: 'Mark a location with a pin, text or picture, and move it from place to place' },
   object: { label: 'Object', icon: '◆', dur: 90, hint: 'Place a tank, ship, jet, soldier, base, city… and move or animate it' },
   effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Explosion, fire, smoke, shockwave, earthquake, missile strike' },
   shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Arrows, roads, zones, distance and area measurements' },
-  label: { label: 'Map label', icon: 'Aa', dur: 90, hint: 'Place outlined atlas text on the map' },
+  label: { hidden: true, label: 'Pin / label', icon: 'Aa', dur: 90, hint: 'Place outlined atlas text on the map' },
 };
 const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });
 export const PRESETS = {
@@ -1773,7 +1792,7 @@ export function makeAction(type, start, extra = {}) {
     scene: { ...SCENE_PANEL_DEFAULTS, color: '#d9b767' },
     border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18, invert: false },
     plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
-    highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: .45, showLabel: true, label: '', pulse: true, radius: 400, invert: false },
+    highlight: { target: { kind: 'country', name: 'Australia' }, color: '#ffb703', dim: 0, showLabel: true, label: '', pulse: false, radius: 400, invert: false },
     pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1, mode: 'stay' },
     object: { place: city('Paris', 48.8566, 2.3522), glyph: 'tank', count: 1, color: OBJECT_ICONS.tank.color, size: 1.2, enter: 'none', idle: 'none', exit: 'none', mode: 'stay', path: [], curve: 'smooth', trail: true, showLabel: false, label: '' },
     effect: { place: city('Paris', 48.8566, 2.3522), fx: 'explosion', color: EFFECTS.explosion.color, size: 1.5, repeat: 1, from: { kind: 'point', name: 'Launch site', lat: 45.5, lon: -1.5 }, showLabel: false, label: '' },
@@ -1905,6 +1924,7 @@ export function validateMapProject(p) {
       for(const [k,lo,hi] of [['flagOpacity',0,1],['flagZoom',1,4],['flagX',-100,100],['flagY',-100,100]])if(a[k]!==undefined&&!num(a[k],lo,hi))throw Error('Invalid flag image setting.');
       if(a.image!==undefined&&(typeof a.image!=='string'||a.image.length>2e6||!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(a.image)))throw Error('Invalid highlight image.');
     }
+    if (a.type === 'highlight' && ['showFill','regionLabels'].some(k=>a[k]!==undefined&&typeof a[k]!=='boolean')) throw Error('Invalid region display setting.');
     if (a.type === 'highlight' && !isLoc(a.target)) throw Error('Invalid highlight target.');
     if (a.type === 'highlight' && a.highlightOrigin !== undefined && !(a.highlightOrigin?.kind === 'point' && isLoc(a.highlightOrigin))) throw Error('Invalid highlight fill start.');
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
@@ -1975,11 +1995,25 @@ export function validateMapProject(p) {
   for (const s of p.shots.map(mapSourceItem)) {
     if (s.cameraKeys !== undefined) {
       if (!Array.isArray(s.cameraKeys) || s.cameraKeys.length > 1000) throw Error('Invalid camera keyframes.');
-      const frames = new Set();
+      const frames = new Set(), ids=new Set(), pairs=new Map();
       for (const key of s.cameraKeys) {
-        if (!Number.isSafeInteger(key.frame) || key.frame < s.start || key.frame > s.start + s.dur || frames.has(key.frame) || !key.values || Array.isArray(key.values) || !Object.keys(key.values).length) throw Error('Invalid camera keyframe.');
-        frames.add(key.frame);
+        if (!Number.isSafeInteger(key.frame) || key.frame < s.start || key.frame > s.start + s.dur || (!key.pairId&&frames.has(key.frame)) || !key.values || Array.isArray(key.values) || !Object.keys(key.values).length) throw Error('Invalid camera keyframe.');
+        if(!key.pairId)frames.add(key.frame);
+        if(key.id!==undefined){if(typeof key.id!=='string'||!key.id||key.id.length>100||ids.has(key.id))throw Error('Invalid camera keyframe id.');ids.add(key.id);}
+        if(key.pairId!==undefined){
+          if(typeof key.pairId!=='string'||!key.pairId||key.pairId.length>100||!key.id||!['start','end'].includes(key.pairRole)||!ENUMS.preset.includes(key.preset)||key.preset==='keyframed')throw Error('Invalid paired camera keyframe.');
+          if(!pairs.has(key.pairId))pairs.set(key.pairId,[]);pairs.get(key.pairId).push(key);
+        }
+        if(key.samples!==undefined){
+          if(!key.pairId||key.pairRole!=='start'||!Array.isArray(key.samples)||key.samples.length<2||key.samples.length>181)throw Error('Invalid camera movement samples.');
+          let previous=-1;for(const sample of key.samples){if(!num(sample.t,0,1)||sample.t<=previous||!sample.values||Object.keys(CAMERA_FIELDS).some(field=>!num(sample.values[field],...CAMERA_FIELDS[field])))throw Error('Invalid camera movement sample.');previous=sample.t;}
+          if(key.samples[0].t!==0||key.samples.at(-1).t!==1)throw Error('Invalid camera movement sample endpoints.');
+        }
         for (const [field, value] of Object.entries(key.values)) if (!CAMERA_FIELDS[field] || !num(value, ...CAMERA_FIELDS[field])) throw Error('Invalid camera keyframe property.');
+      }
+      for(const pair of pairs.values()){
+        const a=pair.find(k=>k.pairRole==='start'),b=pair.find(k=>k.pairRole==='end');
+        if(pair.length!==2||!a||!b||a.frame>=b.frame||a.preset!==b.preset)throw Error('Invalid camera movement pair.');
       }
     }
     if (s.animDur !== undefined && (!Number.isSafeInteger(s.animDur) || s.animDur < 1)) throw Error('Invalid camera animation duration.');

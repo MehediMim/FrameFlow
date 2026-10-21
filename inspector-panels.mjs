@@ -45,7 +45,7 @@ function arrange(panel) {
     details.className = CSS_SECTION;
     details.dataset.sectionKey = k;
     const stored = preferences.get(k);
-    details.open = stored === undefined ? (panel.id === 'inspector' ? motionSectionPriority(title) <= 20 : serial === 1) : stored;
+    details.open = panel.id==='mInspector' ? true : stored === undefined ? (panel.id === 'inspector' ? motionSectionPriority(title) <= 20 : serial === 1) : stored;
     const summary = document.createElement('summary');
     summary.className = 'ff-inspector-summary';
     const text = document.createElement('span');

@@ -153,16 +153,19 @@ try {
   await evaluate(`document.querySelector('#mUndo').click()`);
   await evaluate(`(async()=>{const E=await import('./map-engine.mjs');E.validateMapProject(JSON.parse(localStorage.getItem('frameflow-map-v1')));})()`);
   // Focus in the old bar must not keep its controls bound to a different layer.
-  await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1'));p.actions.push(...[['region-a','France','#aa5533','First'],['region-b','Germany','#3388aa','Second']].map(([id,name,color,label])=>E.makeAction('highlight',0,{id,target:{kind:'country',name},color,reliefColor:color,label,dur:240})));localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
+  await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1'));p.actions.push(...[['region-a','France','#aa5533','First'],['region-b','Germany','#3388aa','Second']].map(([id,name,color,label])=>E.makeAction('highlight',0,{id,target:{kind:'country',name},color,reliefColor:color,label,dur:240})),E.makeAction('border',240,{id:'region-border',target:{kind:'country',name:'France'},dur:120}));localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
   await waitFor(`!!document.querySelector('[data-mid="region-b"]')&&document.querySelectorAll('#mDlCountry option').length>100`);
-  await evaluate(`document.querySelector('[data-mid="region-a"]').click();document.querySelector('#mMapContext [data-direct-land="label"]').focus();`);
+  const laneTop=id=>evaluate(`document.querySelector('[data-mrow="${id}"]').style.top`);
+  assert.ok([await laneTop('region-a'),await laneTop('region-b')].includes(await laneTop('region-border')),'non-overlapping fill and border can share a lane');
+  assert.notEqual(await laneTop('object'),await laneTop('region-border'),'land and objects cannot share a lane even when their times do not overlap');
+  await evaluate(`document.querySelector('[data-mclip="region-b"]').scrollIntoView({block:'nearest'});document.querySelector('[data-mid="region-a"]').click();document.querySelector('#mMapContext [data-direct-land="label"]').focus();`);
   const clip=await evaluate(`(()=>{const r=document.querySelector('[data-mclip="region-b"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await click(clip);
   assert.equal(await primary(),'region-b');
   assert.equal(await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').value`),'Second','timeline selection replaces focused controls from the old layer');
   assert.equal(await evaluate(`document.querySelector('#mMapContext [data-direct-land="color"]').value`),'#3388aa');
   await change('#mMapContext [data-direct-land="label"]','Edited second');
-  const regions=(await stored()).actions.filter(a=>a.id.startsWith('region-'));
+  const regions=(await stored()).actions.filter(a=>['region-a','region-b'].includes(a.id));
   assert.deepEqual(regions.map(a=>a.label),['First','Edited second'],'the new controls edit only the selected layer');
   await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').focus();document.querySelector('[data-mid="pin"]').click();`);
   assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="__pinDisplay"]')&&!document.querySelector('#mMapContext [data-direct-land]')`),'layer-list selection changes the control type while the old field is focused');

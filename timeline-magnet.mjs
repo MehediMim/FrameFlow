@@ -54,7 +54,18 @@ export function installMagneticTimeline(timeline) {
       clientX: event.clientX, clientY: event.clientY, button: 0, pointerId: event.pointerId, bubbles: true,
     }));
   });
-  const groupOf = row => row.hasAttribute('data-audio-row') ? 'Audio' : row.hasAttribute('data-cam-select') || row.querySelector('.t-shot') ? 'Camera' : 'Subject';
+  const groupOf = row => {
+    if(row.hasAttribute('data-audio-row'))return 'Audio';
+    if(row.hasAttribute('data-cam-select')||row.querySelector('.t-shot'))return 'Camera';
+    if(row.hasAttribute('data-mrow')){
+      if(row.querySelector('.t-highlight,.t-border'))return 'Land';
+      if(row.querySelector('.t-object,.t-group,.t-plane'))return 'Object';
+      if(row.querySelector('.t-pin,.t-label'))return 'Label';
+      if(row.querySelector('.t-shape'))return 'Shape';
+      if(row.querySelector('.t-effect'))return 'Effect';
+    }
+    return 'Subject';
+  };
   function layout() {
     observer.disconnect();
     rows.querySelectorAll('.ff-track-heading').forEach(el => el.remove());
@@ -65,7 +76,7 @@ export function installMagneticTimeline(timeline) {
       return { id, row, label: labels.children[id], group: groupOf(row), start: left, end };
     }).filter(entry=>!entry.row.hidden&&!entry.label?.hidden);
     let top = 0;
-    for (const group of ['Camera', 'Subject', 'Audio']) {
+    for (const group of ['Camera', 'Land', 'Object', 'Label', 'Shape', 'Effect', 'Subject', 'Audio']) {
       const members = entries.filter(e => e.group === group);if(!members.length)continue;
       const packed = packTimeline(members);
       const representatives = new Map();

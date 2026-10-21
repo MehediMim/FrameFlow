@@ -314,10 +314,12 @@ function addAction(type,extra={}) {
   if (dc && !geo?.details?.has(dc)) { notify(detailErrors.has(dc) ? `${dc} detail could not load. Check map settings for Retry.` : `Loading ${dc} detail. Try again in a moment.`); return; }
   pause(); checkpoint();
   const a = makeAction(type, frame,extra); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
+  if(type==='object'){endPathDraw(true);cancelPick();campaign?.cancel();}
   if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
   if (type === 'label') { const [lon, lat] = centerLonLat(); Object.assign(a, { labelPlacement: 'map', place: { kind: 'point', name: 'Map position', lon: ((lon + 180) % 360 + 360) % 360 - 180, lat }, offsetX: 0, offsetY: 0, labelStyle: { ...DEFAULT_LABEL_STYLE, ...(proj.theme==='documentary'?DOCUMENTARY_LABEL:LABEL_PRESETS.atlasGround.style) } }); }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
   if (type === 'shape') startPathDraw(a.id);
+  else if(type==='object')startPick('place','place');
 }
 function addShot(preset) {
   const needsPlane = PRESETS[preset].fields.includes('planeId');

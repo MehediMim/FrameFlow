@@ -68,7 +68,25 @@ try {
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const saved=()=>evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);
-  await evaluate(`document.querySelector('[data-madd="object"]').click()`);await change('#mInspector [data-mf="glyph"]','stoneFort');
+  await evaluate(`document.querySelector('[data-madd="object"]').click()`);
+  assert.equal((await saved()).actions[0].enter,'none','new objects appear instantly');
+  assert.equal(await evaluate(`document.querySelector('[data-mf="enter"]').value`),'none','Instant is selected in the inspector');
+  assert.equal(await evaluate(`document.querySelector('#mCanvas').style.cursor`),'crosshair','adding an object immediately arms placement');
+  const placeObjectAt=async(lon,lat)=>{
+    const point=await evaluate(`(async()=>{const E=await import('./map-engine.mjs');const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));const v=E.makeView({cx:E.lonToX(p.camera.init.lon),cy:E.latToY(p.camera.init.lat),...p.camera.init},p.width,p.height),q=E.project(v,E.lonToX(${lon}),E.latToY(${lat})),b=document.querySelector('#mCanvas').getBoundingClientRect();return{x:b.left+q.x/p.width*b.width,y:b.top+q.y/p.height*b.height};})()`);
+    await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1});
+    await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:1});
+  };
+  await placeObjectAt(5,46);
+  const firstPosition=(await saved()).actions[0].place;
+  assert.ok(Math.abs(firstPosition.lon-5)<1&&Math.abs(firstPosition.lat-46)<1,'first map click places the new object without using Position');
+  assert.equal(await evaluate(`document.querySelector('#mCanvas').style.cursor`),'','placement ends after the first click');
+  await placeObjectAt(-3,49);
+  assert.deepEqual((await saved()).actions[0].place,firstPosition,'later map clicks do not move the object automatically');
+  await evaluate(`document.querySelector('[data-mpick="place"]').click()`);
+  await placeObjectAt(-3,49);
+  assert.notDeepEqual((await saved()).actions[0].place,firstPosition,'the existing Position button allows repositioning');
+  await change('#mInspector [data-mf="glyph"]','stoneFort');
   assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], .m-object-library').length`),0,'object selection uses only the two dropdowns');
   await evaluate(`document.querySelector('[data-object-menu]').open=true`);
   await waitFor(`document.querySelector('[data-object-choice="tank"] img').complete&&document.querySelector('[data-object-choice="tank"] img').naturalWidth>0`);

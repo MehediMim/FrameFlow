@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Frame based browser motion graphics editor (Motion, Map and Paper studios)",
   "scripts": {
+    "test:scene-builder": "node tests/scene-builder.test.mjs && node tests/scene-environment.test.mjs && node tests/scene-storytelling.test.mjs && node tests/scene-duration.test.mjs",
+    "test:scene-builder:browser": "node tests/scene-builder.browser.test.mjs",
     "test:motion-media": "node tests/motion-media.test.mjs",
     "test:motion-media:browser": "node tests/timeline-rename.browser.test.mjs --media",
     "test:layer-visibility": "node tests/layer-visibility.test.mjs",

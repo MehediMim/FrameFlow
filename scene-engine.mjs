@@ -4,9 +4,13 @@
 // Editable city items, rotation, rounded routes and deterministic traffic signals.
 // v2 changes: gesture clips per human, camera clips, detailed human/car/bus models, lit + culled polygons.
 
+import { SCENERY, SURFACES, BUILDINGS, ROOFS, TREE_STYLES, drawScenery } from './scene-catalog.mjs';
+import { SURFACE_TEXTURES, TEXTURE_PACKS, TEXTURE_SPECS, paintSurfaceTile, surfaceTexture, TERRAIN_TYPES, DEFAULT_TERRAIN, terrainMesh, terrainHeight } from './scene-environment.mjs';
+import { DEFAULT_ATMOSPHERE, CARRY_PROPS, interpolatePose, drawClouds, drawRain, validateStorytelling } from './scene-storytelling.mjs';
+export const MAX_SCENE_OBJECTS = 200;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const GESTURES = { idle: 'Idle', walk: 'Walk', run: 'Run', wave: 'Wave', point: 'Point', jump: 'Jump', sit: 'Sit', clap: 'Clap', bow: 'Bow' };
-export const GESTURE_DURATION = { idle: 2, walk: 4, run: 3, wave: 2, point: 2, jump: 1.1, sit: 3, clap: 2, bow: 2 };
+export const GESTURES = { idle: 'Idle', walk: 'Walk', run: 'Run', wave: 'Wave', point: 'Point', jump: 'Jump', sit: 'Sit', clap: 'Clap', bow: 'Bow', talk:'Talk', cheer:'Cheer', dance:'Dance' };
+export const GESTURE_DURATION = { idle: 2, walk: 4, run: 3, wave: 2, point: 2, jump: 1.1, sit: 3, clap: 2, bow: 2, talk:4, cheer:3, dance:4 };
 export const CAMERA_MODES = { first: 'First person', second: 'Second person', third: 'Third person', bird: 'Bird’s-eye' };
 export const CAMERA_MOVES = { follow: 'Follow subject', static: 'Locked off', orbit: 'Orbit subject' };
 export const CAMERA_PRESETS = {
@@ -29,7 +33,10 @@ const avg = pts => { const n = pts.length; return [0, 1, 2].map(i => pts.reduce(
 // ---------------------------------------------------------------- characters
 // Body proportions are multipliers on the adult-man reference model (h = overall height).
 export const BODIES = {
-  man: { label: 'Character', h: 1, eye: 1.65, head: 1.65, torso: 1, leg: 1, limb: 1.12, hip: 1, waist: 1, chest: 1, sw: 1, neck: 1, bust: 0, arm: 1, foot: 1, hair: 'short' }
+  man: { label: 'Adult · broad', h: 1, eye: 1.65, head: 1.12, torso: 1, leg: 1, limb: 1.06, hip: 1, waist: 1, chest: 1, sw: 1, neck: 1, bust: 0, arm: 1, foot: 1, hair: 'short' },
+  woman: { label: 'Adult · slender', h: .96, eye: 1.58, head: 1.12, torso: 1, leg: 1, limb: .9, hip: 1.08, waist: .9, chest: .94, sw: .88, neck: .9, bust: .45, arm: .96, foot: .94, hair: 'bob' },
+  boy: { label: 'Child · short hair', h: .7, eye: 1.17, head: 1.35, torso: .92, leg: 1, limb: .95, hip: .9, waist: .95, chest: .9, sw: .87, neck: .9, bust: 0, arm: .9, foot: .9, hair: 'short' },
+  girl: { label: 'Child · long hair', h: .7, eye: 1.17, head: 1.35, torso: .92, leg: 1, limb: .95, hip: .9, waist: .95, chest: .9, sw: .87, neck: .9, bust: 0, arm: .9, foot: .9, hair: 'ponytail' }
 };
 export const OUTFITS = {
   casual: { label: 'T-shirt & jeans',   bottom: '#3c4757', shoe: '#ecece7', sole: '#c5c5be', sleeve: 'short', bottomType: 'long' },
@@ -42,24 +49,27 @@ export const HAIR_STYLES = { short: 'Short', buzz: 'Buzz cut', curly: 'Curly', b
 export const FACIAL = { none: 'Clean shaven', stubble: 'Stubble', beard: 'Beard' };
 export const SKIN_TONES = ['#f6d7c0', '#ebbf98', '#d4a173', '#b07a4f', '#80532f', '#53341f'];
 export const HAIR_COLORS = ['#17120f', '#38291f', '#6b4423', '#a56b32', '#d8b26a', '#b8432f', '#8f8f94', '#e8e6e0'];
-export const defaultLook = () => ({ body: 'man', outfit: 'formal', hair: 'short', hairColor: '#483039', skin: '#ebbf98', bottomColor: '#3c4757', facial: 'none' });
-// Legacy body choices retain clothing and colors but now share one detailed rig.
-export const humanLook = o => ({ ...defaultLook(), ...(o.look || {}), body: 'man' });
+export const EXPRESSIONS = { neutral: 'Relaxed', happy: 'Happy', serious: 'Serious' };
+export const defaultLook = (body = 'man') => ({ body, outfit: 'casual', hair: BODIES[body]?.hair ?? 'short', hairColor: '#38291f', skin: '#ebbf98', bottomColor: '#3c4757', facial: 'none', glasses: false, expression: 'neutral' });
+export const humanLook = o => ({ ...defaultLook(o.look?.body), ...(o.look || {}) });
 export const heightOf = o => o.type === 'human' ? (BODIES[humanLook(o).body]?.h ?? 1) : 1;
 const mixHex = (a, b, k) => { const x = a.slice(1).match(/../g).map(v => parseInt(v, 16)), y = b.slice(1).match(/../g).map(v => parseInt(v, 16)); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
 
 // ---------------------------------------------------------------- objects, clips, scenes
 export const makeClip = (gesture = 'walk', start = 0, dur = GESTURE_DURATION[gesture] || 2, speed = 1) => ({ id: newId(), gesture, start, dur, speed });
 export function makeCameraClip(preset = 'third', start = 0, dur = 3, target = null) { const { mode, move, yaw, height, distance, fov } = CAMERA_PRESETS[preset]; return { id: newId(), mode, move, yaw, height, distance, fov, start, dur, blend: .5, target }; }
-export const ITEM_TYPES = { human:'Character', car:'Car', bus:'Bus', road:'Road', junction:'Intersection', crossing:'Crosswalk', building:'Building', tree:'Tree', park:'Grass patch', traffic:'Traffic light', lamp:'Street light', bench:'Bench' };
+export const ITEM_TYPES = { human:'Character', car:'Car', bus:'Bus', road:'Road', junction:'Intersection', crossing:'Crosswalk', building:'Building', tree:'Tree', park:'Grass patch', traffic:'Traffic light', lamp:'Street light', bench:'Bench', ...Object.fromEntries(Object.entries(SCENERY).map(([k,v])=>[k,v[0]])) };
 export const isMobile = o => ['human','car','bus'].includes(o.type);
-export const itemSize = o => [o.width ?? ({road:8,junction:12,crossing:8,building:4,park:8,car:1.8,bus:2.5,tree:2.5,traffic:.6,lamp:.6,bench:2,human:.7}[o.type]||1),o.length ?? ({road:20,junction:12,crossing:3,building:5,park:8,car:4.4,bus:9,tree:2.5,traffic:.6,lamp:1,bench:.7,human:.7}[o.type]||1)];
+export const itemSize = o => [o.width ?? SCENERY[o.type]?.[2] ?? ({road:8,junction:12,crossing:8,building:4,park:8,car:1.8,bus:2.5,tree:2.5,traffic:.6,lamp:.6,bench:2,human:.7}[o.type]||1),o.length ?? SCENERY[o.type]?.[3] ?? ({road:20,junction:12,crossing:3,building:5,park:8,car:4.4,bus:9,tree:2.5,traffic:.6,lamp:1,bench:.7,human:.7}[o.type]||1)];
 export function makeObject(type, i = 0) {
   const palette={road:'#424c55',junction:'#424c55',crossing:'#f5f1dd',building:'#aabcc9',tree:'#6c9c62',park:'#709662',traffic:'#38434a',lamp:'#7b8991',bench:'#9c7555',human:'#bd6663',car:'#db795b',bus:'#e7b44c'};
   const o={ id:newId(),type,name:ITEM_TYPES[type]||type,x:0,z:i*3,endX:0,endZ:isMobile({type})?35+i*3:i*3,start:0,duration:12,scale:1,color:palette[type]||'#aaaaaa',material:'color',easing:'linear',visible:true,clips:[],rotation:0,orientation:'path',waypoints:[],turnRadius:3 };
   if(type==='human')o.look=defaultLook();
   if(['road','junction','crossing','building','park'].includes(type)){[o.width,o.length]=itemSize(o);}
   if(type==='building')o.height=8;
+  if(SCENERY[type]) { [o.width,o.length]=itemSize(o);o.height=SCENERY[type][4];o.color=SCENERY[type][5]; }
+  if(BUILDINGS.includes(type))Object.assign(o,{roof:'pitched',accentColor:'#a56850',windows:true});
+  if(type==='tree')Object.assign(o,{height:4.5,treeStyle:'round'});
   if(type==='traffic')Object.assign(o,{signal:'cycle',redTime:6,greenTime:5,amberTime:2,phase:0});
   return o;
 }
@@ -101,7 +111,7 @@ function pathLength(o){routePoints(o);return routeCache.get(o).length;}
 function pathAt(o,d){const pts=routePoints(o),r=routeCache.get(o);if(!r.length)return [o.x,0,o.z];d=clamp(d,0,r.length);let i=1;while(i<pts.length-1&&r.lengths[i]<d)i++;const a=pts[i-1],b=pts[i],k=(d-r.lengths[i-1])/(r.lengths[i]-r.lengths[i-1]||1);return [lerp(a[0],b[0],k),0,lerp(a[1],b[1],k)];}
 function travelled(o, t) {            // metres a human has walked/run by time t
   let d = 0;
-  for (const c of resolveClips(o.clips)) { const sp = SPEED[c.gesture]; if (sp && t > c.start) d += sp * (c.speed || 1) * (Math.min(t, c.end) - c.start); }
+  for (const c of resolveClips(o.clips)) { const sp = SPEED[c.gesture],start=Math.max(c.start,o.routeStart??0); if (sp && t > start) d += sp * (c.speed || 1) * Math.max(0,Math.min(t, c.end) - start); }
   return d;
 }
 function travelFraction(o, t) {
@@ -113,6 +123,22 @@ export function actorYaw(o,t=0){
  let yaw=rad(o.rotation??0);if(isMobile(o)&&o.orientation!=='fixed'){const L=pathLength(o),d=travelFraction(o,t)*L,a=pathAt(o,Math.max(0,d-.08)),b=pathAt(o,Math.min(L,d+.08));if(Math.hypot(b[0]-a[0],b[2]-a[2])>1e-7)yaw+=Math.atan2(b[0]-a[0],b[2]-a[2]);}return yaw;
 }
 export const headingOf=(o,t=0)=>{const y=actorYaw(o,t);return [Math.sin(y),0,Math.cos(y)];};
+export function characterState(p,o,t){
+  const position=actorPosition(o,t),gesture=activeClip(o.clips,t)?.gesture??'idle';
+  let yaw=actorYaw(o,t),seat=null,seatHeight=0;
+  const available=id=>p.objects.find(v=>v.id===id&&v.visible!==false&&t>=v.start&&t<=v.start+v.duration);
+  if(o.type==='human'&&gesture==='sit'){
+    const target=available(o.seatId);
+    if(target&&['chair','bench','sofa'].includes(target.type)){
+      seat=target;yaw=rad(target.rotation??0);position[0]=target.x+Math.sin(yaw)*.08;position[2]=target.z+Math.cos(yaw)*.08;
+      seatHeight=(target.type==='chair'?(target.height??1)*.5+.12:target.type==='bench'?.61:.65)*target.scale+(target.elevation??0)+(target.grounding==='terrain'?terrainHeight(target.x,target.z,p.terrain)+.15:0);
+    }
+  }
+  if(o.type==='human'&&gesture==='talk'){
+    const target=available(o.talkTarget);if(target?.type==='human'&&target.id!==o.id){const q=actorPosition(target,t);yaw=Math.atan2(q[0]-position[0],q[2]-position[2]);}
+  }
+  return{position,yaw,seat,seatHeight,gesture};
+}
 
 // ---------------------------------------------------------------- human poses
 // Angles are radians. lt/rt: thigh swing (forward +), lk/rk: knee bend. la..ld / ra..rd: upper arm (forward, outward), forearm (forward, outward).
@@ -141,6 +167,9 @@ function gesturePose(g, tl, sp = 1) {
   else if (g === 'clap') { const sw = .5 + .5 * Math.sin(TAU * 2.2 * sp * tl), d = rad(14) - rad(40) * sw;
     set({ la: rad(55), ra: rad(55), lb: rad(18), rb: rad(18), lc: rad(95), rc: rad(95), ld: d, rd: d, lean: rad(2) }); }
   else if (g === 'bow') { const l = rad(42) * (.5 - .5 * Math.cos(TAU * .45 * sp * tl)); set({ lean: l, hp: l * .35, la: rad(8), ra: rad(8), lc: rad(14), rc: rad(14) }); }
+  else if (g === 'talk') { const sw=Math.sin(TAU*.65*sp*tl);set({la:rad(15+10*sw),ra:rad(20-12*sw),lc:rad(65+18*sw),rc:rad(70-15*sw),lb:rad(15),rb:rad(18),hy:rad(8)*sw,hp:rad(3)*Math.sin(tl*5)}); }
+  else if (g === 'cheer') { const sw=Math.sin(TAU*1.3*sp*tl);set({la:rad(155),ra:rad(155),lb:rad(15),rb:rad(15),lc:rad(155+15*sw),rc:rad(155-15*sw),hop:.08*Math.max(0,sw)}); }
+  else if (g === 'dance') { const sw=Math.sin(TAU*.85*sp*tl);set({lean:rad(7)*sw,hy:rad(14)*sw,lt:rad(12)*sw,rt:-rad(12)*sw,lk:rad(12),rk:rad(12),la:rad(35+30*sw),ra:rad(35-30*sw),lc:rad(85+35*sw),rc:rad(85-35*sw),lb:rad(30),rb:rad(30),hop:.035*(1+Math.cos(TAU*1.7*sp*tl))}); }
   return P;
 }
 const blendPose = (a, b, k) => Object.fromEntries(Object.keys(a).map(key => [key, lerp(a[key], b[key], k)]));
@@ -158,8 +187,9 @@ export function humanPose(o, t) {
 // ---------------------------------------------------------------- camera
 const subjectOf = (p, id) => p.objects.find(o => o.id === id) || p.objects.find(o => ['human', 'car', 'bus'].includes(o.type));
 function rawCamera(p, c, t, t0) {
-  const o = subjectOf(p, c.target), rig = o ? actorPosition(o, c.move === 'static' ? t0 : t) : [0, 0, 15], live = o ? actorPosition(o, t) : [0, 0, 15];
-  const dir = o ? headingOf(o,t) : [0, 0, 1], eye = o?.type === 'human' ? (BODIES[humanLook(o).body]?.eye ?? 1.62 * heightOf(o)) * o.scale : 1.4 * (o?.scale || 1);
+  if(c.fromPose&&c.toPose)return interpolatePose(c.fromPose,c.toPose,(t-t0)/(c.dur||1),c.easing??'smooth');
+  const o = subjectOf(p, c.target), state=o?.type==='human'?characterState(p,o,t):null,rig = o ? (state&&c.move!=='static'?state.position:actorPosition(o,c.move==='static'?t0:t)) : [0, 0, 15], live = state?.position??(o ? actorPosition(o, t) : [0, 0, 15]);
+  const dir = state?[Math.sin(state.yaw),0,Math.cos(state.yaw)]:o ? headingOf(o,t) : [0, 0, 1], eye = state?.seat?state.seatHeight+.74*o.scale:o?.type === 'human' ? (BODIES[humanLook(o).body]?.eye ?? 1.62 * heightOf(o)) * o.scale : 1.4 * (o?.scale || 1);
   let pos, look;
   if (c.move === 'static' && Number.isFinite(c.fixedX) && Number.isFinite(c.fixedZ)) {
     pos = [c.fixedX, c.height, c.fixedZ]; look = [c.aimX ?? live[0], c.aimHeight ?? 1, c.aimZ ?? live[2]];
@@ -174,10 +204,11 @@ export function cameraAt(p, t) {
   const clips = resolveClips(p.cameraTrackVisible === false ? [] : p.cameraClips), base = () => rawCamera(p, p.camera, t, 0), act = clips.find(c => t >= c.start && t < c.end);
   if (act) {
     const cur = rawCamera(p, act, t, act.start), bl = act.blend ?? .5;
-    if (bl > 0 && t < act.start + bl) { const prev = [...clips].reverse().find(c => c.end <= act.start + 1e-6), from = prev && act.start - prev.end < .02 ? rawCamera(p, prev, t, prev.start) : base(); return mixCam(from, cur, ease((t - act.start) / bl)); }
+    if (bl > 0 && t < act.start + bl) { const prev = [...clips].reverse().find(c => c.end <= act.start + 1e-6), from = prev && act.start - prev.end < .02 ? rawCamera(p, prev, prev.end, prev.start) : base(); return mixCam(from, cur, ease((t - act.start) / bl)); }
     return cur;
   }
   const last = [...clips].reverse().find(c => c.end <= t), bl = last?.blend ?? .5;
+  if(last?.fromPose)return rawCamera(p,last,last.end,last.start);
   return last && bl > 0 && t - last.end < bl ? mixCam(rawCamera(p, last, t, last.start), base(), ease((t - last.end) / bl)) : base();
 }
 
@@ -185,7 +216,7 @@ export function cameraAt(p, t) {
 // Every texture is a repeating vector (or noise) tile. It is mapped onto each polygon in perspective, so it follows
 // the plane of every surface (road, wall, roof, limb). `T` is the tile size in metres at scale 1, `S` the tile in pixels.
 export const FINISHES = { none: 'Smooth', grain: 'Grainy texture', halftone: 'Halftone dots', stripes: 'Diagonal stripes', checks: 'Checkerboard', waves: 'Waves' };
-const FX_SPEC = { grain: { S: 128, T: 1.6, a: .55 }, halftone: { S: 64, T: .12, a: .62 }, stripes: { S: 64, T: .18, a: .32 }, checks: { S: 64, T: .3, a: .3 }, waves: { S: 64, T: .28, a: .4 } };
+const FX_SPEC = { ...TEXTURE_SPECS, grain: { S: 128, T: 1.6, a: .55 }, halftone: { S: 64, T: .12, a: .62 }, stripes: { S: 64, T: .18, a: .32 }, checks: { S: 64, T: .3, a: .3 }, waves: { S: 64, T: .28, a: .4 } };
 const mkCanvas = (w, h) => { const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : document.createElement('canvas'); c.width = w; c.height = h; return c; };
 const patCache = new Map();
 const PAINT = {
@@ -209,7 +240,7 @@ function fxPattern(ctx, kind, level = 0, strength = .6) {
   const spec = FX_SPEC[kind]; if (!spec) return null;
   const key = `${kind}|${kind === 'halftone' ? level : 0}|${kind === 'halftone' ? Math.round(strength * 10) : 0}`;
   let pat = patCache.get(key);
-  if (!pat) { const c = mkCanvas(spec.S, spec.S); PAINT[kind](c.getContext('2d'), spec.S, level, strength); pat = ctx.createPattern(c, 'repeat'); if (patCache.size > 120) patCache.clear(); patCache.set(key, pat); }
+  if (!pat) { const c = mkCanvas(spec.S, spec.S); if(SURFACE_TEXTURES[kind])paintSurfaceTile(c.getContext('2d'),spec.S,kind);else PAINT[kind](c.getContext('2d'), spec.S, level, strength); pat = ctx.createPattern(c, 'repeat'); if (patCache.size > 120) patCache.clear(); patCache.set(key, pat); }
   return pat;
 }
 // Plane of a polygon. The texture is projected along the dominant axis of the surface normal (a box mapping): static
@@ -224,13 +255,15 @@ function planeOf(points, frame) {
 
 // ---------------------------------------------------------------- renderer
 const BOX_FACES = [[0, 1, 2, 3], [4, 7, 6, 5], [0, 3, 7, 4], [1, 5, 6, 2], [3, 2, 6, 7], [0, 4, 5, 1]];
-const LIGHT = norm([-.35, .85, -.4]);
 export function renderScene(canvas, p, t) {
   const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height, cam = cameraAt(p, t);
+  const sun = rad(p.sunAngle ?? -40), light = norm([Math.sin(sun)*.6,.85,Math.cos(sun)*.6]), ambient = p.ambient ?? .5;
   const fwd = norm(sub(cam.look, cam.pos)), right = norm(cross(fwd, [0, 1, 0])), up = cross(right, fwd), focal = H / 2 / Math.tan(cam.fov * Math.PI / 360);
   const FX = p.finish || 'none', FXS = clamp(p.finishStrength ?? .6, 0, 1), FXSC = clamp(p.finishScale ?? 1, .1, 8);
-  const white = p.material === 'white', faces = []; let layer = 3, group = null, fx = FX, fxs = FXSC, frame = null;
+  const white = p.material === 'white', faces = []; let layer = 3, group = null, fx = FX, fxs = FXSC, frame = null, surfaceOwner=null, surfaceEnabled=!white;
+  const atmosphere={...DEFAULT_ATMOSPHERE,...p.atmosphere};
   ctx.fillStyle = white ? '#e9edef' : p.sky; ctx.fillRect(0, 0, W, H);
+  drawClouds(ctx,W,H,atmosphere,t);
   if (FX === 'grain') { ctx.globalAlpha = .12 + .3 * FXS; ctx.fillStyle = fxPattern(ctx, 'grain'); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   const view = v => { const d = sub(v, cam.pos); return [dot(d, right), dot(d, up), dot(d, fwd)]; };
   const rgbOf = col => col.slice(1).match(/../g).map(x => parseInt(x, 16));
@@ -241,8 +274,12 @@ export function renderScene(canvas, p, t) {
       if (ain) out.push(a); if (ain !== bin) { const k = (.15 - a[2]) / (b[2] - a[2]); out.push(a.map((x, j) => x + (b[j] - x) * k)); } }
     if (out.length < 3) return;
     const depth = out.reduce((s, v) => s + v[2], 0) / out.length;
-    const tint = k => `rgb(${rgbOf(col).map(x => Math.round(Math.min(255, x * k))).join(',')})`, half = fx === 'halftone';
-    faces.push({ layer, group, depth: depth - bias, zv: depth, alpha, fx, fxs, plane: fx !== 'none' ? planeOf(points, frame) : null, col: tint(half ? 1 : shade), level: half ? Math.round(clamp((1.05 - shade) / .6, 0, 1) * 5) : 0, pts: out.map(v => [W / 2 + v[0] * focal / v[2], H / 2 - v[1] * focal / v[2]]) });
+    const projected=out.map(v=>[W/2+v[0]*focal/v[2],H/2-v[1]*focal/v[2]]);
+    if(projected.every(v=>v[0]<-2)||projected.every(v=>v[0]>W+2)||projected.every(v=>v[1]<-2)||projected.every(v=>v[1]>H+2))return;
+    const surface=surfaceEnabled?surfaceTexture(p,surfaceOwner,col):'none';
+    const haze=(p.haze??0)*clamp((depth-30)/130,0,1),sky=rgbOf(p.sky);
+    const tint = k => `rgb(${rgbOf(col).map((x,i) => Math.round(Math.min(255,x*k)*(1-haze)+sky[i]*haze)).join(',')})`, half = fx === 'halftone';
+    faces.push({ layer, group, depth: depth - bias, zv: depth, alpha, fx, fxs, surface, surfaceScale:(p.textureScale??1)*(surfaceOwner?.textureScale??1), plane: fx !== 'none'||surface!=='none' ? planeOf(points, frame) : null, col: tint(half ? 1 : shade), level: half ? Math.round(clamp((1.05 - shade) / .6, 0, 1) * 5) : 0, pts: projected });
   }
   // Lit polygon: normal is oriented away from `center`, back faces are culled, brightness follows a fixed key light.
   function lit(pts, col, center, bias = 0, cull = true) {
@@ -250,7 +287,7 @@ export function renderScene(canvas, p, t) {
     const m = Math.hypot(...n); if (m < 1e-9) return; n = mul(n, 1 / m);
     const c = avg(pts); if (dot(n, sub(c, center)) < 0) n = mul(n, -1);
     if (cull && dot(n, sub(cam.pos, c)) <= 0) return;
-    push(pts, col, Math.min(1.05, .5 + .5 * Math.max(0, dot(n, LIGHT)) + .07 * n[1]), bias);
+    push(pts, col, Math.min(1.05, ambient + (1-ambient) * Math.max(0, dot(n, light)) + .07 * n[1]), bias);
   }
   const solid = (v, col, bias = 0) => { const c = avg(v); BOX_FACES.forEach(f => lit(f.map(i => v[i]), col, c, bias)); };
   function box(x, y, z, w, h, d, col, yaw = 0, bias = 0) {
@@ -274,13 +311,19 @@ export function renderScene(canvas, p, t) {
         if (color == null) continue; lit([P(l0, o0), P(l0, o1), P(l1, o1), P(l1, o0)], color, c, bias); } }
   }
   const sphereFrame = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  const shadow = (cx, cz, rx, rz, yaw) => { const keep = [layer, group], keepFx = fx; layer = 2.5; group = null; fx = 'none';
-    push(Array.from({ length: 18 }, (_, i) => { const q = i / 18 * 2 * Math.PI, a = Math.cos(q) * rx, b = Math.sin(q) * rz; return [cx + a * Math.cos(yaw) + b * Math.sin(yaw), .03, cz - a * Math.sin(yaw) + b * Math.cos(yaw)]; }), '#000000', 1, 0, .24);
+  const shadow = (cx, cz, rx, rz, yaw, y=.03) => { const keep = [layer, group], keepFx = fx; layer = 2.5; group = null; fx = 'none';
+    const rings=atmosphere.shadowSoftness>0?5:1;
+    for(let j=0;j<rings;j++){const spread=1+atmosphere.shadowSoftness*(1-j/(rings-1||1))*.7;
+    push(Array.from({ length: 20 }, (_, i) => { const q = i / 20 * 2 * Math.PI, a = Math.cos(q) * rx*spread, b = Math.sin(q) * rz*spread; return [cx + a * Math.cos(yaw) + b * Math.sin(yaw), y, cz - a * Math.sin(yaw) + b * Math.cos(yaw)]; }), '#000000', 1, 0, .24/rings);}
     [layer, group] = keep; fx = keepFx; };
 
   // ---- ground, road, roadside
   const road = p.roadWidth / 2;
-  layer=0; box(25,-.25,25,340,.1,340,white?'#e5e8e7':'#7d9970');
+  layer=0;
+  if(p.terrain&&(p.terrain.type!=='flat'||p.terrain.sculpt?.length)){
+    for(const points of terrainMesh(p.terrain))lit(points,white?'#e5e8e7':(p.ground??'#8fa77b'),[points[0][0],-100,points[0][2]],0,false);
+  }else box(25,-.25,25,340,.1,340,white?'#e5e8e7':(p.ground ?? '#8fa77b'));
+  surfaceEnabled=false;
   for (let z = -100; z < 160; z += 10) {
     if(p.baseRoad !== false){ layer = 1; box(0, -.11, z, p.roadWidth, .1, 10, white ? '#babfc2' : '#424c55'); box(-road - 1, 0, z, 2, .12, 10, white ? '#f4f5f4' : '#c5bfb2'); box(road + 1, 0, z, 2, .12, 10, white ? '#f4f5f4' : '#c5bfb2');
     layer = 2; box(0, .01, z, .12, .02, 3, '#f5f1dd'); }
@@ -302,19 +345,27 @@ export function renderScene(canvas, p, t) {
   // ---- actors
   for (const o of p.objects) {
     if (!o.visible || t < o.start || t > o.start + o.duration || o.id === cam.hide) continue;
-    const [x, , z] = actorPosition(o, t), colored = o.material === 'texture' || o.material === 'color' || (o.material === 'inherit' && !white), col = colored ? o.color : '#f5f5f2', s = o.scale * heightOf(o);
-    layer=3; const yaw=actorYaw(o,t);
-    const loc = (a, b, c) => [x + (a * Math.cos(yaw) + c * Math.sin(yaw)) * s, b * s, z + (-a * Math.sin(yaw) + c * Math.cos(yaw)) * s];
+    const state=characterState(p,o,t),[x, , z] = state.position, colored = o.material === 'texture' || o.material === 'color' || (o.material === 'inherit' && !white), col = colored ? o.color : '#f5f5f2', s = o.scale * heightOf(o);
+    layer=3; const yaw=state.yaw;
+    surfaceOwner=o;surfaceEnabled=colored;
+    const baseY=state.seat?state.seatHeight-.43*s:(o.elevation??0)+(o.grounding==='terrain'?terrainHeight(x,z,p.terrain)+.15:0);
+    const plant=['tree','pine','palm','bush','flowers'].includes(o.type),windAngle=rad(atmosphere.windDirection);
+    const loc = (a, b, c) => {const sway=plant?Math.sin(t*1.7+x*.17+z*.13)*atmosphere.wind*b*b*.018:0;return[x + (a * Math.cos(yaw) + c * Math.sin(yaw)) * s+Math.sin(windAngle)*sway, b * s + baseY, z + (-a * Math.sin(yaw) + c * Math.cos(yaw)) * s+Math.cos(windAngle)*sway];};
     const O = loc(0, 0, 0), dirW = (a, b, c) => norm(sub(loc(a, b, c), O));
     const lbox = (cx, y0, cz, w, h, d, color, bias = 0) => { const q = loc(cx, y0, cz); box(q[0], q[1], q[2], w * s, h * s, d * s, color, yaw, bias); };
     const dist = Math.hypot(x - cam.pos[0], z - cam.pos[2]), lod = dist < 14 ? 0 : dist < 40 ? 1 : 2, sides = [24, 14, 8][lod], limb = [16, 10, 6][lod], seg = [24, 14, 8][lod], rings = [16, 10, 6][lod];
-    group = view(loc(0, .9, 0))[2]; fx = o.finish && o.finish !== 'inherit' ? o.finish : FX; fxs = FXSC * clamp(o.finishScale ?? 1, .1, 8); frame = { o: [x, 0, z], X: [Math.cos(yaw), 0, -Math.sin(yaw)], Z: [Math.sin(yaw), 0, Math.cos(yaw)] };
+    group = view(loc(0, .9, 0))[2]; fx = o.finish && o.finish !== 'inherit' ? o.finish : FX; fxs = FXSC * clamp(o.finishScale ?? 1, .1, 8); frame = { o: [x, baseY, z], X: [Math.cos(yaw), 0, -Math.sin(yaw)], Z: [Math.sin(yaw), 0, Math.cos(yaw)] };
     if (o.type === 'human') drawHuman();
     else if (o.type === 'car' || o.type === 'bus') drawVehicle(o.type === 'bus');
-    else if (o.type === 'tree') { lbox(0, 0, 0, .35, 2, .35, colored ? '#8d6e52' : col); lbox(0, 1.5, 0, 2.5, 2, 2.5, col); lbox(0, 3, 0, 1.6, 1.2, 1.6, col); }
+    else if (o.type === 'tree') {
+      const h=o.height??4.5,[w,d]=itemSize(o),f=[dirW(1,0,0),dirW(0,1,0),dirW(0,0,1)];
+      tube(loc(0,0,0),loc(0,h*.65,0),.16*s,.08*s,colored?'#8d6e52':col,8);
+      if(o.treeStyle==='layered'){lbox(0,h*.35,0,w,h*.42,d,col);lbox(0,h*.65,0,w*.65,h*.35,d*.65,col);}
+      else {ball(loc(0,h*.67,0),w*.55*s,h*.34*s,d*.55*s,f,col,14,10);for(const sd of [-1,1])ball(loc(sd*w*.25,h*.52,0),w*.35*s,h*.24*s,d*.4*s,f,col,12,8);}
+    }
     else if (o.type === 'building') {
       const [w,d]=itemSize(o),h=o.height??8;lbox(0,0,0,w,h,d,col);lbox(0,h,0,w+.12,.15,d+.12,colored?'#87959f':'#e0e3e4');
-      for(let yy=1;yy<h-.7;yy+=1.6)for(let xx=-w/2+.7;xx<w/2-.3;xx+=1.3){lbox(xx,yy,-d/2-.015,.65,.8,.03,colored?'#647f8c':'#cfd6d8');lbox(xx,yy,d/2+.015,.65,.8,.03,colored?'#647f8c':'#cfd6d8');}
+      if(o.windows!==false)for(let yy=1;yy<h-.7;yy+=1.6)for(let xx=-w/2+.7;xx<w/2-.3;xx+=1.3){lbox(xx,yy,-d/2-.015,.65,.8,.03,colored?'#647f8c':'#cfd6d8');lbox(xx,yy,d/2+.015,.65,.8,.03,colored?'#647f8c':'#cfd6d8');}
       lbox(0,0,d/2+.035,.85,1.9,.05,colored?'#3c505b':'#bdc5c8');
     }
     else if(['road','junction','crossing','park'].includes(o.type)){
@@ -338,11 +389,14 @@ export function renderScene(canvas, p, t) {
       for(let j=0;j<3;j++)lbox(0,.53,j*.2-.2,2,.08,.17,col);
       for(let j=0;j<3;j++)lbox(0,.75+j*.16,-.25,2,.12,.07,col);
     }
+    else {if(SURFACES.includes(o.type)){layer=1;group=null;}drawScenery(o,{lbox,loc,tube,ball,solid,lit,frame:[dirW(1,0,0),dirW(0,1,0),dirW(0,0,1)],col,colored,s,t,waterTime:t*atmosphere.waterSpeed});}
     if (o.type === 'human') shadow(x, z, .42 * s, .3 * s, yaw); else if (o.type === 'car') shadow(x, z, 1.15 * s, 2.35 * s, yaw); else if (o.type === 'bus') shadow(x, z, 1.4 * s, 4.7 * s, yaw);
+    else if(!SURFACES.includes(o.type)&&o.type!=='terrain'&&o.type!=='hill'){const [w,d]=itemSize(o);shadow(x,z,w*s*.5,d*s*.5,yaw,Math.max(.03,baseY+.025));}
     group = null; frame = null;
 
     function drawHuman() {
       const look = humanLook(o), B = BODIES[look.body] || BODIES.man, OF = OUTFITS[look.outfit] || OUTFITS.casual, P = humanPose(o, t);
+      if(o.carry&&o.carry!=='none'){P.ra=.35;P.rb=.12;P.rc=1.25;P.rd=.12;}
       const C = colored
         ? { top: col, bottom: look.bottomColor, skin: look.skin, hair: look.hairColor, shoe: OF.shoe, sole: OF.sole, dark: '#1d1f22', chair: '#8a6f55', white: '#f4f4f0', tie: '#8c2f39',
             lip: mixHex(look.skin, B.bust || look.body === 'girl' ? '#c0505a' : '#8a3d35', B.bust || look.body === 'girl' ? .55 : .35), brow: look.hairColor }
@@ -436,16 +490,17 @@ export function renderScene(canvas, p, t) {
           face(e*.041,.047,.095,.026,.006,.008,C.brow);
           face(e*.011,-.035,.122,.004,.0025,.002,C.lip,8);
           // Thin round glasses: actual 3D rim segments and temple arms.
-          for (let j=0;j<24;j++) {
-            const a=j*Math.PI/12,b=(j+1)*Math.PI/12;
+          if(look.glasses)for (let j=0;j<16;j++) {
+            const a=j*Math.PI/8,b=(j+1)*Math.PI/8;
             tube(at(e*.043+.032*Math.cos(a),.015+.029*Math.sin(a),.115),at(e*.043+.032*Math.cos(b),.015+.029*Math.sin(b),.115),.0018*hs,.0018*hs,C.sole,5);
           }
-          tube(at(e*.075,.02,.115),at(e*.104,.02,-.012),.002*hs,.002*hs,C.sole,6);
+          if(look.glasses)tube(at(e*.075,.02,.115),at(e*.104,.02,-.012),.002*hs,.002*hs,C.dark,6);
         }
-        tube(at(-.011,.022,.115),at(.011,.022,.115),.0018*hs,.0018*hs,C.sole,6);
-        face(0,-.057,.096,.028,.014,.008,C.lip);
-        face(0,-.056,.103,.023,.009,.003,C.dark);
-        face(0,-.051,.106,.021,.0035,.002,C.white);
+        if(look.glasses)tube(at(-.011,.022,.115),at(.011,.022,.115),.0018*hs,.0018*hs,C.dark,6);
+        const smile=look.expression==='happy';
+        face(0,-.057,.096,smile?.028:.023,state.gesture==='talk'?.004+.008*(.5+.5*Math.sin(t*14)):smile?.012:.004,.006,C.lip);
+        if(smile)face(0,-.053,.103,.02,.004,.002,C.white);
+        if(look.expression==='serious')for(const e of [-1,1])face(e*.034,.043,.101,.022,.004,.005,C.brow);
       }
       if (hairOn && style === 'short') {
         // Overlapping swept locks form a continuous hairstyle, with a side part.
@@ -463,6 +518,12 @@ export function renderScene(canvas, p, t) {
         const palm = w(...vadd(Wr, fd, .04)), handFrame = [Rw, Uw, Fw];
         ball(palm, .032*k, .044*s, .018*k, handFrame, C.skin, seg, rings);
         const hp = (x,y,z) => add(palm,add(mul(Rw,x*s),add(mul(Uw,y*s),mul(Fw,z*s))));
+        if(sd===1&&o.carry&&o.carry!=='none'){
+          const q=palm;
+          if(o.carry==='box')box(q[0],q[1]-.15*s,q[2],.3*s,.3*s,.3*s,colored?'#c49b6b':C.white,yaw);
+          if(o.carry==='bag'){box(q[0],q[1]-.32*s,q[2],.25*s,.3*s,.12*s,colored?'#c9b38c':C.white,yaw);tube(q,add(q,[0,-.06*s,0]),.018*s,.018*s,C.dark,8);}
+          if(o.carry==='cup')tube(add(q,[0,-.05*s,0]),add(q,[0,.1*s,0]),.055*s,.065*s,C.white,12);
+        }
         if (lod < 2) {
           // Four individually modelled fingers, knuckles and a separate thumb.
           for (let j=0;j<4;j++) {
@@ -477,7 +538,7 @@ export function renderScene(canvas, p, t) {
         }
 
       });
-      if (P.sit > .55) { const y0 = py - .13; lbox(0, y0, -.03, .5, .05, .46, C.chair); lbox(0, y0 + .05, -.26, .46, .5, .04, C.chair); for (const a of [-1, 1]) for (const b of [-1, 1]) lbox(a * .22, 0, -.03 + b * .19, .04, y0, .04, C.dark); }
+      if (P.sit > .55&&!state.seat) { const y0 = py - .13; lbox(0, y0, -.03, .5, .05, .46, C.chair); lbox(0, y0 + .05, -.26, .46, .5, .04, C.chair); for (const a of [-1, 1]) for (const b of [-1, 1]) lbox(a * .22, 0, -.03 + b * .19, .04, y0, .04, C.dark); }
     }
 
     function drawVehicle(bus) {
@@ -525,12 +586,12 @@ export function renderScene(canvas, p, t) {
 
   // Texture of one face: ray-cast the screen onto the face's plane so the tile keeps its true size and perspective.
   // Large faces (road, ground) are filled in small patches, each with its own local affine fit.
-  function paintFx(f) {
+  function paintFx(f, strength = FXS) {
     const spec = FX_SPEC[f.fx]; if (!spec || !f.plane || (f.fx === 'halftone' && f.level < 1)) return;
     const T = spec.T * f.fxs, S = spec.S, k = S / T, px = T * focal / Math.max(.2, f.zv);
     const fade = f.fx === 'grain' ? clamp((px / S - .3) / .9, 0, 1) : clamp((px - 5) / 10, 0, 1);
     if (fade <= .02) return;
-    const pat = fxPattern(ctx, f.fx, f.level, FXS); if (!pat) return;
+    const pat = fxPattern(ctx, f.fx, f.level, strength); if (!pat) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const [x, y] of f.pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0)); x1 = Math.min(W, Math.ceil(x1)); y1 = Math.min(H, Math.ceil(y1));
@@ -538,7 +599,7 @@ export function renderScene(canvas, p, t) {
     const { n, p: p0, o, U, V } = f.plane, base = dot(sub(p0, cam.pos), n);
     const hit = (sx, sy) => {
       const d = add(add(mul(right, (sx - W / 2) / focal), mul(up, (H / 2 - sy) / focal)), fwd), den = dot(d, n); if (Math.abs(den) < 1e-3) return null;
-      const t = base / den; if (t <= 0) return null; const q = sub(add(cam.pos, mul(d, t)), o); return [dot(q, U) * k, dot(q, V) * k];
+      const distance = base / den; if (distance <= 0) return null; const q = sub(add(cam.pos, mul(d, distance)), o); return [dot(q, U) * k+(f.fx==='water'?t*atmosphere.waterSpeed*12:0), dot(q, V) * k+(f.fx==='water'?t*atmosphere.waterSpeed*7:0)];
     };
     // Affine map pattern -> screen through three exact point pairs; the pattern repeats every S, so coordinates are wrapped.
     const affine = (s0, s1, s2, q0, q1, q2) => {
@@ -549,7 +610,7 @@ export function renderScene(canvas, p, t) {
       return [m00, m10, m01, m11, s0[0] - m00 * a0[0] - m01 * a0[1], s0[1] - m10 * a0[0] - m11 * a0[1]];
     };
     const path = () => { ctx.beginPath(); f.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); };
-    ctx.globalAlpha = f.alpha * clamp(spec.a * (.5 + .8 * FXS), 0, 1) * fade; ctx.fillStyle = pat;
+    ctx.globalAlpha = f.alpha * clamp(spec.a * (.5 + .8 * strength), 0, 1) * fade; ctx.fillStyle = pat;
     let budget = 3000;   // triangles per face, keeps pathological views cheap
     const mid = (A, B) => vert((A.s[0] + B.s[0]) / 2, (A.s[1] + B.s[1]) / 2);
     const tri = (A, B, D, depth = 0) => {
@@ -587,9 +648,10 @@ export function renderScene(canvas, p, t) {
   faces.sort((a, b) => a.layer - b.layer || (b.group ?? b.depth) - (a.group ?? a.depth) || b.depth - a.depth);
   for (const f of faces) {
     ctx.globalAlpha = f.alpha; ctx.beginPath(); f.pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fillStyle = f.col; ctx.fill(); ctx.strokeStyle = f.col; ctx.lineWidth = .5; ctx.stroke();
-    if (f.alpha >= .5) paintFx(f);
+    if (f.alpha >= .5) {if(f.surface!=='none'&&(p.textureStrength??.65)>0)paintFx({...f,fx:f.surface,fxs:f.surfaceScale},p.textureStrength??.65);paintFx(f);}
   }
   ctx.globalAlpha = 1;
+  drawRain(ctx,W,H,atmosphere,t);
   return { faces: faces.length, camera: cam };
 }
 
@@ -608,9 +670,13 @@ export function migrateScene(q) {
 }
 export function validateScene(input) {
   const q = migrateScene(input);
-  if (typeof q.name !== 'string' || ![24, 30, 60].includes(q.fps) || !safeTime(q.duration, 1, q.fps) || !Array.isArray(q.objects) || q.objects.length > 80) throw Error('Invalid Scene Studio project');
+  if (typeof q.name !== 'string' || ![24, 30, 60].includes(q.fps) || !safeTime(q.duration, 1, q.fps) || !Array.isArray(q.objects) || q.objects.length > MAX_SCENE_OBJECTS) throw Error('Invalid Scene Studio project');
   if (!['white', 'texture'].includes(q.material) || !HEX.test(q.sky) || !finite(q.roadWidth, 4, 20) || ![q.left, q.right].every(v => ['city', 'park', 'trees', 'playground', 'none'].includes(v))) throw Error('Invalid environment');
   if (!Object.hasOwn(FINISHES, q.finish ?? 'none') || !finite(q.finishStrength ?? .6, 0, 1) || !finite(q.finishScale ?? 1, .1, 8)) throw Error('Invalid finish');
+  if(!HEX.test(q.ground??'#8fa77b')||!finite(q.ambient??.5,.15,.9)||!finite(q.sunAngle??-40,-180,180))throw Error('Invalid lighting or ground');
+  if(!finite(q.haze??0,0,.8))throw Error('Invalid distance haze');
+  if(!Object.hasOwn(TEXTURE_PACKS,q.texturePack??'none')||!['auto','none',...Object.keys(SURFACE_TEXTURES)].includes(q.groundTexture??'none')||!finite(q.textureStrength??.65,0,1)||!finite(q.textureScale??1,.25,6))throw Error('Invalid texture pack');
+  if(q.terrain!==undefined){const a={...DEFAULT_TERRAIN,...q.terrain};if(!q.terrain||typeof q.terrain!=='object'||Array.isArray(q.terrain)||!Object.hasOwn(TERRAIN_TYPES,a.type)||!finite(a.height,0,25)||!finite(a.scale,12,100)||!finite(a.flatRadius,0,100)||!Number.isSafeInteger(a.seed)||a.seed<0||a.seed>99999)throw Error('Invalid terrain');}
   const camSpec = k => { if (!CAMERA_MODES[k.mode] || !CAMERA_MOVES[k.move]) throw Error('Invalid camera');
     for (const [f, a, b] of [['yaw', -360, 360], ['height', 1, 60], ['distance', 2, 80], ['fov', 25, 100]]) if (!finite(k[f], a, b)) throw Error('Invalid camera value'); };
   const fixedSpec = c => { for (const key of ['fixedX','fixedZ','aimX','aimZ']) if (c[key] !== undefined && !finite(c[key], -100, 150)) throw Error('Invalid camera position'); if(c.aimHeight !== undefined && !finite(c.aimHeight,0,60)) throw Error('Invalid camera aim'); };
@@ -626,6 +692,15 @@ export function validateScene(input) {
     if(!finite(o.rotation??0,-360,360)||!['path','fixed'].includes(o.orientation??'path')||!finite(o.turnRadius??3,0,20))throw Error('Invalid rotation or turn radius');
     if(o.waypoints!==undefined&&(!Array.isArray(o.waypoints)||o.waypoints.length>60||o.waypoints.some(v=>!v||!finite(v.x,-100,150)||!finite(v.z,-100,150))))throw Error('Invalid route points');
     for(const k of ['width','length','height'])if(o[k]!==undefined&&!finite(o[k],.5,80))throw Error('Invalid object dimensions');
+    if(!finite(o.elevation??0,-2,30))throw Error('Invalid object elevation');
+    if(!['fixed','terrain'].includes(o.grounding??'fixed'))throw Error('Invalid object grounding');
+    if(!['auto','none',...Object.keys(SURFACE_TEXTURES)].includes(o.surfaceTexture??'auto')||!finite(o.textureScale??1,.25,6))throw Error('Invalid surface texture');
+    if(o.terrainProfile!==undefined&&!['rolling','ridged','dunes'].includes(o.terrainProfile))throw Error('Invalid terrain profile');
+    if(o.terrainSeed!==undefined&&(!Number.isSafeInteger(o.terrainSeed)||o.terrainSeed<0||o.terrainSeed>99999))throw Error('Invalid terrain seed');
+    if(o.accentColor!==undefined&&!HEX.test(o.accentColor))throw Error('Invalid accent color');
+    if(o.roof!==undefined&&!Object.hasOwn(ROOFS,o.roof))throw Error('Invalid roof');
+    if(o.windows!==undefined&&typeof o.windows!=='boolean')throw Error('Invalid windows');
+    if(o.treeStyle!==undefined&&!Object.hasOwn(TREE_STYLES,o.treeStyle))throw Error('Invalid tree style');
     if(o.type==='traffic'){
       if(!['cycle','red','amber','green'].includes(o.signal??'cycle'))throw Error('Invalid signal');
       const cycle=[o.redTime??6,o.greenTime??5,o.amberTime??2];
@@ -634,12 +709,14 @@ export function validateScene(input) {
     }
 
     if (!((o.finish ?? 'inherit') === 'inherit' || Object.hasOwn(FINISHES, o.finish)) || !finite(o.finishScale ?? 1, .1, 8)) throw Error('Invalid finish');
-    if (o.type === 'human') { const lk = humanLook(o); if (!BODIES[lk.body] || !OUTFITS[lk.outfit] || !HAIR_STYLES[lk.hair] || !FACIAL[lk.facial] || ![lk.skin, lk.hairColor, lk.bottomColor].every(v => HEX.test(v))) throw Error('Invalid character look'); }
+    if (o.type === 'human') { const lk = humanLook(o); if (!BODIES[lk.body] || !OUTFITS[lk.outfit] || !HAIR_STYLES[lk.hair] || !FACIAL[lk.facial] || !EXPRESSIONS[lk.expression] || typeof lk.glasses!=='boolean' || ![lk.skin, lk.hairColor, lk.bottomColor].every(v => HEX.test(v))) throw Error('Invalid character look'); }
     for (const f of ['x', 'z', 'endX', 'endZ']) if (!finite(o[f], -100, 150)) throw Error('Invalid position');
     if (!finite(o.scale, .2, 4) || !safeTiming(o.start, o.duration, q.fps)) throw Error('Invalid timing or scale');
+    if(o.routeStart!==undefined&&!safeTime(o.routeStart,0,q.fps))throw Error('Invalid route start');
     if (!Array.isArray(o.clips) || o.clips.length > 60) throw Error('Invalid gesture clips');
     for (const c of o.clips) { if (typeof c.id !== 'string' || ids.has(c.id) || !GESTURES[c.gesture] || !safeTiming(c.start, c.dur, q.fps) || !finite(c.speed ?? 1, .25, 3)) throw Error('Invalid gesture clip'); ids.add(c.id); }
   }
+  validateStorytelling(q);
   return q;
 }
 

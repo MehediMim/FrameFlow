@@ -1,4 +1,4 @@
-﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="design-tokens.css?v=consistent-editor-1"><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=paired-camera-1"><style>
+﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="design-tokens.css?v=consistent-editor-1"><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=nested-picker-1"><style>
 /* Map Studio color presets; native picker remains available. */
 .ff-palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 12px;max-width:100%;line-height:1}
 .ff-color-chip{appearance:none;display:inline-block;position:relative;flex:0 0 19px;width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;margin:0!important;padding:0!important;border:1px solid #ffffff66!important;border-radius:5px!important;background:var(--chip-color)!important;cursor:pointer;box-shadow:0 1px 3px #0004;transition:transform .1s,box-shadow .1s}
@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=compact-timeline-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=expanded-settings-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"></head><body class="landing">
 <style>
 /* Support links for Map Studio and the landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -236,8 +236,9 @@ body.landing #landing{display:block}
 </div>
 <label>Map style <select id="mTheme"></select></label>
 <label id="mImageryBox" hidden>Imagery source <select id="mImagery"></select><span class="mini-label" id="mImageryNote"></span></label>
-<details id="mTerrainBox" hidden>
-<summary class="section-title">Terrain &amp; Relief</summary>
+<div id="mTextureSlot"></div><div id="mAtlasLabels"></div><div id="mLabelStyle"></div>
+<section id="mTerrainBox" class="m-settings-group" hidden>
+<h4>Terrain &amp; relief</h4>
 <p class="mini-label">Elevation tiles load for the visible map. Detail varies by location. Colors and shading apply to previews and exports.</p>
 <label>Sun direction <input id="mTerrainAzimuth" type="range" min="0" max="360" step="5"><output id="mTerrainAzimuthValue"></output></label>
 <label>Sun altitude <input id="mTerrainAltitude" type="range" min="5" max="85" step="1"><output id="mTerrainAltitudeValue"></output></label>
@@ -254,11 +255,8 @@ body.landing #landing{display:block}
 <button id="mTerrainReset" type="button">Reset terrain settings</button>
 <p class="mini-label" id="mTerrainStatus" role="status"></p>
 <a href="terrain-credits.html" target="_blank" rel="noopener">Terrain data credits</a>
-</details>
+</section>
 <label class="m-chk"><input type="checkbox" id="mGrat"> Grid lines</label>
-<label>Start view <select id="mRegion"></select></label>
-<div class="two"><label>Zoom<input id="mStartZoom" type="number" min="0" max="12" step=".1"></label><label>Tilt<input id="mStartPitch" type="number" min="0" max="70"></label></div>
-<label>Rotation<input id="mStartBearing" type="number" min="-180" max="180" step="5"></label>
 <label>Canvas <select id="mSize"><option value="1280,720">Landscape · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="1080,1920">Portrait · 1080 × 1920</option><option value="1080,1080">Square · 1080 × 1080</option></select></label>
 <div class="two"><label>Frame rate<select id="mFps"><option>24</option><option selected>30</option><option>60</option></select></label><label>Total frames<input id="mDuration" type="number" value="240" min="2"></label></div>
 </dialog>
@@ -273,7 +271,7 @@ body.landing #landing{display:block}
 <input hidden type="file" id="mProjectFile" accept="application/json,.json">
 <dialog id="mModal"><div id="mModalBody"></div><button id="mCloseModal">Close</button></dialog>
 </div>
-<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=typed-lanes-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
+<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=expanded-settings-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {

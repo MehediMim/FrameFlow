@@ -1,6 +1,7 @@
 import { duplicateLayers, removeLayers } from './map-layer-actions.mjs';
-import { installDirectMapEditing } from './map-direct-edit.mjs?v=selection-toolbar-1';
+import { installDirectMapEditing } from './map-direct-edit.mjs?v=nested-picker-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
+import { bindObjectCascade } from './map-object-picker.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
@@ -10,12 +11,12 @@ import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from '
 import { detailCountriesOf, targetMembers, targetFeatures, featureForTarget, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
-import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=preview-controls-1';
+import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=expanded-settings-1';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
 import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=paired-camera-1';
-import { CITIES, REGIONS } from './map-places.mjs';
+import { CITIES } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './fonts.mjs';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
@@ -330,14 +331,13 @@ function buildStaticUI() {
   $$('[data-mpre]').forEach(el => el.onclick = () => addShot(el.dataset.mpre));
   $('#mTheme').innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
   $('#mImagery').innerHTML = Object.entries(IMAGERY_SOURCES).map(([k, x]) => `<option value="${k}">${x.label}</option>`).join('');
-  if (!$('#mTexture')) $('#mImageryBox').insertAdjacentHTML('afterend', `
-    <details open id="mTextureSection">
-      <summary class="section-title">TEXTURE</summary>
+  if (!$('#mTexture')) $('#mTextureSlot').innerHTML = `
+    <section id="mTextureSection" class="m-settings-group">
+      <h4>Texture</h4>
       <label>Surface <select id="mTexture">${Object.entries(TEXTURES).map(([k, label]) => `<option value="${k}">${label}</option>`).join('')}</select></label>
       <label>Strength <span class="m-val" id="mTextureStrengthValue"></span><input aria-label="Texture strength" id="mTextureStrength" type="range" min="0" max="100" step="1"></label>
       <label>Scale <span class="m-val" id="mTextureScaleValue"></span><input aria-label="Texture scale" id="mTextureScale" type="range" min="50" max="300" step="10"></label>
-    </details>`);
-  $('#mRegion').innerHTML = Object.entries(REGIONS).map(([k, r]) => `<option value="${k}">${r.label}</option>`).join('') + '<option value="custom">Custom</option>';
+    </section>`;
 }
 function suggestTarget() {
   const c = current(), src = c && c.type ? c : [...proj.actions].reverse()[0];
@@ -634,15 +634,13 @@ function battleFields(a) {
     + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees'));
 }
 function objectPicker(glyph) {
-  const filter = objectTypeFilters.get(sel) || 'all';
-  const groups = OBJECT_CATEGORIES.filter(([key]) => filter === 'all' || key === filter);
-  const outside = filter !== 'all' && (OBJECT_ICONS[glyph]?.group || 'general') !== filter;
   const entries=group=>Object.entries(OBJECT_ICONS).filter(([,icon])=>(icon.group||'general')===group);
-  const options=group=>entries(group).map(([key,icon])=>`<option value="${key}" ${key===glyph?'selected':''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object type<select data-object-type>${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label]) => `<option value="${key}" ${key === filter ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
-    + `<div class="m-object-picker"><span class="mini-label">Object</span><select data-mf="glyph" data-t="sel" aria-label="Object" hidden>${outside?'<option value="" selected disabled>Choose an object</option>':''}${groups.map(([key,label])=>`<optgroup label="${esc(label)}">${options(key)}</optgroup>`).join('')}</select>`
-    + `<details data-object-menu><summary aria-label="Choose object">${outside?'':`<img data-object-preview="${glyph}" alt="">`}<span>${outside?'Choose an object':esc(OBJECT_ICONS[glyph]?.label||'Choose an object')}</span><span class="m-object-caret" aria-hidden="true">&#9662;</span></summary>`
-    + `<div class="m-object-options" role="listbox" aria-label="Objects">${groups.map(([group,label])=>`<div role="group" aria-label="${esc(label)}"><h4>${esc(label)}</h4>${entries(group).map(([key,icon])=>`<button type="button" class="m-object-choice" role="option" data-object-choice="${key}" aria-selected="${key===glyph}"><img data-object-preview-lazy="${key}" alt=""><span>${esc(icon.label)}</span></button>`).join('')}</div>`).join('')}</div></details></div>`;
+  return `<div class="m-object-picker"><span class="mini-label">Object</span>
+    <select data-object-type hidden aria-label="Object type">${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label])=>`<option value="${key}" ${key===(objectTypeFilters.get(sel)||'all')?'selected':''}>${esc(label)}</option>`).join('')}</select>
+    <select data-mf="glyph" data-t="sel" aria-label="Object" hidden>${OBJECT_CATEGORIES.map(([group,label])=>`<optgroup label="${esc(label)}">${entries(group).map(([key,icon])=>`<option value="${key}" ${key===glyph?'selected':''}>${esc(icon.label)}</option>`).join('')}</optgroup>`).join('')}</select>
+    <details data-object-menu><summary aria-label="Choose object"><img data-object-preview="${glyph}" alt=""><span>${esc(OBJECT_ICONS[glyph]?.label||'Choose an object')}</span><span class="m-object-caret" aria-hidden="true">&#9662;</span></summary>
+    <div class="m-object-cascade" hidden><div class="m-object-types" role="menu" aria-label="Object types">${OBJECT_CATEGORIES.map(([group,label])=>`<button type="button" role="menuitem" data-object-category="${group}" aria-haspopup="true" aria-expanded="false"><span>${esc(label)}</span><span aria-hidden="true">&#8250;</span></button>`).join('')}</div>
+    <div class="m-object-submenus">${OBJECT_CATEGORIES.map(([group,label])=>`<div data-object-category-panel="${group}" role="listbox" aria-label="${esc(label)}" hidden><h4>${esc(label)}</h4>${entries(group).map(([key,icon])=>`<button type="button" class="m-object-choice" role="option" data-object-choice="${key}" aria-selected="${key===glyph}"><img data-object-preview-lazy="${key}" alt=""><span>${esc(icon.label)}</span></button>`).join('')}</div>`).join('')}</div></div></details></div>`;
 }
 
 function highlightExtentFields(a) {
@@ -862,25 +860,13 @@ function bindInspector(it) {
   paintObjectPreviews($('#mInspector'));
   const objectMenu=$('#mInspector [data-object-menu]');
   if(objectMenu){
-    objectMenu.ontoggle=()=>{
-      if(!objectMenu.open)return;
-      for(const img of objectMenu.querySelectorAll('[data-object-preview-lazy]')){img.dataset.objectPreview=img.dataset.objectPreviewLazy;delete img.dataset.objectPreviewLazy;}
-      paintObjectPreviews(objectMenu);
-      objectMenu.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'});
-    };
+    bindObjectCascade(objectMenu);
     for(const button of objectMenu.querySelectorAll('[data-object-choice]'))button.onclick=()=>{
       const input=$('#mInspector [data-mf="glyph"]');input.value=button.dataset.objectChoice;
       input.dispatchEvent(new Event('change',{bubbles:true}));
       $('#mInspector [data-object-menu] summary')?.focus();
     };
-    objectMenu.onkeydown=e=>{
-      if(e.key==='Escape'){objectMenu.open=false;objectMenu.querySelector('summary').focus();e.preventDefault();e.stopPropagation();return;}
-      if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;
-      e.preventDefault();e.stopPropagation();objectMenu.open=true;
-      const rows=[...objectMenu.querySelectorAll('[data-object-choice]')],i=rows.indexOf(document.activeElement);
-      const next=e.key==='Home'?0:e.key==='End'?rows.length-1:e.key==='ArrowDown'?Math.min(rows.length-1,i+1):Math.max(0,i-1);
-      rows[next]?.focus();
-    };
+
   }
   const objectType = $('#mInspector [data-object-type]');
   if (objectType) objectType.onchange = () => {
@@ -1097,19 +1083,18 @@ function renderLabelPanel() {
   renderAtlasLabelPanel();
   let box = $('#mLabelStyle');
   if (!box) { box = document.createElement('div'); box.id = 'mLabelStyle'; $('#mImageryBox').after(box); }
-  const wasOpen = box.querySelector('details')?.open;
   const st = labelStyleOf(proj);
-  box.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">LABEL STYLE <span>Aa</span></summary><p class="mini-label">Applies to place names, route names, pins and highlights. Choose “2D · Attached to map” to lay labels flat on the map. Pick a different style on any item to override it.</p>${labelStyleHtml(st, 'mProjLbl')}</details>`;
+  box.innerHTML = `<section class="m-settings-group"><h4>Label style</h4><p class="mini-label">Applies to place names, route names, pins and highlights. Choose “2D · Attached to map” to lay labels flat on the map. Pick a different style on any item to override it.</p>${labelStyleHtml(st, 'mProjLbl')}</section>`;
   bindLabelStyle(box, 'mProjLbl', () => (proj.labelStyle ||= { ...DEFAULT_LABEL_STYLE }), v => { proj.labelStyle = v; }, renderLabelPanel);
 }
 function renderAtlasLabelPanel() {
   let box = $('#mAtlasLabels');
   if (!box) { box = document.createElement('div'); box.id = 'mAtlasLabels'; $('#mImageryBox').after(box); }
-  const open = box.querySelector('details')?.open, s = atlasLabelSettings(proj.atlasLabels);
+  const s = atlasLabelSettings(proj.atlasLabels);
   const chk = (key, title) => `<label class="m-chk"><input type="checkbox" data-atlas="${key}" ${s[key] ? 'checked' : ''}> ${title}</label>`;
   const num = (key, title, min, max, step = 1) => `<label>${title}<input type="number" data-atlas="${key}" min="${min}" max="${max}" step="${step}" value="${s[key]}"></label>`;
   const color = (key, title) => `<label>${title}<input type="color" data-atlas="${key}" value="${s[key]}"></label>`;
-  box.innerHTML = `<details ${open ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">COUNTRY &amp; OCEAN LABELS</summary>
+  box.innerHTML = `<section class="m-settings-group"><h4>Country &amp; ocean labels</h4>
     <p class="mini-label">Names fit each country’s mainland shape and follow its natural direction. Use the country size multiplier to adjust all names together. Fixed zoom sizing preserves these proportions as you zoom.</p>
     ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('caps', 'Uppercase military lettering')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
     ${fontPickerHtml('mAtlasFont', 'Font', s.font)}
@@ -1121,7 +1106,7 @@ function renderAtlasLabelPanel() {
     ${s.scaleMode === 'world' ? num('referenceZoom', 'Size measured at zoom', 0, 14, .1) : ''}
     <div class="two">${color('text', 'Text color')}${color('outline', 'Outline color')}</div>
     ${num('haloWidth', 'Outline thickness (relative to text)', 0, 1, .01)}${num('opacity', 'Opacity', 0, 1, .05)}${num('spacing', 'Letter spacing (%)', 0, 40)}
-    <p class="mini-label">Disable overlap reduction to show every visible country name. Add a Map label for custom historical names.</p></details>`;
+    <p class="mini-label">Disable overlap reduction to show every visible country name. Add a Map label for custom historical names.</p></section>`;
   const set = (key, value) => { checkpoint(); proj.atlasLabels = { ...proj.atlasLabels, [key]: value }; changed(); renderAtlasLabelPanel(); };
   bindFontPicker('mAtlasFont', font => set('font', font));
   box.querySelectorAll('[data-atlas]').forEach(el => el.onchange = () => {
@@ -1294,8 +1279,6 @@ function renderSettings() {
   $('#mTextureStrengthValue').textContent = Math.round(texture.strength * 100) + '%';
   $('#mTextureScaleValue').textContent = texture.scale.toFixed(1) + '×';
   $('#mTextureStrength').disabled = $('#mTextureScale').disabled = texture.type === 'none';
-  const i = proj.camera.init, match = Object.entries(REGIONS).find(([, r]) => r.lon === i.lon && r.lat === i.lat && r.zoom === i.zoom);
-  $('#mRegion').value = match ? match[0] : 'custom'; $('#mStartZoom').value = i.zoom; $('#mStartPitch').value = i.pitch; $('#mStartBearing').value = i.bearing;
   $('#mGraticule').classList.toggle('active', !!proj.graticule);
   renderLabelPanel();
 }
@@ -1317,7 +1300,6 @@ function renderAreaSettings() {
   $$('#mDetailCountries [data-dc-remove]').forEach(el => el.onclick = () => { pause(); checkpoint(); const cur = areaOf(proj); proj.area = { ...cur, mode: 'world', detailCountries: detailCountriesOf(cur).filter(c => c !== el.dataset.dcRemove) }; saveLocal(); renderAll(); });
   $$('#mDetailCountries [data-dc-retry]').forEach(el => el.onclick = () => { const c = el.dataset.dcRetry; detailLoads.delete(c); detailErrors.delete(c); void loadDetail(c); renderAreaSettings(); });
   $('#mAreaPad').value = Math.round(ar.pad * 100); $('#mAreaPadValue').textContent = Math.round(ar.pad * 100) + '%'; $('#mAreaPad').disabled = !ar.fit;
-  $('#mRegion').disabled = $('#mStartZoom').disabled = false;
   $('#mAreaNote').textContent = countries.length ? 'The world map stays as it is. Only the countries listed above get detailed boundaries, and each loads only when added.' : 'Pick a country and press Add country details. Nothing extra loads until you do.';
 }
 function renderTerrainSettings() {
@@ -1376,10 +1358,6 @@ function bindSettings() {
   }
   $('#mGrat').onchange = edit(el => proj.graticule = el.checked);
   $('#mGraticule').onclick = () => { checkpoint(); proj.graticule = !proj.graticule; saveLocal(); renderSettings(); draw(); };
-  $('#mRegion').onchange = edit(el => { const r = REGIONS[el.value]; if (r) Object.assign(proj.camera.init, { lon: r.lon, lat: r.lat, zoom: r.zoom }); });
-  $('#mStartZoom').onchange = edit(el => proj.camera.init.zoom = clamp(+el.value || 1, 0, 12));
-  $('#mStartPitch').onchange = edit(el => proj.camera.init.pitch = clamp(+el.value || 0, 0, 70));
-  $('#mStartBearing').onchange = edit(el => proj.camera.init.bearing = clamp(+el.value || 0, -180, 180));
 }
 
 // ------------------------------------------------------------------ timeline
@@ -1709,6 +1687,7 @@ setMode('map')
     close.addEventListener('click', () => setOpen(false));
     panel.addEventListener('close', () => open.setAttribute('aria-expanded', 'false'));
     panel.addEventListener('click', e => {
+      if(e.target!==panel)return;
       const rect = panel.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) setOpen(false);
     });

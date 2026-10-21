@@ -22,15 +22,30 @@ function arrangeSettings(panel, prefix) {
       const group = holder.firstElementChild;
       for (const node of nodes) if(node) group.querySelector('.ff-settings-fields').append(node);
       body.append(group);
+      return group;
     };
     const control = id => document.getElementById(id)?.closest('label');
     const size = control(`${prefix}Size`);
     const timing = document.getElementById(`${prefix}Fps`)?.closest('.two');
-    section('Composition', [size, timing]);
+    const pages=[section('Document', [size, timing])];
     if(prefix === 'm') {
-      section('Map appearance', [control('mTheme'), control('mImagery'), document.getElementById('mTerrainBox'), document.getElementById('mAtlasLabels'), control('mGrat'), document.getElementById('mTextureSection'), document.getElementById('mLabelStyle')]);
-      section('Country details', [document.getElementById('mAreaBox')]);
-      section('Starting view', [control('mRegion'), document.getElementById('mStartZoom')?.closest('.two'), control('mStartBearing')]);
+      pages.push(section('Appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSlot'), document.getElementById('mTerrainBox')]));
+      pages.push(section('Labels', [document.getElementById('mAtlasLabels'), document.getElementById('mLabelStyle')]));
+      pages.push(section('Country details', [document.getElementById('mAreaBox')]));
+      panel.classList.add('ff-organized');
+      const nav=document.createElement('div');nav.className='ff-settings-nav';nav.setAttribute('role','tablist');nav.setAttribute('aria-label','Settings categories');nav.setAttribute('aria-orientation','vertical');
+      const activate=index=>pages.forEach((page,i)=>{
+        const tab=nav.children[i];page.hidden=i!==index;tab.setAttribute('aria-selected',String(i===index));tab.tabIndex=i===index?0:-1;
+      });
+      pages.forEach((page,i)=>{
+        const tab=document.createElement('button');tab.type='button';tab.textContent=page.querySelector('h3').textContent;
+        tab.id=`${prefix}SettingsTab${i}`;tab.setAttribute('role','tab');tab.setAttribute('aria-controls',`${prefix}SettingsPage${i}`);
+        page.id=`${prefix}SettingsPage${i}`;page.setAttribute('role','tabpanel');page.setAttribute('aria-labelledby',tab.id);page.tabIndex=0;
+        tab.onclick=()=>activate(i);
+        tab.onkeydown=e=>{if(!['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?pages.length-1:(i+(['ArrowDown','ArrowRight'].includes(e.key)?1:-1)+pages.length)%pages.length;activate(next);nav.children[next].focus();};
+        nav.append(tab);
+      });
+      const content=document.createElement('div');content.className='ff-settings-pages';content.append(...pages);body.append(nav,content);activate(0);
     }
   }
   heading.after(body);
@@ -156,6 +171,9 @@ function install() {
   for(const el of document.querySelectorAll('.transport > label')){const t=[...el.childNodes].find(n=>n.nodeType===3);if(t)t.textContent='TIME (s) ';}
   for(const el of document.querySelectorAll('.ruler-label > span'))el.textContent='SECONDS →';
   // Do not let editor shortcuts modify a project while any shared dialog is open.
-  window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]'))e.stopImmediatePropagation()},true);
+  window.addEventListener('keydown',e=>{
+    if(e.target.closest?.('.ff-settings-nav [role=tab]')&&['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+    if(document.querySelector('dialog[open]'))e.stopImmediatePropagation();
+  },true);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else queueMicrotask(install);

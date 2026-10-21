@@ -177,7 +177,7 @@ body.mode-map #mapStudio{display:flex}
 #mMapContext[hidden],.m-map-add-context[hidden]{display:none}
 #mMapContext.m-map-object-context{width:min(520px,calc(100% - 24px))}
 #mMapContext.m-map-group-context{width:min(280px,calc(100% - 24px))}
-#mMapContext .m-map-object-controls{width:100%;display:grid;grid-template-columns:minmax(78px,1fr) minmax(100px,1.15fr) 42px minmax(108px,1fr);gap:8px;align-items:end}
+#mMapContext .m-map-object-controls{width:100%;display:grid;grid-template-columns:minmax(160px,1.5fr) 42px minmax(108px,1fr);gap:8px;align-items:end}
 #mMapContext .m-map-group-controls{grid-template-columns:42px minmax(130px,1fr)}
 #mMapContext .m-map-layer-controls{grid-template-columns:repeat(auto-fit,minmax(78px,1fr))}
 #mMapContext .m-map-land-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px}
@@ -229,3 +229,18 @@ body.mode-map #mapStudio{display:flex}
 
 .m-key.m-camera-key{width:18px;height:16px}
 .m-key.m-camera-key::before{left:2px;top:1px}
+
+/* Object types reveal their illustrated choices beside the hovered category. */
+body.ff-unified .m-object-cascade{position:fixed;z-index:10000;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);padding:0;background:var(--ff-surface);border:1px solid var(--ff-border);border-radius:6px;box-shadow:0 10px 32px #0009;overflow:hidden;color:var(--ff-text)}
+body.ff-unified .m-object-cascade[hidden]{display:none}
+body.ff-unified .m-object-cascade .m-object-types,body.ff-unified .m-object-cascade .m-object-submenus{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+body.ff-unified .m-object-cascade .m-object-types{padding:4px;border-right:1px solid var(--ff-border)}
+body.ff-unified .m-object-cascade button{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;margin:0;padding:6px 8px;border:0;border-radius:3px;background:transparent;color:var(--ff-text);text-align:left;font-size:11px;line-height:1.3;white-space:normal}
+body.ff-unified .m-object-cascade [data-object-category]{justify-content:space-between}
+body.ff-unified .m-object-cascade [data-object-category] > :last-child{color:var(--ff-muted);font-size:17px}
+body.ff-unified .m-object-cascade button:hover,body.ff-unified .m-object-cascade [aria-expanded=true],body.ff-unified .m-object-cascade [aria-selected=true]{background:#36492b}
+body.ff-unified .m-object-cascade button:focus-visible{outline:2px solid var(--ff-accent);outline-offset:-2px}
+body.ff-unified .m-object-cascade .m-object-choice{min-height:40px;border-radius:0;border-bottom:1px solid var(--ff-border)}
+body.ff-unified .m-object-cascade .m-object-choice img{width:28px;height:28px;flex:none;object-fit:contain}
+body.ff-unified .m-object-cascade h4{position:sticky;top:0;margin:0;padding:8px;background:var(--ff-surface);color:var(--ff-muted);font-size:10px;font-weight:600}
+body.ff-unified .m-object-cascade [data-object-category-panel][hidden]{display:none}

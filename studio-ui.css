@@ -173,3 +173,35 @@ body.ff-unified{--bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border
 .ff-unified #mapStudio .track-label{padding-top:0;padding-bottom:0;font-size:10px}
 .ff-unified #mapStudio .m-clip{top:4px;bottom:4px}
 .ff-unified #mapStudio [data-audio-clip]{top:4px!important;height:24px!important}
+/* Categorized document settings: navigation stays visible as the active panel scrolls. */
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group{display:grid;gap:12px;margin:0;padding:0;border:0;border-radius:0;background:transparent}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group[hidden]{display:none}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group > h4{margin:0;padding:0 0 8px;border-bottom:1px solid var(--ff-border);font-size:11px;font-weight:600;color:var(--ff-text)}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group > :not(h4){margin:0}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group .two{margin:0}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized{width:min(740px,calc(100vw - 32px));max-width:740px;height:min(620px,calc(100dvh - 48px))}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized > .section-title{padding:14px 18px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized > .section-title h2{font-size:16px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-body{display:grid!important;grid-template-columns:154px minmax(0,1fr);gap:0;padding:0;overflow:hidden;scrollbar-gutter:auto;flex:1}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-nav{display:flex;flex-direction:column;gap:3px;padding:12px 8px;background:var(--ff-surface);border-right:1px solid var(--ff-border);overflow:auto}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-nav button{flex-shrink:0;margin:0;padding:9px 10px;min-height:34px;text-align:left;border:1px solid transparent;border-radius:4px;background:transparent;font-size:12px;color:var(--muted)}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-nav button[aria-selected=true]{background:var(--ff-surface-raised,#303735);border-color:var(--ff-border);color:var(--text);box-shadow:inset 2px 0 var(--accent)}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-nav button:hover{color:var(--text);background:#ffffff08}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-pages{min-height:0;overflow:auto;padding:18px 20px;scrollbar-width:thin;scrollbar-gutter:stable}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-section{border:0;padding:0;margin:0}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-section[hidden]{display:none}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-section > h3{font-size:13px;padding-bottom:10px;border-bottom:1px solid var(--ff-border)}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-fields{padding-top:14px;gap:12px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized label{gap:5px;font-size:11px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized :is(input:not([type=checkbox]):not([type=range]):not([type=color]),select){min-height:30px;padding:6px 8px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .two{gap:12px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized #mAreaBox{gap:12px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized :is(#mTextureSection,#mLabelStyle details,#mTerrainBox,#mAtlasLabels details){padding:10px;border-radius:4px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized :is(#mTextureSection,#mLabelStyle details,#mTerrainBox,#mAtlasLabels details) > :is(label,.two,.mini-label){margin-top:10px}
+body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-footer{padding:10px 18px}
+@media(max-width:580px){
+  body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-nav{flex-direction:row;gap:4px;padding:8px;border-right:0;border-bottom:1px solid var(--ff-border)}
+  body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-nav button{white-space:nowrap;padding:7px 9px}
+  body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .ff-settings-pages{padding:14px}
+}

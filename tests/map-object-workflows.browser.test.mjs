@@ -87,8 +87,10 @@ try {
   await placeObjectAt(-3,49);
   assert.notDeepEqual((await saved()).actions[0].place,firstPosition,'the existing Position button allows repositioning');
   await change('#mInspector [data-mf="glyph"]','stoneFort');
-  assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], .m-object-library').length`),0,'object selection uses only the two dropdowns');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], .m-object-library').length`),0,'object selection uses a compact nested picker');
   await evaluate(`document.querySelector('[data-object-menu]').open=true`);
+  await waitFor(`!!document.querySelector('body > .m-object-cascade')`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="modern"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   await waitFor(`document.querySelector('[data-object-choice="tank"] img').complete&&document.querySelector('[data-object-choice="tank"] img').naturalWidth>0`);
   await evaluate(`document.querySelector('[data-object-choice="tank"]').click()`);
   assert.equal((await saved()).actions[0].glyph,'tank','icon dropdown selects an object');
@@ -146,23 +148,18 @@ try {
   }
   assert.ok((await evaluate(`Array.from(document.querySelectorAll('#mInspector optgroup')).map(g=>g.label)`)).includes('Time & planning'));
   const beforeFilter=await saved();
-  await change('#mInspector [data-object-type]','time');
   await evaluate(`document.querySelector('[data-object-menu]').open=true`);
-  await waitFor(`Array.from(document.querySelectorAll('[data-object-choice] img')).every(img=>img.complete&&img.naturalWidth>0)`);
-  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-object-choice]')).map(row=>row.dataset.objectChoice)`),['clock','stopwatch','hourglass','calendar'],'icon menu shows only the selected type');
-
-  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).map(o=>o.value)`),['clock','stopwatch','hourglass','calendar']);
-  await change('#mInspector [data-object-type]','transport');
+  await waitFor(`!!document.querySelector('body > .m-object-cascade')`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="time"]').dispatchEvent(new PointerEvent('pointerenter'))`);
+  await waitFor(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] img')].every(img=>img.complete&&img.naturalWidth>0)`);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] [data-object-choice]')].map(row=>row.dataset.objectChoice)`),['clock','stopwatch','hourglass','calendar'],'hover reveals the chosen category beside its name');
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="transport"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   assert.deepEqual(await saved(),beforeFilter,'browsing types leaves the project unchanged');
-  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="glyph"]').value`),'','filtering offers only objects in the selected category');
-  assert.ok(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).every(o=>o.value!=='clock'&&o.value!=='calendar')`));
-  await change('#mInspector [data-mf="glyph"]','ferry');
-  assert.equal((await saved()).actions.at(-1).glyph,'ferry','filtered selection changes the object');
-  assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-type]').value`),'transport','type selection survives inspector updates');
-  await change('#mInspector [data-object-type]','time');
+  assert.equal(await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="time"]').hidden`),true,'the previous category closes');
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-choice="ferry"]').click()`);
+  assert.equal((await saved()).actions.at(-1).glyph,'ferry','the nested menu selects an object');
   await change('#mInspector [data-mf="glyph"]','calendar');
-  await change('#mInspector [data-object-type]','all');
-  assert.ok((await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] option').length`))>50,'All types restores the catalog');
+  assert.ok((await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] option').length`))>50,'the complete catalog remains available');
   await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   assert.deepEqual((await saved()).actions.slice(-4).map(a=>a.glyph),['clock','stopwatch','hourglass','calendar'],'time props survive reload');
   const render=await evaluate(`(async()=>{

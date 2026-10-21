@@ -1,4 +1,5 @@
 import { paintObjectPreviews } from './map-object-preview.mjs';
+import { bindObjectCascade } from './map-object-picker.mjs';
 import { objectLocationAt, project, screenToLonLat, lonToX, latToY, xToLon, yToLat, countryAt, regionAt, resolveLoc, drawRegionSelection, OBJECT_ICONS, EFFECTS, SHAPES, TRAVEL_ICONS } from './map-engine.mjs?v=paired-camera-1';
 import { objectSizeAt, objectPoseAt, putObjectKey } from './map-object-keys.mjs';
 import { groupPoseAt, putGroupKey, makeObjectGroup } from './map-object-groups.mjs';
@@ -58,6 +59,7 @@ export function installDirectMapEditing(api){
   });
   document.addEventListener('keydown',e=>{
     if(!document.body.classList.contains('mode-map')||document.querySelector('dialog[open]'))return;
+    if(e.key==='Escape'&&document.querySelector('body > .m-object-cascade:not([hidden])'))return;
     const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
     if((e.ctrlKey||e.metaKey)&&!typing&&!api.busy()){
       if(e.key.toLowerCase()==='d'){e.preventDefault();e.stopImmediatePropagation();api.layerAction(selected.size?[...selected]:api.current()?[api.current().id]:[],'duplicate');return;}
@@ -228,7 +230,7 @@ export function installDirectMapEditing(api){
     }
     for(const button of form.querySelectorAll('[data-direct-object-choice]'))button.onclick=()=>apply('glyph',button.dataset.directObjectChoice,true);
     for(const button of form.querySelectorAll('[data-direct-pick]'))button.onclick=()=>document.querySelector(`#mInspector [data-mpick="${button.dataset.directPick}"]`)?.click();
-    const menu=form.querySelector('[data-direct-object-menu]');if(menu)menu.ontoggle=()=>{if(!menu.open)return;for(const img of menu.querySelectorAll('[data-object-preview-lazy]')){img.dataset.objectPreview=img.dataset.objectPreviewLazy;delete img.dataset.objectPreviewLazy;}paintObjectPreviews(menu);};
+    const menu=form.querySelector('[data-direct-object-menu]');if(menu)bindObjectCascade(menu);
     form.querySelectorAll('.ff-palette').forEach(palette=>palette.remove());
     bar.append(form);paintObjectPreviews(form);
   }

@@ -12,7 +12,7 @@ const rotatable=a=>['object','group'].includes(a?.type);
 const scalable=a=>['object','group','pin','effect','label'].includes(a?.type);
 const key=t=>`${t.kind}:${t.country||''}:${t.name}`;
 export function installDirectMapEditing(api){
-  const {canvas}=api,selected=new Set(),lands=new Map();let drag=null,toolbarKey='';
+  const {canvas}=api,selected=new Set(),lands=new Map();let drag=null,toolbarKey='',toolbarSelectionKey='';
   const landStyle={color:'#ffb703',showFill:true,showLabel:true,label:''};
   const bar=document.createElement('div');bar.id='mMapContext';bar.className='m-map-context';bar.hidden=true;bar.setAttribute('role','group');bar.setAttribute('aria-label','Selection settings');
   const overlayRoot=canvas.closest('.m-stage-viewport')||canvas.closest('.stage-area');
@@ -52,6 +52,10 @@ export function installDirectMapEditing(api){
   }
   function positionMenu(x,y){menu.hidden=false;menu.style.left=Math.max(8,Math.min(window.innerWidth-172,x))+'px';menu.style.top=Math.max(8,Math.min(window.innerHeight-(menu.querySelectorAll('button').length*36+12),y))+'px';menu.querySelector('button').focus({preventScroll:true});}
   document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target))menu.hidden=true;},true);
+  overlayRoot.addEventListener('pointerdown',e=>{
+    if(e.button!==0||api.busy()||!e.target.matches('.m-stage-viewport,.stage-area,.canvas-wrap,.stage-hint'))return;
+    selected.clear();lands.clear();api.select(null);toolbar(true);
+  });
   document.addEventListener('keydown',e=>{
     if(!document.body.classList.contains('mode-map')||document.querySelector('dialog[open]'))return;
     const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
@@ -295,13 +299,16 @@ export function installDirectMapEditing(api){
     const current=api.current(),land=regionLayer(),object=!lands.size&&spatial(current);
     if(object&&!selected.has(current.id)){selected.clear();selected.add(current.id);}else if(!object&&!lands.size)selected.clear();
     const signature=JSON.stringify([[...lands.values()],[...selected],object||land?current:null,document.querySelector('#mInspector [data-object-type]')?.value]);
-    if(!force&&(signature===toolbarKey||bar.contains(document.activeElement)))return;
-    toolbarKey=signature;bar.hidden=!!lands.size||(!land&&!object&&selected.size<2);bar.dataset.selectionCount=String(lands.size||selected.size||1);
+    const selectionKey=JSON.stringify([current?.id,[...lands.keys()],[...selected]]);
+    if(!force&&selectionKey===toolbarSelectionKey&&(signature===toolbarKey||bar.contains(document.activeElement)))return;
+    toolbarKey=signature;toolbarSelectionKey=selectionKey;
+    bar.hidden=!!lands.size||(!land&&!object&&selected.size<2);bar.dataset.selectionCount=String(lands.size||selected.size||1);
+    bar.dataset.layerId=land?.id||(object?current.id:'');
     bar.classList.toggle('m-map-land-context',!lands.size&&!!land);
     bar.classList.toggle('m-map-object-context',object);bar.classList.toggle('m-map-group-context',object&&current.type==='group');
     bar.classList.toggle('m-map-layer-context',object&&!['object','group'].includes(current.type));
 
-    if(lands.size){
+    if(bar.hidden){
       bar.replaceChildren();
     }else if(land){
       bar.innerHTML='';landControls(land);
@@ -430,7 +437,7 @@ export function installDirectMapEditing(api){
     c.restore();
   }
   const inspector=document.querySelector('#mInspector');
-  if(inspector)new MutationObserver(()=>{if(!bar.contains(document.activeElement))toolbar(true);}).observe(inspector,{childList:true,subtree:true});
+  if(inspector)new MutationObserver(()=>toolbar()).observe(inspector,{childList:true,subtree:true});
   function setSelection(ids){selected.clear();for(const id of ids)if(spatial(item(id)))selected.add(id);lands.clear();toolbarKey='';}
   function toggleSelection(id){
     if(!spatial(item(id)))return false;const current=api.current();if(!selected.size&&spatial(current))selected.add(current.id);

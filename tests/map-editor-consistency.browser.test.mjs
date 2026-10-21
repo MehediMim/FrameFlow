@@ -152,6 +152,26 @@ try {
   assert.equal((await stored()).actions.length,9,'Ctrl+D duplicates a mixed selection with the shared layer action');
   await evaluate(`document.querySelector('#mUndo').click()`);
   await evaluate(`(async()=>{const E=await import('./map-engine.mjs');E.validateMapProject(JSON.parse(localStorage.getItem('frameflow-map-v1')));})()`);
+  // Focus in the old bar must not keep its controls bound to a different layer.
+  await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1'));p.actions.push(...[['region-a','France','#aa5533','First'],['region-b','Germany','#3388aa','Second']].map(([id,name,color,label])=>E.makeAction('highlight',0,{id,target:{kind:'country',name},color,reliefColor:color,label,dur:240})));localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
+  await waitFor(`!!document.querySelector('[data-mid="region-b"]')&&document.querySelectorAll('#mDlCountry option').length>100`);
+  await evaluate(`document.querySelector('[data-mid="region-a"]').click();document.querySelector('#mMapContext [data-direct-land="label"]').focus();`);
+  const clip=await evaluate(`(()=>{const r=document.querySelector('[data-mclip="region-b"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  await click(clip);
+  assert.equal(await primary(),'region-b');
+  assert.equal(await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').value`),'Second','timeline selection replaces focused controls from the old layer');
+  assert.equal(await evaluate(`document.querySelector('#mMapContext [data-direct-land="color"]').value`),'#3388aa');
+  await change('#mMapContext [data-direct-land="label"]','Edited second');
+  const regions=(await stored()).actions.filter(a=>a.id.startsWith('region-'));
+  assert.deepEqual(regions.map(a=>a.label),['First','Edited second'],'the new controls edit only the selected layer');
+  await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').focus();document.querySelector('[data-mid="pin"]').click();`);
+  assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="__pinDisplay"]')&&!document.querySelector('#mMapContext [data-direct-land]')`),'layer-list selection changes the control type while the old field is focused');
+  await evaluate(`document.querySelector('#mapStudio [data-zoom="fit"]').click();for(let i=0;i<4;i++)document.querySelector('#mapStudio [data-zoom="out"]').click();`);
+  const empty=await evaluate(`(()=>{const r=document.querySelector('.m-stage-viewport .stage-area').getBoundingClientRect();return{x:r.left+8,y:r.top+80};})()`);
+  assert.ok(await evaluate(`document.elementFromPoint(${empty.x},${empty.y}).matches('.stage-area,.canvas-wrap')`),'dismissal is tested on empty workspace outside the map');
+  await click(empty);
+  assert.equal(await primary(),undefined,'empty workspace clears selection');
+  assert.ok(await evaluate(`document.querySelector('#mMapContext').hidden&&document.querySelector('#mMapContext').childElementCount===0`),'empty workspace dismisses and clears the bar');
   assert.deepEqual(errors,[]);
   console.log('Editor consistency: spatial layer selection, dragging, shared controls and context actions, mixed Shift-selection, batch actions, undo and pinned overlays passed');
 } finally {

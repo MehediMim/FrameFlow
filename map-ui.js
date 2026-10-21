@@ -1,5 +1,5 @@
 import { duplicateLayers, removeLayers } from './map-layer-actions.mjs';
-import { installDirectMapEditing } from './map-direct-edit.mjs?v=paired-camera-1';
+import { installDirectMapEditing } from './map-direct-edit.mjs?v=selection-toolbar-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
@@ -1473,7 +1473,7 @@ function renderTimeline() {
     e.preventDefault(); e.stopPropagation(); pause();
     const id = el.dataset.mclip, it = items().find(i => i.id === id); if (!it) return;
     if(e.shiftKey&&directMapEditing?.toggleSelection(id)){renderTimeline();return;}
-    if (sel !== id) { directMapEditing?.setSelection([id]);sel = id; renderItems(); renderInspector(); }
+    if (sel !== id) { directMapEditing?.setSelection([id]);sel = id; renderItems(); renderInspector();draw(); }
     if (it.fullTimelineCamera) { renderTimeline(); return; }
     checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, pathKeys: it.pathKeys ? clone(it.pathKeys) : null, groupKeys: it.groupKeys ? clone(it.groupKeys) : null, groupChildren: it.type === 'group' ? clone(proj.actions.filter(a=>it.memberIds.includes(a.id))) : null, moved: false };
     renderTimeline();

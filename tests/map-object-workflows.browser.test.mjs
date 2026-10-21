@@ -69,24 +69,9 @@ try {
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const saved=()=>evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);await change('#mInspector [data-mf="glyph"]','stoneFort');
-  const library = await evaluate(`(async()=>{
-    const {OBJECT_ICONS}=await import('./map-objects.mjs');
-    const rows=[...document.querySelectorAll('[data-object-choice]')];
-    await Promise.all(rows.map(row=>row.querySelector('img').decode()));
-    const search=document.querySelector('[data-object-search]');
-    search.value='passenger';search.dispatchEvent(new Event('input'));
-    const matches=rows.filter(row=>!row.hidden).map(row=>row.textContent.trim());
-    search.value='no-such-object-xyz';search.dispatchEvent(new Event('input'));
-    const empty=!document.querySelector('[data-object-empty]').hidden;
-    search.value='';search.dispatchEvent(new Event('input'));
-    document.querySelector('[data-object-choice="tank"]').click();
-    return {count:rows.length,total:Object.keys(OBJECT_ICONS).length,matches,empty,
-      selected:document.querySelector('[data-object-choice="tank"]').getAttribute('aria-pressed'),
-      layerIcon:!!document.querySelector('#mItems img[data-object-preview="tank"]')};
-  })()`);
-  assert.equal(library.count,library.total,'every object has a rendered thumbnail and name');
-  assert.ok(library.matches.length>=3 && library.matches.every(name=>name.toLowerCase().includes('passenger')));
-  assert.equal(library.empty,true);assert.equal(library.selected,'true');assert.equal(library.layerIcon,true);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], [data-object-choice], .m-object-library').length`),0,'object selection uses only the two dropdowns');
+  await change('#mInspector [data-mf="glyph"]','tank');
+  assert.ok(await evaluate(`!!document.querySelector('#mItems img[data-object-preview="tank"]')`),'selected object keeps its layer preview');
   await change('#mInspector [data-mf="glyph"]','stoneFort');
   await evaluate(`document.querySelector('#mInspector [data-mf="autoObjectKey"]').click()`);
   await change('#mFrame','1');await change('#mInspector [data-mf="size"]','2');await change('#mInspector [data-mf="objectAngle"]','90');await change('#mInspector [data-mf="damageState"]','damaged');
@@ -144,7 +129,7 @@ try {
   assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).map(o=>o.value)`),['clock','stopwatch','hourglass','calendar']);
   await change('#mInspector [data-object-type]','transport');
   assert.deepEqual(await saved(),beforeFilter,'browsing types leaves the project unchanged');
-  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="glyph"]').value`),'calendar','filtering preserves the current object');
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="glyph"]').value`),'','filtering offers only objects in the selected category');
   assert.ok(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).every(o=>o.value!=='clock'&&o.value!=='calendar')`));
   await change('#mInspector [data-mf="glyph"]','ferry');
   assert.equal((await saved()).actions.at(-1).glyph,'ferry','filtered selection changes the object');

@@ -47,6 +47,15 @@ try{
   await cdp('Runtime.enable');await cdp('Page.enable');
   await cdp('Page.navigate',{url:`http://127.0.0.1:${port}/index.html#map`});
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  await evaluate(`document.querySelector('[data-madd="shape"]').click()`);
+  const fresh=(await stored()).actions.at(-1);
+  assert.equal(fresh.measurementOnly,true,'new shapes start as text annotations');
+  assert.equal(fresh.revealPath,false,'new measurements are static');
+  assert.equal(fresh.showMeasurement,true);
+  assert.equal(fresh.curve,'straight','two picked points give a direct distance');
+  await evaluate(`document.querySelector('[data-mpath="draw"]').click()`);
+  await change('[data-mf="measurementOnly"]',false);
+  assert.equal((await stored()).actions.at(-1).measurementOnly,false,'arrow geometry can be enabled');
   await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),{putPathKey}=await import('./map-path-animation.mjs');
     const p=E.newMapProject();p.frames=300;p.camera.init={lon:3,lat:3,zoom:4,bearing:0,pitch:0};

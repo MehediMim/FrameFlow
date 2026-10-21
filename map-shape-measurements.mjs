@@ -34,6 +34,7 @@ export function shapeLabel(a,route){
   return [a.showLabel&&a.label,a.showMeasurement&&measurementText(measureShape(a,route))].filter(Boolean).join(' · ');
 }
 export function validateShapeMeasurement(a){
+  if(a.measurementOnly!==undefined&&typeof a.measurementOnly!=='boolean')throw Error('Invalid measurement display.');
   if(a.showMeasurement!==undefined&&typeof a.showMeasurement!=='boolean')throw Error('Invalid measurement label.');
   if(a.measurementUnit!==undefined&&!['metric','imperial'].includes(a.measurementUnit))throw Error('Invalid measurement units.');
 }

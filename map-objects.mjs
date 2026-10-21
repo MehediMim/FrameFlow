@@ -170,6 +170,15 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   const u = v.unit, k = Math.round(v.cx - r.mid), p = a.revealPath===false?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
   for (let i = 0; i < r.n; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); P.push(q.z < v.near ? null : q); }
   const zone = a.shape === 'zone' || a.shape === 'noFly', w = (a.width || 6) * u;
+  // Measurement annotations use the complete geometry and never follow a reveal.
+  if (a.measurementOnly) {
+    if(zone&&a.path.length<3)return;
+    const pts=P.filter(Boolean);if(pts.length<(zone?3:2))return;
+    const anchor=zone?{x:pts.reduce((sum,q)=>sum+q.x,0)/pts.length,y:pts.reduce((sum,q)=>sum+q.y,0)/pts.length}:H.project(v,(r.X[0]+r.X[r.n-1])/2+k,(r.Y[0]+r.Y[r.n-1])/2);
+    const label=shapeLabel(a,r);
+    if(label&&(zone||anchor.z>=v.near))labels.push({x:anchor.x,y:anchor.y,text:label,alpha:1,scale:1});
+    return;
+  }
   let text = null;
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
   if(Object.hasOwn(NETWORK_SHAPES,a.shape)){

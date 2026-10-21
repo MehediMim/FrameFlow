@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { measureShape, measurementText, shapeLabel, resizeShape } from '../map-shape-measurements.mjs';
 import { makeAction, newMapProject, validateMapProject, planeRoute } from '../map-engine.mjs';
+import { drawShape } from '../map-objects.mjs';
 import { pathAt, putPathKey } from '../map-path-animation.mjs';
 const near=(actual,expected,epsilon=1e-5)=>assert.ok(Math.abs(actual-expected)<epsilon,`${actual} ≈ ${expected}`);
 const route=a=>planeRoute(null,a),measure=a=>measureShape(a,route(a));
@@ -56,3 +57,16 @@ const p=newMapProject();p.actions=[arrow,square,keyed].map((a,i)=>({...a,id:'mea
 assert.doesNotThrow(()=>validateMapProject(JSON.parse(JSON.stringify(p))));
 for(const patch of [{showMeasurement:'yes'},{measurementUnit:'bad'}])assert.throws(()=>validateMapProject({...p,actions:[{...arrow,...patch}]}));
 console.log('Shape lengths, spherical areas, curves, dateline, units, resizing, anchors, keyed paths, validation and labels passed');
+
+// Static annotation labels render in full at the first frame, without geometry.
+const H={actAlpha:()=>1,planeRoute:(_,a)=>route(a),ease:(_,p)=>p,actionProgress:()=>0,project:(_,x,y)=>({x,y,z:1})};
+const view={unit:1,cx:.5,near:0};
+for(const source of [arrow,square]){
+  const annotation={...source,measurementOnly:true,revealPath:true},first=[],later=[];
+  drawShape(H,{},view,null,annotation,0,first);
+  drawShape({...H,actionProgress:()=>1},{},view,null,annotation,80,later);
+  assert.equal(first.length,1,'measurement text is present at the first frame');
+  assert.equal(first[0].alpha,1);
+  assert.equal(first[0].text,shapeLabel(annotation,route(annotation)));
+  assert.deepEqual(first,later,'annotation position and text do not animate');
+}

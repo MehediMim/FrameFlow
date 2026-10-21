@@ -1726,7 +1726,7 @@ export const ACTION_TYPES = {
   pin: { label: 'Pin', icon: '⌖', dur: 45, hint: 'Mark a location with a pin, text or picture, and move it from place to place' },
   object: { label: 'Object', icon: '◆', dur: 90, hint: 'Place a tank, ship, jet, soldier, base, city… and move or animate it' },
   effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Explosion, fire, smoke, shockwave, earthquake, missile strike' },
-  shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Attack or retreat arrow, front line, occupied or no-fly zone' },
+  shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Static distance or area text, with optional arrows and zones' },
   label: { label: 'Map label', icon: 'Aa', dur: 90, hint: 'Place outlined atlas text on the map' },
 };
 const city = (name, lat, lon) => ({ kind: 'city', name, lat, lon });

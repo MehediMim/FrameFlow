@@ -1,7 +1,9 @@
 // A self-contained landing demonstration; it never changes an editor project.
 const root=document.getElementById('landing');
 if(root){
-  const play=root.querySelector('#mhPreviewPlay'),seek=root.querySelector('#mhPreviewSeek'),time=root.querySelector('#mhPreviewTime');
+  // The hero has its own campaign player (landing-war.mjs); these small section demos run on their own 8-second loop and the old preview controls are optional.
+  const play=root.querySelector('#mhPreviewPlay'),time=root.querySelector('#mhPreviewTime')||{textContent:''};
+  const seek=root.querySelector('#mhPreviewSeek')||{value:'30'};
   const reduced=matchMedia('(prefers-reduced-motion:reduce)');
   let playing=false,raf=0,last=0;
   function render(value){
@@ -21,12 +23,12 @@ if(root){
     last=now;raf=requestAnimationFrame(tick);
   }
   function setPlaying(value){
-    playing=value;cancelAnimationFrame(raf);raf=0;last=0;play.setAttribute('aria-pressed',String(playing));play.setAttribute('aria-label',playing?'Pause map preview':'Play map preview');
-    play.querySelector('[data-play-icon]').textContent=playing?'Ⅱ':'▶';play.querySelector('[data-play-text]').textContent=playing?'Pause preview':'Play preview';
+    playing=value;cancelAnimationFrame(raf);raf=0;last=0;if(play){play.setAttribute('aria-pressed',String(playing));play.setAttribute('aria-label',playing?'Pause map preview':'Play map preview');
+    play.querySelector('[data-play-icon]').textContent=playing?'Ⅱ':'▶';play.querySelector('[data-play-text]').textContent=playing?'Pause preview':'Play preview';}
     if(playing&&document.body.classList.contains('landing')&&!document.hidden)raf=requestAnimationFrame(tick);
   }
-  play.addEventListener('click',()=>setPlaying(!playing));
-  seek.addEventListener('input',()=>{setPlaying(false);render(Number(seek.value));});
+  if(play)play.addEventListener('click',()=>setPlaying(!playing));
+  if(seek.addEventListener)seek.addEventListener('input',()=>{setPlaying(false);render(Number(seek.value));});
   new MutationObserver(()=>{if(!document.body.classList.contains('landing'))setPlaying(false);}).observe(document.body,{attributes:true,attributeFilter:['class']});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)setPlaying(false);});
   reduced.addEventListener('change',()=>{if(reduced.matches)setPlaying(false);});

@@ -58,28 +58,28 @@ try {
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false });
 
   await cdp('Page.navigate',{url:`http://127.0.0.1:${port}/index.html`});
-  await waitFor(`document.body.classList.contains('landing')&&document.querySelector('#mhPreviewPlay')&&document.querySelector('.mh-map-image').complete`);
+  await waitFor(`document.body.classList.contains('landing')&&document.querySelector('#mhWarPlay')&&document.querySelector('[data-war-stage=hero] canvas').dataset.ready==='true'`);
   const evaluateInfo=await evaluate(`(()=>{const root=document.getElementById('landing'),ids=[...root.querySelectorAll('[id]')].map(e=>e.id);return {text:root.innerText,links:[...root.querySelectorAll('a[href]')].map(a=>a.getAttribute('href')),duplicates:ids.filter(id=>document.querySelectorAll('[id="'+id+'"]').length!==1),assets:[...root.querySelectorAll('img')].map(i=>({src:i.src,loaded:i.complete&&i.naturalWidth>0})),title:document.title};})()`);
   assert.ok(!/Motion Studio|Paper Studio|Scene Studio|four studios/i.test(evaluateInfo.text),'landing content is entirely map focused');
   assert.ok(!evaluateInfo.links.some(h=>['#motion','#paper','#scene'].includes(h)),'landing has no other studio CTAs');
   assert.deepEqual(evaluateInfo.duplicates,[],'landing IDs do not collide with editor controls');
   assert.ok(evaluateInfo.title.includes('Map Animation Studio'));
-  assert.ok(evaluateInfo.assets[0].loaded,'hero map image loads');
+  assert.ok(await evaluate(`document.querySelector('[data-war-stage=hero] canvas').width>300`),'campaign map canvas renders');
   await waitFor(`document.getElementById('landing').dataset.showcaseReady`);
   assert.equal(await evaluate(`document.getElementById('landing').dataset.showcaseReady`),'true','real map and texture renderers complete');
   assert.equal(await evaluate(`document.querySelectorAll('[data-map-object]').length`),56,'historical, modern, and civilian map objects are on display');
   assert.equal(await evaluate(`document.querySelectorAll('[data-map-texture][data-rendered="true"]').length`),6,'six real texture finishes render without selection');
   assert.equal(await evaluate(`document.querySelectorAll('[data-map-style][data-rendered="true"]').length`),4,'four map palettes render with the actual map engine');
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-map-object]')).every(canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((v,i)=>i%4===3&&v>0))`),true,'every object preview contains a rendered illustration');
-  const liveScene=await evaluate(`document.querySelector('[data-live-scene]').toDataURL()`);
+  const liveScene=await evaluate(`document.querySelector('[data-war-stage=hero] canvas').toDataURL()`);
   await sleep(250);
-  assert.notEqual(await evaluate(`document.querySelector('[data-live-scene]').toDataURL()`),liveScene,'hero objects visibly animate without a click');
+  assert.notEqual(await evaluate(`document.querySelector('[data-war-stage=hero] canvas').toDataURL()`),liveScene,'hero objects visibly animate without a click');
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('[data-map-object]')).boxShadow`),'none','editor canvas shadows do not leak into the object collection');
   for(const id of ['features','journeys','markers','terrain','regions','campaign','networks','units','animation','sharing','feature-library','how','support'])assert.equal(await evaluate(`!!document.getElementById('${id}')`),true,'feature section '+id);
   assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),16,'all map feature groups are initially discoverable');
   assert.equal(await evaluate(`document.querySelectorAll('.mh-story-stage').length`),6,'six map storytelling themes are shown without selection');
   assert.equal(await evaluate(`document.querySelectorAll('.mh-story-picker, [data-story]').length`),0,'no click-to-reveal story controls remain');
-  assert.equal(await evaluate(`document.getElementById('mhPreviewPlay').getAttribute('aria-pressed')`),'true','hero map starts animating automatically');
+  assert.equal(await evaluate(`document.getElementById('mhWarPlay').getAttribute('aria-pressed')`),'true','hero map starts animating automatically');
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-story-stage')).every(card=>card.getBoundingClientRect().height>0&&card.querySelector('.mh-atlas-caption>p:not(.mh-eyebrow)').textContent.length>40&&card.querySelector('animateMotion'))`),true,'every story includes a visible description and animated map');
   assert.equal(await evaluate(`new Set(Array.from(document.querySelectorAll('.mh-story-stage .mh-atlas-route:first-of-type')).map(path=>path.getAttribute('d'))).size`),6,'each story has its own map route');
   await evaluate(`document.getElementById('features').scrollIntoView()`);
@@ -105,15 +105,27 @@ try {
     await evaluate(`document.getElementById('${section}').scrollIntoView()`);
     await writeFile(join(tmpdir(),`frameflow-map-landing-${section}.png`),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   }
-  await evaluate(`document.querySelector('#mhPreviewSeek').value='0';document.querySelector('#mhPreviewSeek').dispatchEvent(new Event('input',{bubbles:true}))`);
-  const start=await evaluate(`document.querySelector('[data-demo-front]').getAttribute('d')`);
-  await evaluate(`document.querySelector('#mhPreviewSeek').value='100';document.querySelector('#mhPreviewSeek').dispatchEvent(new Event('input',{bubbles:true}))`);
-  assert.notEqual(await evaluate(`document.querySelector('[data-demo-front]').getAttribute('d')`),start,'scrubbing changes the map demonstration');
-  assert.equal(await evaluate(`document.querySelector('#mhPreviewTime').textContent`),'00:08.00');
-  await evaluate(`document.querySelector('#mhPreviewPlay').click()`);await sleep(250);
-  assert.equal(await evaluate(`document.querySelector('#mhPreviewPlay').getAttribute('aria-pressed')`),'true');
-  assert.ok(await evaluate(`Number(document.querySelector('#mhPreviewSeek').value)<100`),'preview playback advances and loops');
-  await evaluate(`document.querySelector('#mhPreviewPlay').click()`);
+  await evaluate(`window.scrollTo(0,0)`);
+  const projectBefore=await evaluate(`localStorage.getItem('frameflow-map-v1')`);
+  await evaluate(`document.querySelector('#mhWarSeek').value='50';document.querySelector('#mhWarSeek').dispatchEvent(new Event('input',{bubbles:true}))`);
+  await waitFor(`document.querySelector('#mhWarTime').textContent==='00:05.0'`);
+  const start=await evaluate(`document.querySelector('[data-war-stage=hero] canvas').toDataURL()`);
+  await evaluate(`document.querySelector('#mhWarSeek').value='240';document.querySelector('#mhWarSeek').dispatchEvent(new Event('input',{bubbles:true}))`);
+  await waitFor(`document.querySelector('#mhWarTime').textContent==='00:24.0'`);
+  assert.notEqual(await evaluate(`document.querySelector('[data-war-stage=hero] canvas').toDataURL()`),start,'scrubbing changes the campaign demonstration');
+  assert.equal(await evaluate(`document.querySelector('[data-war-stage=hero]').dataset.act`),'2','the hero advances to the war act');
+  await evaluate(`document.querySelector('#mhWarPlay').click()`);await sleep(250);
+  assert.equal(await evaluate(`document.querySelector('#mhWarPlay').getAttribute('aria-pressed')`),'true');
+  assert.ok(await evaluate(`Number(document.querySelector('#mhWarSeek').value)>240`),'campaign playback advances');
+  await evaluate(`document.querySelector('#mhWarPlay').click();document.querySelector('[data-war-jump="1"]').click()`);
+  await waitFor(`document.querySelector('[data-war-stage=hero]').dataset.act==='1'`);
+  assert.equal(await evaluate(`localStorage.getItem('frameflow-map-v1')`),projectBefore,'the landing demo does not modify the editor project');
+  await evaluate(`document.querySelector('.mh-nav a[href="#acts"]').click()`);
+  await waitFor(`location.hash==='#acts'&&Math.abs(document.getElementById('acts').getBoundingClientRect().top)<70`);
+  for(const [progress,act] of [[.05,'0'],[.5,'1'],[.94,'2']]){
+    await evaluate(`(()=>{const r=document.querySelector('.mh-acts-track').getBoundingClientRect();window.scrollTo(0,scrollY+r.top+(r.height-innerHeight)*${progress});})()`);
+    await waitFor(`document.querySelector('[data-acts]').dataset.act==='${act}'`);
+  }
   await evaluate(`document.querySelector('#landing a[href="#networks"]').click()`);
   await waitFor(`location.hash==='#networks'&&Math.abs(document.getElementById('networks').getBoundingClientRect().top)<70`);
   assert.equal(await evaluate(`document.body.classList.contains('landing')`),true,'feature anchors keep the landing page visible');
@@ -122,7 +134,7 @@ try {
   for(const width of [768,390]){
     await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
     await evaluate('window.scrollTo(0,0)');await sleep(100);
-    const layout=await evaluate(`(()=>{const root=document.getElementById('landing'),r=document.querySelector('.mh-nav').getBoundingClientRect();return{pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,navRight:r.right,heroRight:document.querySelector('.mh-preview').getBoundingClientRect().right,sections:[...root.querySelectorAll('.mh-section')].length};})()`);
+    const layout=await evaluate(`(()=>{const root=document.getElementById('landing'),r=document.querySelector('.mh-nav').getBoundingClientRect();return{pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,navRight:r.right,heroRight:document.querySelector('.mh-war-stage').getBoundingClientRect().right,sections:[...root.querySelectorAll('.mh-section')].length};})()`);
     assert.ok(layout.pageWidth<=width,`no horizontal page overflow at ${width}px: ${JSON.stringify(layout)}`);
     assert.ok(layout.navRight<=width&&layout.heroRight<=width,'navigation and map preview fit');
     assert.equal(layout.sections,12);
@@ -146,12 +158,14 @@ try {
     assert.equal(await evaluate(`document.title`),'FrameFlow — Map Studio','legacy links open Map Studio');
   }
   await evaluate(`localStorage.setItem('frameflow-mode','paper');location.reload()`);
-  await waitFor(`document.body.classList.contains('mode-map')&&document.querySelectorAll('#mDlCountry option').length>100`);
+  await waitFor(`document.body.classList.contains('mode-map')&&document.querySelectorAll('#mDlCountry option').length>100&&localStorage.getItem('frameflow-mode')==='map'`);
   assert.equal(await evaluate(`localStorage.getItem('frameflow-mode')`),'map','old studio preferences cannot restore a removed editor');
-  assert.equal(await evaluate(`document.getElementById('mhPreviewPlay').getAttribute('aria-pressed')`),'false','preview pauses in editor');
+  assert.equal(await evaluate(`document.getElementById('mhWarPlay').getAttribute('aria-pressed')`),'false','preview pauses in editor');
   await evaluate(`document.getElementById('homeLink').click()`);await waitFor(`document.body.classList.contains('landing')`);
   await cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   const motion=await evaluate(`getComputedStyle(document.querySelector('.mh-flow')).animationName`);assert.equal(motion,'none','reduced motion stops decorative animation');
+  assert.equal(await evaluate(`document.querySelector('#mhWarPlay').getAttribute('aria-pressed')`),'false','reduced motion pauses campaign autoplay');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.mh-acts-sticky')).position`),'relative','reduced motion removes sticky scroll choreography');
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-story-stage svg')).every(svg=>svg.animationsPaused())`),true,'reduced motion pauses all SVG atlas animations');
   assert.deepEqual(errors,[],'no browser runtime errors');
   console.log('Map-only landing content, all sections, unique IDs, preview controls, anchor routing, desktop/tablet/mobile layout, reduced motion and editor entry passed');

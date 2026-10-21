@@ -1,0 +1,166 @@
+/* FrameFlow landing, war layer. Loads after landing-map.css and only restyles #landing.
+   Palette: abyss (#070c11), parchment (#efe6d2), aged brass (#dfc18a), crimson (#c8402f / #ff6b4a), steel (#2f6a9c / #9fd0f5). */
+body.landing{background:#070c11}
+#landing{--mh-bg:#070c11;--mh-surface:#0e161d;--mh-border:#dac59c24;--mh-text:#efe6d2;--mh-muted:#9ea8aa;--mh-accent:#dfc18a;
+  --war-red:#c8402f;--war-red-hot:#ff6b4a;--war-steel:#2f6a9c;--war-steel-hot:#9fd0f5;
+  --mh-display:'Big Shoulders Display','Barlow Condensed','Arial Narrow',Impact,sans-serif;
+  background:radial-gradient(ellipse at 85% 0,#3a2a1a30,transparent 40%),#070c11}
+
+/* Poster-weight headlines */
+#landing h2{font:900 clamp(42px,5.6vw,92px)/.92 var(--mh-display);letter-spacing:.004em;text-transform:uppercase}
+#landing h2 em{font:inherit;color:inherit;letter-spacing:inherit}
+#landing .mh-section-heading>p{font-size:14px}
+#landing .mh-campaign-copy>h3,#landing .mh-relief-notes h3,#landing .mh-museum-heading h3{font-family:var(--mh-display);font-weight:800;text-transform:uppercase;letter-spacing:.01em;line-height:.95}
+#landing .mh-campaign-copy>h3{font-size:clamp(38px,4vw,58px)}
+#landing .mh-primary{color:#1b140a}
+#landing .mh-primary:hover{background:#f3dcae}
+
+/* A serrated front line closes every section */
+#landing .mh-section,#landing .mh-acts{position:relative}
+#landing .mh-section{border-bottom:0}
+#landing .mh-section::after{content:'';position:absolute;left:0;right:0;bottom:0;height:9px;opacity:.5;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='9'%3E%3Cpath d='M0 0L9 8 18 0' fill='none' stroke='%23dfc18a' stroke-width='1.2'/%3E%3C/svg%3E") repeat-x}
+
+/* ---------------------------------------------------------------- Hero: the war table */
+#landing .mh-war{position:relative}
+#landing .mh-war-stage{position:relative;height:clamp(640px,calc(100svh - 98px),960px);overflow:hidden;background:#060b10;isolation:isolate;cursor:crosshair;border-bottom:1px solid #dfc18a33}
+#landing .mh-war-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#landing .mh-war-grain{position:absolute;inset:0;pointer-events:none;opacity:.14;mix-blend-mode:overlay;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+#landing .mh-war-scrim{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,#060b10f2 0,#060b10cc 28%,#060b1000 56%),linear-gradient(0deg,#060b10f0 0,#060b1000 42%)}
+#landing .mh-war-copy{position:absolute;z-index:3;left:max(40px,calc((100% - 1360px)/2 + 0px));bottom:104px;max-width:min(680px,52%);cursor:default}
+#landing .mh-war-live{display:flex;align-items:center;gap:10px;font:500 12px/1 'DM Sans',sans-serif;color:#e8d4a6;margin-bottom:20px}
+#landing .mh-war h1{font:900 clamp(44px,6.3vw,104px)/.88 var(--mh-display);white-space:nowrap;letter-spacing:-.005em;text-transform:uppercase;color:#efe6d2;margin:0}
+#landing .mh-war-line{display:block;color:#efe6d233;transition:color .7s,transform .7s cubic-bezier(.2,.7,.2,1),text-shadow .7s}
+#landing .mh-war-line.is-on{color:#fff1d8;transform:translateX(18px);text-shadow:0 0 38px #ff6b4a55}
+#landing [data-act="1"] .mh-war-line.is-on{text-shadow:0 0 42px #ff6b4a99}
+#landing [data-act="2"] .mh-war-line.is-on{text-shadow:0 0 46px #ff6b4acc}
+#landing .mh-war-lede{max-width:520px;margin:26px 0 24px;font-size:15px;line-height:1.75;color:#c3c8c3}
+#landing .mh-war-cta{display:flex;flex-wrap:wrap;align-items:center;gap:26px}
+#landing .mh-war-cta .mh-button.mh-primary{animation:war-pulse 3.2s ease-in-out infinite}
+@keyframes war-pulse{0%,100%{box-shadow:0 0 0 0 #ff6b4a00}50%{box-shadow:0 0 0 9px #ff6b4a22}}
+#landing .mh-hero-explore{font-size:13px;font-weight:600;color:#e8d4a6;border-bottom:1px solid #e8d4a655;padding-bottom:3px}
+#landing .mh-hero-explore:hover{color:#fff;border-color:#fff}
+#landing .mh-war .mh-small-note{display:block;margin-top:16px;color:#8d9795}
+
+#landing .mh-war-panel{position:absolute;z-index:3;right:max(40px,calc((100% - 1360px)/2));bottom:104px;width:300px;padding:0 0 0 22px;border-left:2px solid #ff6b4a;pointer-events:none}
+#landing .mh-war-panel.swap{animation:war-swap .7s cubic-bezier(.2,.7,.2,1)}
+@keyframes war-swap{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+#landing .mh-war-year{font:900 clamp(72px,8vw,116px)/.8 var(--mh-display);color:#efe6d2;letter-spacing:.01em;font-variant-numeric:tabular-nums;text-shadow:0 4px 30px #000a}
+#landing .mh-war-panel-title{margin-top:14px;font:800 24px/1.05 var(--mh-display);text-transform:uppercase;letter-spacing:.02em;color:#ffd9bf}
+#landing .mh-war-panel-text{margin-top:8px;font-size:13px;line-height:1.6;color:#c3c8c3}
+#landing .mh-war-power{margin-top:18px;display:grid;gap:5px}
+#landing .mh-war-power>div:not(.mh-war-bar){display:flex;justify-content:space-between;font-size:12px;color:#d6d9d2}
+#landing .mh-war-power b{font:600 12px monospace;color:#fff;font-variant-numeric:tabular-nums}
+#landing .mh-war-bar{height:4px;background:#ffffff14;margin-bottom:8px}
+#landing .mh-war-bar i{display:block;height:100%;width:0;transition:width .25s linear}
+#landing .mh-war-bar .red{background:linear-gradient(90deg,#c8402f,#ff6b4a)}
+#landing .mh-war-bar .blue{background:linear-gradient(90deg,#2f6a9c,#9fd0f5)}
+#landing .mh-war-coord{position:absolute;z-index:3;top:calc(5.5% + 14px);right:max(40px,calc((100% - 1360px)/2));font:11px monospace;color:#d9c18c;letter-spacing:.08em;pointer-events:none}
+
+#landing .mh-war-controls{position:absolute;z-index:4;left:max(40px,calc((100% - 1360px)/2));right:max(40px,calc((100% - 1360px)/2));bottom:calc(5.5% + 10px);display:flex;align-items:center;gap:18px;cursor:default}
+#landing .mh-war-controls button:not([data-war-jump]){display:inline-flex;align-items:center;gap:9px;min-width:92px;padding:8px 12px;background:#0b1218cc;border:1px solid #dfc18a66;border-radius:4px;color:#f1e3bf;font:600 12px 'DM Sans',sans-serif;backdrop-filter:blur(6px)}
+#landing .mh-war-controls button:not([data-war-jump]):hover{background:#1c2229;border-color:#dfc18a}
+#landing .mh-war-controls .mh-demo-time{color:#f1e3bf;min-width:58px}
+#landing .mh-war-controls .mh-preview-length{color:#8d9795}
+#landing .mh-war-scrub{position:relative;flex:1;min-width:0;padding-bottom:20px}
+#landing .mh-war-scrub input{display:block;width:100%;height:24px;margin:0;padding:0;border:0;background:transparent;accent-color:#ff6b4a;cursor:pointer}
+#landing .mh-war-ticks{position:absolute;left:0;right:0;bottom:0;height:16px;pointer-events:none}
+#landing .mh-war-ticks button{position:absolute;top:0;padding:0 0 0 7px;border:0;border-left:1px solid #dfc18a77;background:none;color:#cdb98d;font:500 11px/14px 'DM Sans',sans-serif;pointer-events:auto;cursor:pointer}
+#landing .mh-war-ticks button:hover{color:#fff}
+#landing .mh-war-ticks button:nth-child(1){left:0}
+#landing .mh-war-ticks button:nth-child(2){left:32%}
+#landing .mh-war-ticks button:nth-child(3){left:64%}
+
+#landing .mh-war .mh-container{padding-top:6px}
+#landing .mh-capability-ribbon{border-bottom-color:#dfc18a22}
+
+/* ---------------------------------------------------------------- Three acts, scrolled */
+#landing .mh-acts-track{position:relative;height:430svh}
+#landing .mh-acts-sticky{position:sticky;top:0;height:100svh;overflow:hidden;background:#060b10;isolation:isolate}
+#landing .mh-acts-scrim{background:linear-gradient(90deg,#060b10f2 0,#060b10c0 34%,#060b1000 62%),linear-gradient(0deg,#060b10f5 0,#060b1000 36%),linear-gradient(180deg,#060b10dd 0,#060b1000 26%)}
+#landing .mh-acts-inner{box-sizing:border-box;position:relative;z-index:3;height:100%;display:grid;grid-template-rows:auto 1fr auto;padding-block:34px 28px;pointer-events:none}
+#landing .mh-acts-inner a,#landing .mh-acts-inner button{pointer-events:auto}
+#landing .mh-acts-head .mh-eyebrow{margin-bottom:12px}
+#landing .mh-acts-head h2{font-size:clamp(34px,4.2vw,64px)}
+#landing .mh-acts-rail{position:absolute;right:0;top:40px;display:flex;gap:22px;list-style:none;margin:0;padding:0;font-size:12px;color:#7b8584}
+#landing .mh-acts-rail li{position:relative;padding-left:16px;transition:color .4s}
+#landing .mh-acts-rail li::before{content:'';position:absolute;left:0;top:4px;width:8px;height:8px;border:1.5px solid currentColor;border-radius:50%;transition:background .4s}
+#landing .mh-acts-rail li.is-done{color:#f1e3bf}
+#landing .mh-acts-rail li.is-done::before{background:#ff6b4a;border-color:#ff6b4a}
+#landing .mh-acts-chapters{position:relative;align-self:center;min-height:300px}
+#landing .mh-act{position:absolute;left:0;top:50%;max-width:470px;opacity:0;transform:translateY(-44%);transition:opacity .55s,transform .7s cubic-bezier(.2,.7,.2,1);pointer-events:none}
+#landing .mh-act.is-on{opacity:1;transform:translateY(-50%)}
+#landing .mh-act-num{display:inline-block;margin-bottom:10px;padding:3px 10px;background:#ff6b4a;color:#1b0d08;font:800 15px/1.2 var(--mh-display);letter-spacing:.06em;text-transform:uppercase}
+#landing .mh-act h3{font:900 clamp(48px,6.2vw,96px)/.88 var(--mh-display);text-transform:uppercase;letter-spacing:0;color:#fff1d8}
+#landing .mh-act p{margin-top:18px;max-width:430px;font-size:15px;line-height:1.75;color:#c3c8c3}
+#landing .mh-act ul{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:7px}
+#landing .mh-act li{padding-left:16px;border-left:2px solid #ff6b4a;font-size:13px;color:#e8d4a6}
+
+#landing .mh-acts-timeline{width:min(780px,100%);margin-bottom:2px;padding:12px 16px 10px;background:#0b1218d9;border:1px solid #dfc18a2e;backdrop-filter:blur(8px)}
+#landing .mh-acts-tl-head{display:flex;justify-content:space-between;font-size:11px;color:#9ea8aa;margin-bottom:8px}
+#landing .mh-acts-tl-head b{font:500 11px monospace;color:#f1e3bf}
+#landing .mh-tl-rows{position:relative;display:grid;gap:4px}
+#landing .mh-tl-row{display:grid;grid-template-columns:84px 1fr;align-items:center;font-size:11px;color:#8d9795}
+#landing .mh-tl-row>div{position:relative;height:14px;background:#ffffff08}
+#landing .mh-tl-row i{position:absolute;top:2px;height:10px}
+#landing .mh-tl-row .c{left:calc(var(--a)*100%);width:calc((var(--b) - var(--a))*100%);border-radius:2px}
+#landing .mh-tl-row .sea{background:#dfc18a99}
+#landing .mh-tl-row .red{background:#c8402fcc}
+#landing .mh-tl-row .blue{background:#2f6a9ccc}
+#landing .mh-tl-row .fire{background:#ff9a4acc}
+#landing .mh-tl-row .d{left:calc(var(--a)*100%);width:9px;height:9px;top:2.5px;margin-left:-4px;background:#efe6d2;transform:rotate(45deg)}
+#landing .mh-tl-playhead{--ph:0;position:absolute;top:-2px;bottom:-2px;left:calc(84px + (100% - 84px)*var(--ph));width:2px;margin-left:-1px;background:#ff6b4a;box-shadow:0 0 10px #ff6b4a}
+
+/* ---------------------------------------------------------------- War tint for existing sections */
+#landing [data-scene="war"]{--story-ink:#ff8a68}
+#landing [data-scene="conquest"]{--story-ink:#ff9a6a}
+#landing .mh-campaign-band{background:radial-gradient(ellipse at 8% 100%,#c8402f30,transparent 55%),radial-gradient(ellipse at 95% 0,#2f6a9c26,transparent 50%),#0a0f14;border-color:#c8402f44}
+#landing .mh-front-demo-line{stroke:#ff6b4a;filter:drop-shadow(0 0 7px #ff6b4acc)}
+#landing .mh-front-shadow{stroke:#000a}
+#landing .mh-front{stroke:#ff6b4a}
+#landing .mh-detail-grid{border-top-color:#c8402f44}
+
+/* ---------------------------------------------------------------- Small screens and reduced motion */
+@media(max-width:1100px){
+  #landing .mh-war-panel{width:240px}
+  #landing .mh-war-copy{max-width:58%}
+}
+@media(max-width:800px){
+  #landing .mh-war-stage{height:clamp(640px,calc(100svh - 82px),820px)}
+  #landing .mh-war-panel,#landing .mh-war-coord{display:none}
+  #landing .mh-war-copy{left:20px;right:20px;max-width:none;bottom:96px}
+  #landing .mh-war h1{font-size:clamp(34px,10.4vw,84px)}#landing .mh-war-line.is-on{transform:none}
+  #landing .mh-war-lede{font-size:14px;margin:18px 0 18px}
+  #landing .mh-war-scrim{background:linear-gradient(0deg,#060b10 0,#060b10dd 38%,#060b1000 72%)}
+  #landing .mh-war-controls{left:20px;right:20px;gap:12px}
+  #landing .mh-war-controls .mh-preview-length,#landing [data-play-text]{display:none}
+  #landing .mh-war-controls button:not([data-war-jump]){min-width:0;padding:8px 10px}
+  #landing .mh-acts-rail{display:none}
+  #landing .mh-acts-timeline{display:none}
+  #landing .mh-acts-scrim{background:linear-gradient(0deg,#060b10 0,#060b10e0 42%,#060b1000 75%),linear-gradient(180deg,#060b10dd 0,#060b1000 30%)}
+  #landing .mh-acts-chapters{align-self:end;min-height:340px}
+  #landing .mh-act{top:auto;bottom:0;transform:translateY(14px)}
+  #landing .mh-act.is-on{transform:none}
+  #landing .mh-act h3{font-size:clamp(44px,13vw,72px)}
+}
+@media(max-height:700px){#landing .mh-acts-timeline{display:none}}
+@media(prefers-reduced-motion:reduce){
+  #landing .mh-acts-track{height:auto}
+  #landing .mh-acts-sticky{position:relative;height:auto;min-height:100svh}
+  #landing .mh-acts-inner{height:auto;min-height:100svh;pointer-events:auto}
+  #landing .mh-acts-chapters{min-height:0;display:grid;gap:34px;padding-block:30px 40px}
+  #landing .mh-act{position:static;opacity:1;transform:none}
+  #landing .mh-war-stage{cursor:default}
+}
+
+/* Leftover greens in the campaign demo, moved into the war palette */
+#landing .mh-front-demo{background:#0b1117;border-color:#dfc18a33}
+#landing .mh-front-demo text{fill:#a89a78}
+#landing .mh-ghost-front{stroke:#dfc18a66}
+#landing .mh-campaign-pin circle{fill:#2a1712;stroke:#ff9a6a}
+#landing .mh-campaign-pin path{stroke:#ff9a6a}
+#landing .mh-demo-key-strip{color:#d9c18c;border-top-color:#dfc18a2e}
+#landing .mh-mini-icon{color:#ff9a6a}
+#landing .mh-campaign-copy .mh-demo-tip{color:#d9a27d}

@@ -279,17 +279,6 @@ function buildStaticUI() {
   $$('[data-madd]').forEach(el => el.onclick = () => addAction(el.dataset.madd));
   $$('[data-mpre]').forEach(el => el.onclick = () => addShot(el.dataset.mpre));
   $('#mTheme').innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
-  for(const shape of ['front','road','railway','river']){
-    const button=document.createElement('button');button.type='button';button.dataset.mapFeature=shape;button.textContent=SHAPES[shape].label;
-    button.onclick=()=>addAction('shape',{shape,color:SHAPES[shape].color,name:SHAPES[shape].label,revealPath:shape==='front'?false:true,networkAnimation:'both',flowSpeed:24});$('#mAddGrid').append(button);
-  }
-  for(const [glyph,label,symbol] of [['car','Vehicle','↝'],['house','Building','⌂'],['tree','Nature','♧']]){
-    const button=document.createElement('button');button.type='button';button.dataset.mapObjectAdd=glyph;
-    button.title=`Add ${OBJECT_ICONS[glyph].label.toLowerCase()}`;
-    const icon=document.createElement('b');icon.textContent=symbol;button.append(icon,document.createTextNode(label));
-    button.onclick=()=>addAction('object',{glyph,color:OBJECT_ICONS[glyph].color,name:OBJECT_ICONS[glyph].label});
-    $('#mAddGrid').append(button);
-  }
   $('#mImagery').innerHTML = Object.entries(IMAGERY_SOURCES).map(([k, x]) => `<option value="${k}">${x.label}</option>`).join('');
   if (!$('#mTexture')) $('#mImageryBox').insertAdjacentHTML('afterend', `
     <details open id="mTextureSection">

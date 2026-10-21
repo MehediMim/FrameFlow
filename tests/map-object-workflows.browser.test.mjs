@@ -100,8 +100,8 @@ try {
   await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);p=await saved();E.validateMapProject(p);assert.equal(p.actions[0].objectKeys.length,4);assert.equal(p.actions[1].path.length,3);assert.equal(p.armyPresets[0].name,'Red siege guard');
   // New miniatures must work as saved editor objects, not only as gallery art.
   const {MODERN_OBJECTS,CIVILIAN_OBJECTS}=await import('../map-modern-objects.mjs');
-  await evaluate(`document.querySelector('[data-map-object-add="car"]').click()`);
-  assert.equal((await saved()).actions.at(-1).glyph,'car','civilian quick add creates the requested object');
+  await evaluate(`document.querySelector('[data-madd="object"]').click()`);await change('#mInspector [data-mf="glyph"]','car');
+  assert.equal((await saved()).actions.at(-1).glyph,'car','civilian vehicles are selected inside Object');
   for(const [glyph,icon] of Object.entries({...MODERN_OBJECTS,...CIVILIAN_OBJECTS})){
     await change('#mInspector [data-mf="glyph"]',glyph);
     const project=await saved();E.validateMapProject(JSON.parse(JSON.stringify(project)));

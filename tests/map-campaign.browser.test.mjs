@@ -72,7 +72,8 @@ try {
   const select=id=>click('[data-mid="'+id+'"]');
   await evaluate(`(async()=>{const E=await import('./map-engine.mjs');const p=E.newMapProject();p.frames=360;p.camera.init={lon:8,lat:48,zoom:4,bearing:0,pitch:0};localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
-  await click('[data-map-feature="front"]');
+  assert.equal(await evaluate(`document.querySelectorAll('#mAddGrid [data-map-feature],#mAddGrid [data-map-object-add]').length`),0,'specialized tools stay inside Arrow / zone and Object');
+  await click('[data-madd="shape"]');await change('[data-mf="shape"]','front');
   for(const p of [[6,43],[7,47],[8,51]])await mapClick(...p);await enter();
   let p=await stored(),front=p.actions.at(-1);assert.equal(front.path.length,3);
   await click('[data-path-capture]');await seek(2);await click('[data-path-edit]');
@@ -83,7 +84,7 @@ try {
   console.log('Front-line drawing, point dragging, shape keys and timeline diamonds passed');
   await seek(0);
   for(const [shape,path] of [['road',[[-3,44],[2,46],[6,48]]],['railway',[[3,43],[6,45],[10,46]]],['river',[[13,51],[13,48],[15,45]]]]){
-    await click('[data-map-feature="'+shape+'"]');for(const point of path)await mapClick(...point);await enter();await change('[data-mf="networkAnimation"]','both');
+    await click('[data-madd="shape"]');await change('[data-mf="shape"]',shape);for(const point of path)await mapClick(...point);await enter();await change('[data-mf="networkAnimation"]','both');
     assert.equal((await stored()).actions.at(-1).shape,shape);
   }
   await click('[data-madd="highlight"]');await change('[data-area-mode]','region');await click('[data-area-draw]');

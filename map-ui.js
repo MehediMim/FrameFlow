@@ -33,7 +33,7 @@ import { trimMapHistory } from './map-history.mjs';
 import { installCampaignUI } from './map-campaign-ui.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
-import { measureShape, measurementText, resizeShape } from './map-shape-measurements.mjs';
+import { measureShape, measurementText } from './map-shape-measurements.mjs';
 import { planeRoute } from './map-engine.mjs?v=highlight-extent-1';
 let cameraProperty = 'all', objectProperty = 'all';
 const objectTypeFilters = new Map();
@@ -312,7 +312,7 @@ function addAction(type,extra={}) {
   const dc = detailCountry();
   if (dc && !geo?.details?.has(dc)) { notify(detailErrors.has(dc) ? `${dc} detail could not load. Check map settings for Retry.` : `Loading ${dc} detail. Try again in a moment.`); return; }
   pause(); checkpoint();
-  const a = makeAction(type, frame,type==='shape'?{curve:'straight',revealPath:false,showMeasurement:true,measurementOnly:!extra.shape||['arrow','retreat','zone','noFly'].includes(extra.shape),...extra}:extra); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
+  const a = makeAction(type, frame,extra); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
   if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
   if (type === 'label') { const [lon, lat] = centerLonLat(); Object.assign(a, { labelPlacement: 'map', place: { kind: 'point', name: 'Map position', lon: ((lon + 180) % 360 + 360) % 360 - 180, lat }, offsetX: 0, offsetY: 0, labelStyle: { ...DEFAULT_LABEL_STYLE, ...(proj.theme==='documentary'?DOCUMENTARY_LABEL:LABEL_PRESETS.atlasGround.style) } }); }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
@@ -595,22 +595,16 @@ function scenePanelFields(a) {
     + F.range('fadeSeconds','Fade in / out (seconds)',d.fadeSeconds,0,2,.05,x=>x.toFixed(2)+'s');
 }
 function shapeMeasurementFields(a) {
+  const area=['zone','noFly'].includes(a.shape);
+  const toggle=F.chk('showMeasurement', 'Show measurement', !!a.showMeasurement);
+  if(!a.showMeasurement)return toggle;
   const path=pathDraw?.id===a.id?a.path:pathAt(a,frame),current={...a,path};
   const measurement=measureShape(current,planeRoute(geo,current));
-  const area=measurement.kind==='area',keyed=!!a.pathKeys?.length;
-  const disabled=path.length<(area?3:2)||measurement.value<1e-9||!!pathDraw||(keyed&&(frame<a.start||frame>a.start+a.dur));
-  return '<div class="section-title m-sep">MEASUREMENTS</div>'
-    +F.sel('measurementUnit','Units',a.measurementUnit||'metric',[['metric','Kilometres / km²'],['imperial','Miles / mi²']])
-    +F.chk('showMeasurement',area?'Show area on map':'Show distance on map',!!a.showMeasurement)
-    +(['arrow','retreat','zone','noFly'].includes(a.shape)?F.chk('measurementOnly', 'Show measurement text only', !!a.measurementOnly):'')
-    +'<p class="mini-label">Pick two points for a distance, or draw a closed zone for its area. Clear text only to also show the arrow or zone. New measurements stay static throughout the timeline bar.</p>'
-    +`<p class="mini-label" data-shape-measurement>Current ${measurement.kind}: ${measurementText(measurement)}</p>`
-    +'<details><summary>Resize geometry</summary>'
-    +`<label>${area?'Area':'Length'} (${measurement.unit})<input data-shape-size type="number" min="0.01" step="0.01" value="${+measurement.value.toFixed(4)}" ${disabled?'disabled':''}></label>`
-    +`<button type="button" data-shape-resize ${disabled?'disabled':''}>Apply ${measurement.kind}</button>`
-    +`<p class="mini-label">${disabled?'Finish drawing a non-zero '+measurement.kind+(keyed?' and move inside this item’s timeline bar':'')+' to resize.':area?'Resizes around the zone center.':'Resizes the full path, keeping its first point fixed.'} ${keyed?'Changes create a shape keyframe at the playhead. ':''}Measurements follow the full shape at the playhead, including curved paths.</p>`
-    +'</details><div class="section-title m-sep">APPEARANCE</div>';
+  return toggle
+    +F.sel('measurementUnit','Measurement units',a.measurementUnit||'metric',[['metric','Kilometres / km\u00b2'],['imperial','Miles / mi\u00b2']])
+    +`<p class="mini-label" data-shape-measurement>${area?'Area':'Distance'}: ${measurementText(measurement)}</p>`;
 }
+
 function actionFields(a) {
   switch (a.type) {
     case 'group': return campaign.groupFields(a);
@@ -624,7 +618,7 @@ function actionFields(a) {
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
-    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + shapeMeasurementFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '') + '<details><summary>Optional animation</summary>' + campaign.pathFields(a) + '</details>';
+    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + shapeMeasurementFields(a) + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '') + '<details><summary>Optional animation</summary>' + campaign.pathFields(a) + '</details>';
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
       const mv = a.mode === 'move' || a.mode === 'path' ? a.mode : 'stay', ownColor = a.badge || a.showIcon === false;
@@ -815,7 +809,7 @@ function bindInspector(it) {
       for (const [k, cat, base] of [['glyph', OBJECT_ICONS, 'Object'], ['fx', EFFECTS, 'Effect'], ['shape', SHAPES, 'Arrow / zone']]) if (key === k) { // new look: follow its default color and name unless the user changed them
         const old = cat[it[k]], nu = cat[v]; if (!nu) return;
         if (it.color === old?.color) it.color = nu.color; if (!it.name || it.name === base || it.name === old?.label) it.name = nu.label;
-        it[k] = v; if(k==='shape'&&!['arrow','retreat','zone','noFly'].includes(v))it.measurementOnly=false; if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
+        it[k] = v; if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
       }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__pinMove') {
@@ -854,19 +848,10 @@ function bindInspector(it) {
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
-      writeObjectValue(it,key,v); changed(); if (key === 'measurementUnit' || key === 'showMeasurement' || key === 'measurementOnly' || (key === 'curve' && it.type === 'shape') || key === 'highlightExtent' || key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      writeObjectValue(it,key,v); changed(); if (key === 'measurementUnit' || key === 'showMeasurement' || (key === 'curve' && it.type === 'shape') || key === 'highlightExtent' || key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
-  const resizeButton=$('#mInspector [data-shape-resize]');
-  if(resizeButton)resizeButton.onclick=()=>{
-    const input=$('#mInspector [data-shape-size]');
-    if(!input||resizeButton.disabled)return;
-    try{
-      const path=resizeShape({...it,path:pathAt(it,frame)},input.valueAsNumber,a=>planeRoute(geo,a));
-      pause();checkpoint();it.path=path;syncPathEnds(it);changed();renderInspector();notify('Shape '+(['zone','noFly'].includes(it.shape)?'area':'length')+' updated');
-    }catch(error){notify(error.message);renderInspector();}
-  };
   const highlightReset = $('#mInspector [data-highlight-reset]');
   if (highlightReset) highlightReset.onclick = () => { checkpoint(); delete it.highlightOrigin; changed(); renderInspector(); };
   const highlightRadiusPick = $('#mInspector [data-highlight-radius]');

@@ -170,14 +170,12 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   const u = v.unit, k = Math.round(v.cx - r.mid), p = a.revealPath===false?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
   for (let i = 0; i < r.n; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); P.push(q.z < v.near ? null : q); }
   const zone = a.shape === 'zone' || a.shape === 'noFly', w = (a.width || 6) * u;
-  // Measurement annotations use the complete geometry and never follow a reveal.
-  if (a.measurementOnly) {
-    if(zone&&a.path.length<3)return;
-    const pts=P.filter(Boolean);if(pts.length<(zone?3:2))return;
-    const anchor=zone?{x:pts.reduce((sum,q)=>sum+q.x,0)/pts.length,y:pts.reduce((sum,q)=>sum+q.y,0)/pts.length}:H.project(v,(r.X[0]+r.X[r.n-1])/2+k,(r.Y[0]+r.Y[r.n-1])/2);
+  // Keep the full measurement anchored to the shape while its geometry reveals.
+  if (a.showMeasurement && (!zone || a.path.length>=3)) {
+    const pts=P.filter(Boolean);
+    const anchor=zone?(pts.length>=3?{x:pts.reduce((sum,q)=>sum+q.x,0)/pts.length,y:pts.reduce((sum,q)=>sum+q.y,0)/pts.length}:null):H.project(v,(r.X[0]+r.X[r.n-1])/2+k,(r.Y[0]+r.Y[r.n-1])/2);
     const label=shapeLabel(a,r);
-    if(label&&(zone||anchor.z>=v.near))labels.push({x:anchor.x,y:anchor.y,text:label,alpha:1,scale:1});
-    return;
+    if(label&&anchor&&(zone||anchor.z>=v.near))labels.push({x:anchor.x,y:anchor.y,text:label,alpha:1,scale:1});
   }
   let text = null;
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
@@ -186,7 +184,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     drawNetwork(c,clipPolyline(visible,v.W,v.H,40*u),a,u,(frame-a.start)/(v.fps||30));
     const end=visible.filter(Boolean).at(-1);c.restore();
     const label=shapeLabel(a,r);
-    if(label&&end)labels.push({x:end.x,y:end.y-16*u,text:label,alpha:1,scale:1});
+    if(!a.showMeasurement&&label&&end)labels.push({x:end.x,y:end.y-16*u,text:label,alpha:1,scale:1});
     return;
   }
   if (zone) {
@@ -234,5 +232,5 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   }
   c.restore();
   const label=shapeLabel(a,r);
-  if (label && text) labels.push({ x: text.x, y: text.y, text: label, alpha: Math.min(1, p * 2), scale: 1 });
+  if (!a.showMeasurement && label && text) labels.push({ x: text.x, y: text.y, text: label, alpha: Math.min(1, p * 2), scale: 1 });
 }

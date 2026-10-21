@@ -58,15 +58,19 @@ assert.doesNotThrow(()=>validateMapProject(JSON.parse(JSON.stringify(p))));
 for(const patch of [{showMeasurement:'yes'},{measurementUnit:'bad'}])assert.throws(()=>validateMapProject({...p,actions:[{...arrow,...patch}]}));
 console.log('Shape lengths, spherical areas, curves, dateline, units, resizing, anchors, keyed paths, validation and labels passed');
 
-// Static annotation labels render in full at the first frame, without geometry.
+// Measurement labels remain static while the arrow or zone reveals underneath.
 const H={actAlpha:()=>1,planeRoute:(_,a)=>route(a),ease:(_,p)=>p,actionProgress:()=>0,project:(_,x,y)=>({x,y,z:1})};
 const view={unit:1,cx:.5,near:0};
+let strokes=0;
+const c=new Proxy({}, {get:(_,key)=>key==='stroke'?()=>strokes++:()=>{},set:()=>true});
 for(const source of [arrow,square]){
-  const annotation={...source,measurementOnly:true,revealPath:true},first=[],later=[];
-  drawShape(H,{},view,null,annotation,0,first);
-  drawShape({...H,actionProgress:()=>1},{},view,null,annotation,80,later);
+  const annotation={...source,revealPath:true,measurementOnly:true},first=[],later=[];
+  const before=strokes;
+  drawShape(H,c,view,null,annotation,0,first);
+  drawShape({...H,actionProgress:()=>1},c,view,null,annotation,80,later);
   assert.equal(first.length,1,'measurement text is present at the first frame');
   assert.equal(first[0].alpha,1);
   assert.equal(first[0].text,shapeLabel(annotation,route(annotation)));
-  assert.deepEqual(first,later,'annotation position and text do not animate');
+  assert.deepEqual(first,later,'measurement position and text do not animate');
+  assert.ok(strokes>before,'arrow and zone geometry remains visible, including previously saved text-only items');
 }

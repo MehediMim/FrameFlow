@@ -8,6 +8,7 @@ import { MODERN_OBJECTS, CIVILIAN_OBJECTS } from './map-modern-objects.mjs';
 import { TIME_OBJECTS } from './map-time-objects.mjs';
 import { LANDMARK_OBJECTS } from './map-landmark-objects.mjs';
 import { PEOPLE_OBJECTS } from './map-people-objects.mjs';
+import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork } from './map-path-animation.mjs';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
 import { drawDamage, drawRubble } from './map-damage.mjs';
@@ -174,7 +175,8 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     const visible=['static','flow'].includes(a.networkAnimation)?P:revealPolyline(P,p);
     drawNetwork(c,clipPolyline(visible,v.W,v.H,40*u),a,u,(frame-a.start)/(v.fps||30));
     const end=visible.filter(Boolean).at(-1);c.restore();
-    if(a.showLabel&&a.label&&end)labels.push({x:end.x,y:end.y-16*u,text:a.label,alpha:1,scale:1});
+    const label=shapeLabel(a,r);
+    if(label&&end)labels.push({x:end.x,y:end.y-16*u,text:label,alpha:1,scale:1});
     return;
   }
   if (zone) {
@@ -221,5 +223,6 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     text = { x: end.x, y: end.y - 18 * u };
   }
   c.restore();
-  if (a.showLabel && a.label && text) labels.push({ x: text.x, y: text.y, text: a.label, alpha: Math.min(1, p * 2), scale: 1 });
+  const label=shapeLabel(a,r);
+  if (label && text) labels.push({ x: text.x, y: text.y, text: label, alpha: Math.min(1, p * 2), scale: 1 });
 }

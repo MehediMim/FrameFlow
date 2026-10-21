@@ -17,6 +17,8 @@ Project duration has no fixed cap. Existing Map Studio projects and local saves 
 
 Add an **Object**, then use **Object type** in Properties to choose **Famous landmarks & infrastructure** or **People & occupations**. The library includes 16 landmarks (including Padma Bridge and Bangladesh National Parliament) and 16 occupations. These objects support color changes, labels, movement, size and rotation keyframes, and video export.
 
+In **Arrow / zone → Properties → Measurements**, show the full path length or zone area on the map. Choose kilometres/km² or miles/mi², enter a **Length** or **Area**, and press **Apply** to resize. Arrows keep their first point fixed; zones resize around their center. Resizing a keyed shape adds a shape keyframe at the playhead. Measurements follow the drawn curve and update with shape animation; labels are included in PNG and video exports.
+
 ## Files
 
 - `map-ui.js`, `map-engine.mjs`, and `map-*.mjs`: map editing, rendering, animation, and export.

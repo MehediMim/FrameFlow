@@ -20,6 +20,7 @@ import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
+import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
 export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 
@@ -472,7 +473,7 @@ function pathRoute(a) {
   const W = [];
   for (const p of pathWorld(a)) if (!W.length || Math.hypot(p[0] - W[W.length - 1][0], p[1] - W[W.length - 1][1]) > 1e-7) W.push(p);
   if (W.length < 2) return null;
-  const curve = a.curve === 'straight' ? 'straight' : 'smooth', key = `path|${curve}|${W.map(p => p[0].toFixed(7) + ',' + p[1].toFixed(7)).join(';')}`, hit = routeCache.get(a.id);
+  const curve = a.curve === 'straight' ? 'straight' : 'smooth', key = `path|${curve}|${W.map(p => p[0].toFixed(12) + ',' + p[1].toFixed(12)).join(';')}`, hit = routeCache.get(a.id);
   if (hit && hit.key === key) return hit;
   const { pts, idx } = densifyPath(W, curve), N = pts.length, X = new Float64Array(N), Y = new Float64Array(N), cum = new Float64Array(N);
   let minX = Infinity, maxX = -Infinity;
@@ -1941,7 +1942,7 @@ export function validateMapProject(p) {
       if (a.battleIntensity !== undefined && (!Number.isInteger(a.battleIntensity) || !num(a.battleIntensity,1,12))) throw Error('Invalid battle intensity.');
     }
     if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
-    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); validatePathAnimation(a); }
+    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); validatePathAnimation(a); validateShapeMeasurement(a); }
     if (['object', 'effect', 'shape'].includes(a.type) && a.label !== undefined && (typeof a.label !== 'string' || a.label.length > 100)) throw Error('Invalid label.');
     if (((a.type !== 'label' || a.color !== undefined) && !col(a.color)) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
     if (a.opacity !== undefined && !num(a.opacity,0,1)) throw Error('Invalid opacity.');

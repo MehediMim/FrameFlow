@@ -32,6 +32,8 @@ import { trimMapHistory } from './map-history.mjs';
 import { installCampaignUI } from './map-campaign-ui.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
+import { measureShape, measurementText, resizeShape } from './map-shape-measurements.mjs';
+import { planeRoute } from './map-engine.mjs?v=highlight-extent-1';
 let cameraProperty = 'all', objectProperty = 'all';
 const objectTypeFilters = new Map();
 const OBJECT_CATEGORIES = [
@@ -590,6 +592,20 @@ function scenePanelFields(a) {
     + F.range('textScale','Text size',d.textScale,.6,2,.05,x=>x.toFixed(2)+'x')
     + F.range('fadeSeconds','Fade in / out (seconds)',d.fadeSeconds,0,2,.05,x=>x.toFixed(2)+'s');
 }
+function shapeMeasurementFields(a) {
+  const path=pathDraw?.id===a.id?a.path:pathAt(a,frame),current={...a,path};
+  const measurement=measureShape(current,planeRoute(geo,current));
+  const area=measurement.kind==='area',keyed=!!a.pathKeys?.length;
+  const disabled=path.length<(area?3:2)||measurement.value<1e-9||!!pathDraw||(keyed&&(frame<a.start||frame>a.start+a.dur));
+  return '<div class="section-title m-sep">MEASUREMENTS</div>'
+    +F.sel('measurementUnit','Units',a.measurementUnit||'metric',[['metric','Kilometres / km²'],['imperial','Miles / mi²']])
+    +F.chk('showMeasurement',area?'Show area on map':'Show length on map',!!a.showMeasurement)
+    +`<p class="mini-label" data-shape-measurement>Current ${measurement.kind}: ${measurementText(measurement)}</p>`
+    +`<label>${area?'Area':'Length'} (${measurement.unit})<input data-shape-size type="number" min="0.01" step="0.01" value="${+measurement.value.toFixed(4)}" ${disabled?'disabled':''}></label>`
+    +`<button type="button" data-shape-resize ${disabled?'disabled':''}>Apply ${measurement.kind}</button>`
+    +`<p class="mini-label">${disabled?'Finish drawing a non-zero '+measurement.kind+(keyed?' and move inside this item’s timeline bar':'')+' to resize.':area?'Resizes around the zone center.':'Resizes the full path, keeping its first point fixed.'} ${keyed?'Changes create a shape keyframe at the playhead. ':''}Measurements follow the full shape at the playhead, including curved paths.</p>`
+    +'<div class="section-title m-sep">APPEARANCE</div>';
+}
 function actionFields(a) {
   switch (a.type) {
     case 'group': return campaign.groupFields(a);
@@ -603,7 +619,7 @@ function actionFields(a) {
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
-    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '') + campaign.pathFields(a);
+    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + shapeMeasurementFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '') + campaign.pathFields(a);
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
       const mv = a.mode === 'move' || a.mode === 'path' ? a.mode : 'stay', ownColor = a.badge || a.showIcon === false;
@@ -832,10 +848,19 @@ function bindInspector(it) {
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }
-      writeObjectValue(it,key,v); changed(); if (key === 'highlightExtent' || key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
+      writeObjectValue(it,key,v); changed(); if (key === 'measurementUnit' || key === 'showMeasurement' || (key === 'curve' && it.type === 'shape') || key === 'highlightExtent' || key === 'highlightFill' || key === 'autoYear' || key === 'attackTargeted' || key === 'formation' || key === 'count' || key === 'labelPlacement' || key === 'autoFit' || key === 'showLabels' || key === 'showLabel' || key === 'showRouteLabels' || key === 'borderPartial' || key === 'badgeShape' || key === 'badgeStem' || key === 'badgeExit') renderInspector();
       if (key === 'showRouteLabels' || key === 'routeLabelMode') void ensureDetail();
     };
   });
+  const resizeButton=$('#mInspector [data-shape-resize]');
+  if(resizeButton)resizeButton.onclick=()=>{
+    const input=$('#mInspector [data-shape-size]');
+    if(!input||resizeButton.disabled)return;
+    try{
+      const path=resizeShape({...it,path:pathAt(it,frame)},input.valueAsNumber,a=>planeRoute(geo,a));
+      pause();checkpoint();it.path=path;syncPathEnds(it);changed();renderInspector();notify('Shape '+(['zone','noFly'].includes(it.shape)?'area':'length')+' updated');
+    }catch(error){notify(error.message);renderInspector();}
+  };
   const highlightReset = $('#mInspector [data-highlight-reset]');
   if (highlightReset) highlightReset.onclick = () => { checkpoint(); delete it.highlightOrigin; changed(); renderInspector(); };
   const highlightRadiusPick = $('#mInspector [data-highlight-radius]');
@@ -949,7 +974,7 @@ function renderAtlasLabelPanel() {
   });
 }
 function labelFields(a) {
-  if (!['plane', 'highlight', 'pin', 'label', 'object'].includes(a.type)) return '';
+    if (!['plane', 'highlight', 'pin', 'label', 'object', 'shape'].includes(a.type)) return '';
   return '<div class="section-title m-sep">LABEL STYLE</div>' + F.chk('__lscustom', 'Custom style for this label', !!a.labelStyle) + (a.labelStyle ? labelStyleHtml(labelStyleOf(proj, a), 'mItemLbl') : '<p class="mini-label">Using the project label style (Map settings → Label style).</p>');
 }
 

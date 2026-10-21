@@ -11,6 +11,7 @@ if(root){
     const line=root.querySelector('#mhFrontDemo');if(line)line.setAttribute('d',`M${275+curve*65} 44 Q${260+curve*145} 155 ${285+curve*40} 260`);
     const group=root.querySelector('#mhGroupDemo');if(group)group.setAttribute('transform',`translate(${150+curve*75} ${175-curve*35}) rotate(${curve*20})`);
     const head=root.querySelector('#mhDiagramPlayhead');if(head)head.style.left=`${24+t*66}%`;
+    const traveler=root.querySelector('[data-demo-traveler]');if(traveler)traveler.setAttribute('transform',`translate(${232+curve*172} ${208+curve*110}) rotate(${20+curve*40})`);
     const hundredths=Math.round(t*800);time.textContent=`00:${String(Math.floor(hundredths/100)).padStart(2,'0')}.${String(hundredths%100).padStart(2,'0')}`;
     seek.value=String(value);
   }
@@ -30,4 +31,29 @@ if(root){
   document.addEventListener('visibilitychange',()=>{if(document.hidden)setPlaying(false);});
   reduced.addEventListener('change',()=>{if(reduced.matches)setPlaying(false);});
   render(Number(seek.value));
+
+  const search=root.querySelector('#mhFeatureSearch');
+  const cards=[...root.querySelectorAll('[data-feature-category]')];
+  const filters=[...root.querySelectorAll('[data-feature-filter]')];
+  const status=root.querySelector('#mhFeatureStatus'),empty=root.querySelector('#mhFeatureEmpty');
+  let category='all';
+  const indexed=cards.map(card=>({card,text:card.textContent.toLocaleLowerCase()}));
+  function filterFeatures(){
+    const words=search.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    let count=0;
+    for(const {card,text} of indexed){
+      const visible=(category==='all'||card.dataset.featureCategory===category)&&words.every(word=>text.includes(word));
+      card.hidden=!visible;if(visible)count++;
+    }
+    for(const button of filters)button.setAttribute('aria-pressed',String(button.dataset.featureFilter===category));
+    status.textContent=`${count} of ${cards.length} feature groups${category==='all'&&!words.length?' to explore':' shown'}`;
+    empty.hidden=count!==0;
+  }
+  if(search){
+    root.querySelector('.mh-library-controls').hidden=false;
+    search.addEventListener('input',filterFeatures);
+    for(const button of filters)button.addEventListener('click',()=>{category=button.dataset.featureFilter;filterFeatures();});
+    root.querySelector('#mhFeatureReset').addEventListener('click',()=>{category='all';search.value='';filterFeatures();search.focus();});
+    filterFeatures();
+  }
 }

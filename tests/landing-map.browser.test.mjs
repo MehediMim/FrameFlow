@@ -65,7 +65,23 @@ try {
   assert.deepEqual(evaluateInfo.duplicates,[],'landing IDs do not collide with editor controls');
   assert.ok(evaluateInfo.title.includes('Map Animation Studio'));
   assert.ok(evaluateInfo.assets[0].loaded,'hero map image loads');
-  for(const id of ['features','terrain','regions','campaign','networks','units','animation','sharing','how','support'])assert.equal(await evaluate(`!!document.getElementById('${id}')`),true,'feature section '+id);
+  for(const id of ['features','journeys','markers','terrain','regions','campaign','networks','units','animation','sharing','feature-library','how','support'])assert.equal(await evaluate(`!!document.getElementById('${id}')`),true,'feature section '+id);
+  assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),16,'all map feature groups are initially discoverable');
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('#landing a[href^="#"]')).map(a=>a.hash).filter(hash=>hash!=='#map'&&hash!=='#home'&&!document.getElementById(hash.slice(1)))`),[],'every feature link has a destination');
+  await evaluate(`document.querySelector('[data-feature-filter="movement"]').click()`);
+  assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),4,'category filter shows movement features');
+  assert.equal(await evaluate(`document.querySelector('[data-feature-filter="movement"]').getAttribute('aria-pressed')`),'true');
+  await evaluate(`document.querySelector('#mhFeatureSearch').value='follow traveler';document.querySelector('#mhFeatureSearch').dispatchEvent(new Event('input',{bubbles:true}))`);
+  assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),2,'multi-word search combines with the selected category');
+  await evaluate(`document.querySelector('#mhFeatureSearch').value='zzzzmissing';document.querySelector('#mhFeatureSearch').dispatchEvent(new Event('input',{bubbles:true}))`);
+  assert.equal(await evaluate(`document.querySelector('#mhFeatureEmpty').hidden`),false,'empty search offers recovery');
+  await evaluate(`document.querySelector('#mhFeatureReset').click()`);
+  assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),16,'reset clears both search and category');
+  assert.equal(await evaluate(`document.activeElement.id`),'mhFeatureSearch','reset returns keyboard focus to search');
+  for(const section of ['journeys','markers','feature-library']){
+    await evaluate(`document.getElementById('${section}').scrollIntoView()`);
+    await writeFile(join(tmpdir(),`frameflow-map-landing-${section}.png`),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  }
   await evaluate(`document.querySelector('#mhPreviewSeek').value='0';document.querySelector('#mhPreviewSeek').dispatchEvent(new Event('input',{bubbles:true}))`);
   const start=await evaluate(`document.querySelector('[data-demo-front]').getAttribute('d')`);
   await evaluate(`document.querySelector('#mhPreviewSeek').value='100';document.querySelector('#mhPreviewSeek').dispatchEvent(new Event('input',{bubbles:true}))`);
@@ -86,7 +102,9 @@ try {
     const layout=await evaluate(`(()=>{const root=document.getElementById('landing'),r=document.querySelector('.mh-nav').getBoundingClientRect();return{pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,navRight:r.right,heroRight:document.querySelector('.mh-preview').getBoundingClientRect().right,sections:[...root.querySelectorAll('.mh-section')].length};})()`);
     assert.ok(layout.pageWidth<=width,`no horizontal page overflow at ${width}px: ${JSON.stringify(layout)}`);
     assert.ok(layout.navRight<=width&&layout.heroRight<=width,'navigation and map preview fit');
-    assert.equal(layout.sections,8);
+    assert.equal(layout.sections,11);
+    await evaluate(`document.getElementById('feature-library').scrollIntoView()`);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-library-card')).every(card=>{const r=card.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})`),true,'feature library fits viewport');
     await evaluate(`document.getElementById('units').scrollIntoView()`);await waitFor(`document.querySelector('.mh-troop-sheet img').complete&&document.querySelector('.mh-troop-sheet img').naturalWidth>0`);
     await evaluate('window.scrollTo(0,0)');
     if(width===390)await writeFile(join(tmpdir(),'frameflow-map-landing-mobile.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));

@@ -1,32 +1,12 @@
-// Shared collapsible Properties panels for Motion, Map and Paper Studio.
+// Map Studio collapsible Properties panels.
 // Existing inspector inputs/listeners are moved, not recreated, preserving editors.
-const TARGETS = ['inspector', 'mInspector', 'pInspector'];
+const TARGETS = ['mInspector'];
 const preferences = new Map();
 const CSS_SECTION = 'ff-inspector-section';
 const headingSelector = '.section-title';
 
 function keyFor(panel, title) {
   return `${panel.id}:${title.toLowerCase().replace(/\s+/g, ' ').trim()}`;
-}
-// Motion uses one hierarchy across every layer editor. Keep Map/Paper ordering.
-export function motionSectionPriority(title) {
-  const name = title.replace(/[^A-Z0-9 /&]/gi, '').trim().toUpperCase();
-  if (/TRANSFORM|3DSTYLE CAMERA/.test(name)) return -10;
-  if (/CONTENT|EDITOR|^GROUP$|^VIDEO$|CAMERA PRESET|AUDIO SOURCE/.test(name)) return 0;
-  if (/^GENERAL$|^DRAWN LINE$|SVG \/ VECTOR|^RECTANGLE$/.test(name)) return 5;
-  if (/^APPEARANCE$|TABLE APPEARANCE|COLORS & APPEARANCE|^VOLUME$/.test(name)) return 10;
-  if (/TYPOGRAPHY|TITLE STYLE|SUBTITLE STYLE|INFORMATION STYLE|CELLS STYLE|LABEL \/ VALUE STYLE/.test(name)) return 15;
-  if (/LAYOUT/.test(name)) return 18;
-  if (/LAYER TIMING|CAMERA SHOT|^TIMING$/.test(name)) return 30;
-  if (/REVEAL/.test(name)) return 40;
-  if (/ANIMATION/.test(name)) return 45;
-  if (/MOVEMENT PATH/.test(name)) return 50;
-  if (/TEXTURE/.test(name)) return 60;
-  if (/OUTLINE|^BLUR$|LAYER EFFECTS|CAMERA SHAKE/.test(name)) return 65;
-  if (/DEPTH|PARALLAX/.test(name)) return 70;
-  if (/INDIVIDUAL NODES|PUPPET PIN/.test(name)) return 75;
-  if (/RESTORE|END BEHAVIOR|ACTIONS/.test(name)) return 80;
-  return 25;
 }
 function labelFromHeading(node) {
   const cloned = node.cloneNode(true);
@@ -100,7 +80,6 @@ function arrange(panel) {
     } else group.push(node);
   }
   flush();
-  if (panel.id === 'inspector') sections.sort((a, b) => motionSectionPriority(a.title) - motionSectionPriority(b.title));
   sections.forEach(({details}) => fragment.append(details));
   if (!fragment.childNodes.length) return;
   // Avoid triggering expensive studio rerenders, only replace this panel's children.

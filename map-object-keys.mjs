@@ -1,4 +1,4 @@
-import { easings } from './engine.mjs?v=sparse-blur-1';
+import { easings } from './easings.mjs';
 export const OBJECT_KEY_FIELDS={size:[.2,8],objectAngle:[-3600,3600]};
 export const DAMAGE_STATES={intact:'Intact',damaged:'Damaged',burning:'Burning',destroyed:'Destroyed'};
 export function objectPoseAt(a,frame){

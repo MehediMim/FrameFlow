@@ -13,7 +13,7 @@ let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
 import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=highlight-extent-1';
 import { CITIES, REGIONS } from './map-places.mjs';
-import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
+import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './fonts.mjs';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
 import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
@@ -1415,7 +1415,6 @@ function bindToolbar() {
 // ------------------------------------------------------------------ mode switch + shortcuts
 function setMode(m) {
   document.body.classList.toggle('mode-map', m === 'map');
-  document.body.classList.toggle('mode-paper', m === 'paper');
   $$('.modes [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   try { localStorage.setItem('frameflow-mode', m); } catch { /* ignore */ }
   window.dispatchEvent(new Event('frameflow:mode'));
@@ -1494,8 +1493,7 @@ audioUI = registerAudioStudio('map', {
  trackLabels:'#mTrackLabels', trackRows:'#mTrackRows', tracks:'#mTracks', actionButtons:['#mDuplicate','#mDelete']
 });
 renderAll();
-let startMode = 'motion'; try { const saved = localStorage.getItem('frameflow-mode'); startMode = saved === 'map' || saved === 'paper' ? saved : 'motion'; } catch { /* ignore */ }
-setMode(startMode)
+setMode('map')
 // Independent map-settings drawer: keep item properties visible in the inspector.
 {
   const open = document.querySelector('#mSettingsButton');

@@ -1,4 +1,4 @@
-import { easings } from './engine.mjs?v=sparse-blur-1';
+import { easings } from './easings.mjs';
 import { retimeMapItem } from './map-timing.mjs?v=map-split-1';
 import { OBJECT_ICONS } from './map-objects.mjs';
 export const GROUP_FIELDS={lon:[-540,540],lat:[-85,85],scale:[.1,8],rotation:[-3600,3600],opacity:[0,1]};

@@ -1,5 +1,5 @@
-﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=image-badges-1"><link rel="stylesheet" href="paper.css"><style>
-/* Color presets across Motion and Map Studio; native picker remains available. */
+﻿<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FrameFlow — Map Animation Studio</title><meta name="description" content="Create animated maps with terrain relief, documentary styling, front lines, routes, regions, objects, keyframes, and video export."><link rel="stylesheet" href="style.css?v=sticky-timeline-1"><link rel="stylesheet" href="map.css?v=image-badges-1"><style>
+/* Map Studio color presets; native picker remains available. */
 .ff-palette{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 12px;max-width:100%;line-height:1}
 .ff-color-chip{appearance:none;display:inline-block;position:relative;flex:0 0 19px;width:19px!important;height:19px!important;min-width:19px!important;min-height:19px!important;margin:0!important;padding:0!important;border:1px solid #ffffff66!important;border-radius:5px!important;background:var(--chip-color)!important;cursor:pointer;box-shadow:0 1px 3px #0004;transition:transform .1s,box-shadow .1s}
 .ff-color-chip:hover{transform:scale(1.14);box-shadow:0 0 0 2px #b6f36e77}
@@ -10,9 +10,9 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link rel="stylesheet" href="scene-studio.css?v=builder-3"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=map-settings-layout-2"><link rel="stylesheet" href="landing-map.css"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=map-settings-layout-2"><link rel="stylesheet" href="landing-map.css"></head><body class="landing">
 <style>
-/* Support links shared by both studios and landing page. */
+/* Support links for Map Studio and the landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
 .support-link:hover{background:#b6f36e2b;border-color:#b6f36e}
 .support-link:focus-visible{outline:2px solid #b6f36e;outline-offset:3px}
@@ -201,12 +201,7 @@ body.landing #landing{display:block}
 <script type="module" src="landing-map.mjs"></script>
 <script type="module" src="landing-showcase.mjs"></script>
 
-<header><a class="brand" id="homeLink" href="#home" title="Back to home" aria-label="FrameFlow home"><span class="logo">◈</span> FrameFlow <small>MOTION STUDIO</small></a><nav class="modes" aria-label="Studio mode"><button data-mode="motion" class="on">Motion</button><button data-mode="map">Map Studio</button><button data-mode="paper">Paper Studio</button><button data-mode="scene">Scene Studio</button></nav><input id="projectName" class="motion-only" aria-label="Project name" value="Make your move"><span id="saveState" class="muted motion-only">Saved locally</span><button id="undo" class="motion-only" title="Undo (Ctrl Z)">↶</button><button id="redo" class="motion-only" title="Redo (Ctrl Shift Z)">↷</button><button id="open" class="motion-only">Open</button><button id="save" class="motion-only">Save project</button><button id="export" class="primary motion-only">Export video ↗</button><input id="mProjectName" class="map-only" aria-label="Map project name" value="Untitled map"><span id="mSaveState" class="muted map-only">Saved locally</span><button id="mUndo" class="map-only" title="Undo (Ctrl Z)">↶</button><button id="mRedo" class="map-only" title="Redo (Ctrl Shift Z)">↷</button><button id="mOpen" class="map-only">Open</button><button id="mSave" class="map-only">Save project</button><button id="mExport" class="map-only primary">Export video ↗</button><input id="pProjectName" class="paper-only" aria-label="Paper project name" value="Untitled newspaper"><span id="pSaveState" class="muted paper-only">Saved locally</span><button id="pUndo" class="paper-only" title="Undo (Ctrl Z)">↶</button><button id="pRedo" class="paper-only" title="Redo (Ctrl Shift Z)">↷</button><button id="pOpen" class="paper-only">Open</button><button id="pSave" class="paper-only">Save project</button><button id="pExport" class="paper-only primary">Export video ↗</button></header>
-<div class="workspace motion-only"><aside class="left"><div class="section-title">CREATE <span>＋</span></div><div class="add-grid"><button data-add="text"><b>T</b>Text</button><button data-add="rect"><b>▢</b>Rectangle</button><button data-add="circle"><b>○</b>Ellipse</button><button id="image"><b>▧</b>Image</button></div><div class="section-title">LAYERS <span id="layerCount"></span></div><div id="layers"></div><div class="layer-actions"><button id="duplicate" title="Duplicate layer">Duplicate</button><button id="delete" title="Delete layer">Delete</button><button id="up" title="Move forward">↑</button><button id="down" title="Move backward">↓</button></div><div class="starter"><span class="eyebrow">START SOMETHING</span><h3>A little movement.<br>A big impression.</h3><p>Start with this composition, or make it entirely yours.</p><button id="new">＋ Empty composition</button><button id="demo">↻ Load demo</button></div><button id="help" class="help">⌘ Shortcuts & quick guide</button></aside>
-<main><div class="stagebar"><span><i class="dot"></i> Composition <b id="compLabel">1280 × 720</b></span><div><button id="motionSettingsButton" type="button" aria-controls="motionSettingsPanel">⚙ Composition settings</button><button id="grid" title="Toggle grid">▦ Grid</button><button id="snapshot">PNG ↓</button><div class="canvas-zoom"><button id="canvasZoomOut" title="Zoom out">−</button><span id="canvasZoomLabel">Fit</span><button id="canvasZoomIn" title="Zoom in">+</button><button id="canvasZoom100">100%</button><button id="canvasZoomFit">Fit all</button><button id="motionFullscreen" type="button" title="Show composition fullscreen (F)">⛶ Fullscreen</button></div></div></div><div class="stage-area"><div class="canvas-wrap"><canvas id="canvas" width="1280" height="720" aria-label="Composition canvas"></canvas></div><div class="stage-hint">Drag a layer to move it · Use ◆ to animate a property</div></div><div class="transport"><span class="time" id="timecode">00:00:00</span><div class="play-controls"><button id="start" title="First frame">|◀</button><button id="prev" title="Previous frame">‹</button><button id="play" class="play" title="Play / pause (Space)">▶</button><button id="next" title="Next frame">›</button><button id="end" title="Last frame">▶|</button><button id="loop" class="active" title="Loop playback">↻</button></div><label>TIME (s) <input id="frame" type="number" min="0" step="0.001" value="0"></label></div><div class="ff-audio-slot" data-audio-studio="motion"></div></main>
-<aside class="right"><div class="tabs"><b>Properties</b><span>COMPOSITION</span></div><div id="inspector"></div><dialog class="composition" id="motionSettingsPanel" aria-label="Composition settings"><div class="section-title">COMPOSITION SETTINGS <button type="button" id="motionSettingsClose" aria-label="Close composition settings">✕</button></div><label>Canvas <select id="size"><option value="1280,720">Landscape · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="1080,1920">Portrait · 1080 × 1920</option><option value="1080,1080">Square · 1080 × 1080</option></select></label><div class="two"><label>Frame rate<select id="fps"><option>24</option><option selected>30</option><option>60</option></select></label><label>Duration (seconds)<input id="duration" type="number" value="6" min="0.034" step="0.001"></label></div><label class="color-row">Background<input id="background" type="color" value="#e7e9e1"></label></dialog></aside></div>
-<section class="timeline motion-only"><div class="timeline-head"><div><b>Timeline</b><span class="pill" id="fpsLabel">30 FPS</span></div><div class="timeline-tools"><button id="keyAll">◇ Key transform</button><label class="auto"><input id="autoKey" type="checkbox" checked> Auto-key</label><label>Zoom <input id="zoom" type="range" min="1" max="4" step=".25" value="1"></label></div></div><div class="timeline-body"><div class="timeline-labels"><div class="ruler-label">LAYER <span>SECONDS →</span></div><div id="trackLabels"></div></div><div class="tracks-scroll" id="scroll"><div id="tracks"><div id="ruler"></div><div id="trackRows"></div><div id="playhead"><span></span></div></div></div></div><footer><span><i class="dot"></i> <span id="status">Ready to make a move</span></span><span>Space Play / pause <em>·</em> ← → Step frame <em>·</em> K Key transform</span></footer></section>
-
+<header><a class="brand" id="homeLink" href="#home" title="Back to home" aria-label="FrameFlow home"><span class="logo">◈</span> FrameFlow <small>MAP STUDIO</small></a><nav class="modes" aria-label="Studio"><button data-mode="map" class="on">Map Studio</button></nav><input id="mProjectName" class="map-only" aria-label="Map project name" value="Untitled map"><span id="mSaveState" class="muted map-only">Saved locally</span><button id="mUndo" class="map-only" title="Undo (Ctrl Z)">↶</button><button id="mRedo" class="map-only" title="Redo (Ctrl Shift Z)">↷</button><button id="mOpen" class="map-only">Open</button><button id="mSave" class="map-only">Save project</button><button id="mExport" class="map-only primary">Export video ↗</button></header>
 <div id="mapStudio">
 <div class="workspace">
 <aside class="left">
@@ -278,39 +273,7 @@ body.landing #landing{display:block}
 <input hidden type="file" id="mProjectFile" accept="application/json,.json">
 <dialog id="mModal"><div id="mModalBody"></div><button id="mCloseModal">Close</button></dialog>
 </div>
-<div id="paperStudio">
-<div class="workspace">
-<aside class="left">
-<div class="section-title">ADD PARTS <span>＋</span></div><div class="add-grid" id="pAddGrid"></div>
-<div class="section-title">CAMERA MOVES <span>▣</span></div><div class="m-presets" id="pShots"></div>
-<div class="section-title">ITEMS <span id="pItemCount"></span></div><div id="pItems"></div>
-<div class="layer-actions"><button id="pDuplicate" title="Duplicate item">Duplicate</button><button id="pDelete" title="Delete item">Delete</button><button id="pUp" title="Bring forward">↑</button><button id="pDown" title="Send backward">↓</button></div>
-<div class="starter m-starter"><button id="pTemplates">▦ Templates…</button><button id="pNew">＋ Empty sheet</button></div>
-<button id="pHelp" class="help">⌘ Quick guide</button>
-</aside>
-<main>
-<div class="stagebar"><span><i class="dot"></i> Paper <b id="pCompLabel">1280 × 720</b></span><div><button id="pSettingsButton" type="button" aria-expanded="false" aria-controls="pSettingsPanel">⚙ Video settings</button><button id="pSnapshot">PNG ↓</button><button id="pFullscreen" type="button" title="Show paper fullscreen (F)">⛶ Fullscreen</button></div></div>
-<div class="stage-area"><div class="canvas-wrap"><canvas id="pCanvas" width="1280" height="720" aria-label="Paper canvas"></canvas></div><div class="stage-hint" id="pHint"></div></div>
-<div class="transport"><span class="time" id="pTimecode">00:00:00</span><div class="play-controls"><button id="pStart" title="First frame">|◀</button><button id="pPrev" title="Previous frame">‹</button><button id="pPlay" class="play" title="Play / pause (Space)">▶</button><button id="pNext" title="Next frame">›</button><button id="pEnd" title="Last frame">▶|</button><button id="pLoop" class="active" title="Loop playback">↻</button></div><label>FRAME <input id="pFrame" type="number" min="0" value="0"></label></div><div class="ff-audio-slot" data-audio-studio="paper"></div>
-</main>
-<aside class="right">
-<div class="tabs"><b id="pInspTitle">Properties</b><span>PAPER</span></div>
-<div id="pInspector"></div>
-<dialog class="composition" id="pSettingsPanel" aria-label="Video settings"><div class="section-title">VIDEO SETTINGS <button id="pSettingsClose" type="button" aria-label="Close video settings">✕</button></div>
-<label>Canvas <select id="pSize"><option value="1280,720">Landscape · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="1080,1920">Portrait · 1080 × 1920</option><option value="1080,1080">Square · 1080 × 1080</option></select></label>
-<div class="two"><label>Frame rate<select id="pFps"><option>24</option><option selected>30</option><option>60</option></select></label><label>Duration (seconds)<input id="pDuration" type="number" value="6" min="0.07" step="0.001"></label></div>
-</dialog>
-</aside>
-</div>
-<section class="timeline">
-<div class="timeline-head"><div><b>Paper timeline</b><span class="pill" id="pFpsLabel">30 FPS</span></div><div class="timeline-tools"><label>Zoom <input id="pZoomT" type="range" min="1" max="4" step=".25" value="1"></label></div></div>
-<div class="timeline-body"><div class="timeline-labels"><div class="ruler-label">ITEM <span>SECONDS →</span></div><div id="pTrackLabels"></div></div><div class="tracks-scroll" id="pScroll"><div class="m-tracks" id="pTracks"><div class="m-ruler" id="pRuler"></div><div id="pTrackRows"></div><div class="m-playhead" id="pPlayhead"><span></span></div></div></div></div>
-<footer><span><i class="dot"></i> <span id="pStatus">Ready to print</span></span><span>Space Play / pause <em>·</em> ← → Step frame <em>·</em> Drag parts on the page · Drag bars to retime</span></footer>
-</section>
-<input hidden type="file" id="pProjectFile" accept="application/json,.json"><input hidden type="file" id="pImageFile" accept="image/*">
-<dialog id="pModal"><div id="pModalBody"></div><button id="pCloseModal">Close</button></dialog>
-</div>
-<input hidden type="file" id="imageFile" accept="image/*"><input hidden type="file" id="projectFile" accept="application/json,.json"><div id="toast" role="status"></div><dialog id="modal"><div id="modalBody"></div><button id="closeModal">Close</button></dialog><script type="module" src="scene-studio.mjs?v=builder-3"></script><script type="module" src="app.js?v=layer-blur-4"></script><script type="module" src="map-ui.js?v=highlight-extent-1"></script><script type="module" src="paper-ui.js?v=motion-media-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
+<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=map-only-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {
@@ -325,16 +288,20 @@ window.addEventListener('keydown', event => {
 }, true);
 
 function routeStudio() {
-  const mode = location.hash.slice(1);
-  const studio = mode === 'motion' || mode === 'map' || mode === 'paper' || mode === 'scene';
-  for (const id of ['play', 'mPlay', 'pPlay']) {
+  let mode = location.hash.slice(1);
+  if (['motion', 'paper', 'scene'].includes(mode)) {
+    mode = 'map';
+    history.replaceState(null, '', '#map');
+  }
+  const studio = mode === 'map';
+  for (const id of ['mPlay']) {
     const button = document.getElementById(id);
     if (button?.textContent.trim() === 'Ⅱ') button.click();
   }
   document.body.classList.toggle('landing', !studio);
   if (studio) {
     document.querySelector(`.modes [data-mode="${mode}"]`).click();
-    document.title = mode === 'scene' ? 'FrameFlow — Scene Studio' : mode === 'map' ? 'FrameFlow — Map Studio' : mode === 'paper' ? 'FrameFlow — Paper Studio' : 'FrameFlow — Motion Studio';
+    document.title = 'FrameFlow — Map Studio';
     document.getElementById('homeLink').focus({ preventScroll: true });
     window.dispatchEvent(new Event('resize'));
   } else {
@@ -357,7 +324,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 </script><script type="module">
 // FrameFlow shared color presets. Automatically enhances every existing and future
-// native color picker in Motion Studio, Map Studio, and chart/table editors.
+// native color picker in Map Studio.
 const PRESETS = [
   ['#ffffff','White'],['#e7e9e1','Ivory'],['#a3a3a3','Gray'],['#111827','Charcoal'],
   ['#000000','Black'],['#b6f36e','Lime'],['#22c55e','Green'],['#14b8a6','Teal'],

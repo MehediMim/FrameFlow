@@ -1,4 +1,4 @@
-import { easings } from './engine.mjs?v=sparse-blur-1';
+import { easings } from './easings.mjs';
 import { animationKeysOf } from './map-timing.mjs';
 
 export const CAMERA_PROPERTIES = {

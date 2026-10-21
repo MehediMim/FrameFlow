@@ -137,8 +137,17 @@ try {
   await cdp('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
   await evaluate(`document.querySelector('#landing a[href="#map"]').click()`);
   await waitFor(`!document.body.classList.contains('landing')&&document.body.classList.contains('mode-map')&&document.querySelectorAll('#mDlCountry option').length>100`);
-  assert.equal(await evaluate(`document.getElementById('export').tagName`),'BUTTON','Motion export control stays intact');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-mode]').length`),1,'only Map Studio is available');
+  assert.equal(await evaluate(`!!document.querySelector('#canvas,#paperStudio,#sceneStudio')`),false,'removed studios are absent');
   assert.equal(await evaluate(`typeof document.getElementById('mExport').onclick`),'function','map export remains bound');
+  for(const legacy of ['motion','paper','scene']) {
+    await evaluate(`location.hash='#${legacy}'`);
+    await waitFor(`location.hash==='#map'&&!document.body.classList.contains('landing')&&document.body.classList.contains('mode-map')`);
+    assert.equal(await evaluate(`document.title`),'FrameFlow — Map Studio','legacy links open Map Studio');
+  }
+  await evaluate(`localStorage.setItem('frameflow-mode','paper');location.reload()`);
+  await waitFor(`document.body.classList.contains('mode-map')&&document.querySelectorAll('#mDlCountry option').length>100`);
+  assert.equal(await evaluate(`localStorage.getItem('frameflow-mode')`),'map','old studio preferences cannot restore a removed editor');
   assert.equal(await evaluate(`document.getElementById('mhPreviewPlay').getAttribute('aria-pressed')`),'false','preview pauses in editor');
   await evaluate(`document.getElementById('homeLink').click()`);await waitFor(`document.body.classList.contains('landing')`);
   await cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});

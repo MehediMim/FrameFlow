@@ -2,7 +2,8 @@ import { curvedGlyphs, flagImageCrop, flagFeatureParts } from './map-label-curve
 import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-scene-panel.mjs';
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
-import { easings, fontStack, cleanFont } from './engine.mjs?v=sparse-blur-1';
+import { easings } from './easings.mjs';
+import { fontStack, cleanFont } from './fonts.mjs';
 import { routePlaceLabels } from './map-route-labels.mjs';
 import { animationKeysOf, mapSourceItem } from './map-timing.mjs?v=map-split-1';
 import { objectOffsets, FORMATIONS } from './map-formations.mjs';

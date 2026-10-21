@@ -1,10 +1,6 @@
-// FrameFlow shared left sidebar accordions: Motion, Map and Paper.
+// Map Studio left sidebar accordions.
 // Move existing elements without recreating event-bound controls.
-const STUDIO_SELECTORS = [
-  '.workspace.motion-only > .left',
-  '#mapStudio .workspace > .left',
-  '#paperStudio .workspace > .left'
-];
+const STUDIO_SELECTORS = ['#mapStudio .workspace > .left'];
 const memory = new Map();
 
 function titleOf(el) {
@@ -42,8 +38,7 @@ function organize(aside) {
       flush(); title=titleOf(child);
       // A heading's existing button is preserved; the heading itself becomes part of the section.
       if(child.querySelector('button,input,select')) current.push(child);
-      // Counters such as #layerCount live inside headings. app.js writes to them on
-      // every render, so they must stay in the document (shown in the summary).
+      // Keep counters available during editor renders.
       else keep=[...child.querySelectorAll('[id]')];
     } else if(isCamera(child)) {
       flush();
@@ -60,7 +55,7 @@ function organize(aside) {
   aside.replaceChildren(output);
 }
 function install(aside,index){
-  aside.dataset.ffLeftStudio=['motion','map','paper'][index];
+  aside.dataset.ffLeftStudio='map';
   aside.classList.add('ff-left-accordion');
   let pending=false;
   const observer=new MutationObserver(records=>{

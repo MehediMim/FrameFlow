@@ -1,4 +1,4 @@
-import { easings } from './engine.mjs?v=sparse-blur-1';
+import { easings } from './easings.mjs';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const NETWORK_SHAPES={road:{label:'Road',color:'#8c7353'},railway:{label:'Railway',color:'#414941'},river:{label:'River',color:'#6496ad'}};
 export const NETWORK_ANIMATIONS={reveal:'Draw along path',flow:'Flow / traffic',both:'Draw and flow',static:'Static'};

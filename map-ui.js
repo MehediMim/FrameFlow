@@ -36,6 +36,7 @@ let cameraProperty = 'all', objectProperty = 'all';
 const objectTypeFilters = new Map();
 const OBJECT_CATEGORIES = [
   ['transport', 'Travel & civilian transport'], ['places', 'Cities & everyday places'],
+  ['landmarks', 'Famous landmarks & infrastructure'], ['people', 'People & occupations'],
   ['infrastructure', 'Infrastructure & clean energy'], ['nature', 'Nature & outdoors'],
   ['modern', 'Modern military'], ['documentary', 'Documentary · field troops'],
   ['leaders', 'Leaders & characters'], ['time', 'Time & planning'],

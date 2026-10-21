@@ -81,6 +81,11 @@ try {
   p=await stored();front=p.actions.find(a=>a.id===front.id);assert.deepEqual(front.pathKeys.map(k=>k.frame),[0,60]);assert.ok(front.pathKeys[1].path[1].lon>9);
   await evaluate(`(()=>{const el=document.querySelector('[data-key-item="${front.id}"][data-map-key="path:60"]');el.focus();el.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));})()`);
   assert.ok((await stored()).actions.find(a=>a.id===front.id).pathKeys.some(k=>k.frame===61),'path diamonds retime with keyboard');
+  await evaluate(`(()=>{const inspector=document.getElementById('mInspector');inspector.style.width='240px';const section=document.querySelector('[data-path-capture]').closest('details');if(section)section.open=true;})()`);
+  assert.equal(await evaluate(`(()=>{const buttons=[...document.querySelectorAll('.m-path-key-actions>button')],content=buttons[0].closest('.ff-inspector-content')||buttons[0].parentElement.parentElement,r=content.getBoundingClientRect();return buttons.every(button=>{const b=button.getBoundingClientRect();return b.width>0&&b.left>=r.left&&b.right<=r.right&&button.scrollWidth<=button.clientWidth});})()`),true,'path key and edit controls fit a narrow inspector without clipping');
+  await evaluate(`document.querySelector('[data-path-capture]').scrollIntoView({block:'center'})`);
+  await writeFile(join(tmpdir(),'frameflow-path-inspector-review.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await evaluate(`document.getElementById('mInspector').style.removeProperty('width')`);
   console.log('Front-line drawing, point dragging, shape keys and timeline diamonds passed');
   await seek(0);
   for(const [shape,path] of [['road',[[-3,44],[2,46],[6,48]]],['railway',[[3,43],[6,45],[10,46]]],['river',[[13,51],[13,48],[15,45]]]]){

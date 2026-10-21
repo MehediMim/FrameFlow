@@ -5,6 +5,7 @@ import { drawBanner } from './map-banner.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
 import { DOCUMENTARY_OBJECTS } from './map-documentary-objects.mjs';
 import { MODERN_OBJECTS, CIVILIAN_OBJECTS } from './map-modern-objects.mjs';
+import { TIME_OBJECTS } from './map-time-objects.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork } from './map-path-animation.mjs';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
 import { drawDamage, drawRubble } from './map-damage.mjs';
@@ -25,6 +26,7 @@ export const OBJECT_ICONS = {
   ...DOCUMENTARY_OBJECTS,
   ...MODERN_OBJECTS,
   ...CIVILIAN_OBJECTS,
+  ...TIME_OBJECTS,
   flag: { label: 'Flag', color: '#e63946', draw: (c, s, col, t) => { const top = [], bot = []; for (let i = 0; i <= 10; i++) { const x = .03 + i / 10 * .9, w = Math.sin(t * .2 + i * .6) * .05 * (i / 10 + .3); top.push([x, -.98 + w]); bot.push([x, -.45 + w]); } poly(c, [...top, ...bot.reverse()], col, s); rect(c, -.05, -1, .08, 1.4, light, s, .03); } },
   checkpoint: { label: 'Checkpoint', color: '#c9a227', draw: (c, s, col) => { rect(c, -.9, -.1, .5, .5, metal, s); rect(c, -.4, .08, 1.3, .12, '#e63946', s, .02); rect(c, -.05, .08, .2, .12, light, s, .01); rect(c, .4, .08, .2, .12, light, s, .01); rect(c, .85, -.1, .12, .5, dark, s, .02); } },
   storm: { label: 'Storm', color: '#7aa0c4', draw: (c, s, col) => { rect(c, -.75, -.2, 1.5, .35, col, s, .15); circ(c, -.4, -.2, .35, col, s); circ(c, 0, -.4, .45, col, s); circ(c, .4, -.2, .35, col, s); poly(c, [[0, .05], [-.25, .55], [0, .5], [-.1, 1], [.3, .35], [.05, .4]], '#ffd166', s); } },

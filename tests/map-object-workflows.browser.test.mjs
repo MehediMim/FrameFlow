@@ -113,6 +113,15 @@ try {
   await change('#mInspector [data-mf="glyph"]','ferry');await change('#mInspector [data-mf="__pinMove"]','move');
   await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   p=await saved();E.validateMapProject(p);assert.equal(p.actions.at(-1).glyph,'ferry');assert.equal(p.actions.at(-1).mode,'move','civilian movement survives project reload');
+  for(const glyph of ['clock','stopwatch','hourglass','calendar']) {
+    await evaluate(`document.querySelector('[data-madd="object"]').click()`);
+    await change('#mInspector [data-mf="glyph"]',glyph);
+    const project=await saved(); E.validateMapProject(project);
+    assert.equal(project.actions.at(-1).glyph,glyph,'time props can be selected and saved');
+  }
+  assert.ok((await evaluate(`Array.from(document.querySelectorAll('#mInspector optgroup')).map(g=>g.label)`)).includes('Time & planning'));
+  await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  assert.deepEqual((await saved()).actions.slice(-4).map(a=>a.glyph),['clock','stopwatch','hourglass','calendar'],'time props survive reload');
   const render=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs');const topo=await fetch('map-data/countries-50m.json').then(r=>r.json()),geo=E.buildGeo(topo),p=JSON.parse(localStorage.getItem('frameflow-map-v1'));
     const c=document.createElement('canvas');c.width=1280;c.height=720;const x=c.getContext('2d');
@@ -138,6 +147,30 @@ try {
   })()`);
   assert.ok(video.size>1000&&video.type==='video/webm','keyframed objects and battle scene encode to video');
   const screenshot=await cdp('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'frameflow-object-workflows-review.png'),Buffer.from(screenshot.data,'base64'));
+  const timeReview=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),{TIME_OBJECTS}=await import('./map-time-objects.mjs');
+    const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=300;
+    const c=canvas.getContext('2d'),probe=document.createElement('canvas');probe.width=256;probe.height=256;
+    const pc=probe.getContext('2d'),results=[];
+    const snapshot=(icon,color,t)=>{pc.clearRect(0,0,256,256);pc.save();pc.translate(128,128);icon.draw(pc,85,color,t);pc.restore();return probe.toDataURL();};
+    for(const [i,[glyph,icon]] of Object.entries(TIME_OBJECTS).entries()){
+      const before=snapshot(icon,icon.color,0),after=snapshot(icon,icon.color,4);
+      const stable=after===snapshot(icon,icon.color,4),colored=after!==snapshot(icon,'#a43fa1',4);
+      const project=E.newMapProject();project.camera.init={lon:0,lat:0,zoom:2,bearing:0,pitch:0};
+      project.actions=[E.makeAction('object',0,{glyph,color:icon.color,place:{kind:'point',lon:0,lat:0},size:3,enter:'none',idle:'none',exit:'none',dur:300})];
+      project.fps=30;E.drawMap(pc,256,256,project,120,window.workflowGeo);const at30=probe.toDataURL();
+      project.fps=60;E.drawMap(pc,256,256,project,240,window.workflowGeo);const equalSeconds=at30===probe.toDataURL();
+      results.push({glyph,stable,colored,animated:before!==after,equalSeconds});
+      c.save();c.translate(125+i*250,145);icon.draw(c,85,icon.color,4);c.restore();
+      c.fillStyle='#293b48';c.font='18px Arial';c.textAlign='center';c.fillText(icon.label,125+i*250,268);
+    }
+    window.timeObjectReview=canvas.toDataURL();return results;
+  })()`);
+  for(const result of timeReview){
+    assert.ok(result.stable&&result.colored&&result.equalSeconds,JSON.stringify(result));
+    assert.equal(result.animated,result.glyph!=='calendar','clock, stopwatch and sand animate with timeline time');
+  }
+  await writeFile(join(tmpdir(),'frameflow-time-objects-review.png'),Buffer.from(await evaluate(`window.timeObjectReview.split(',')[1]`),'base64'));
   const modernReview=await evaluate(`(async()=>{
     const {MODERN_OBJECTS,CIVILIAN_OBJECTS}=await import('./map-modern-objects.mjs');
     const icons=Object.entries({...MODERN_OBJECTS,...CIVILIAN_OBJECTS});

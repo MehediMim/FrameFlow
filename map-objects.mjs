@@ -4,6 +4,7 @@
 import { drawBanner } from './map-banner.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
 import { DOCUMENTARY_OBJECTS } from './map-documentary-objects.mjs';
+import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork } from './map-path-animation.mjs';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
 import { drawDamage, drawRubble } from './map-damage.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
@@ -50,6 +51,7 @@ export const EFFECTS = {
   strike: { label: 'Missile strike (launch → target)', color: '#ff7a1a' },
 };
 export const SHAPES = {
+  ...NETWORK_SHAPES,
   arrow: { label: 'Attack arrow', color: '#e63946' }, retreat: { label: 'Retreat arrow', color: '#f4a261' }, front: { label: 'Front line', color: '#d62828' },
   zone: { label: 'Zone / occupied area', color: '#e9c46a' }, noFly: { label: 'No-fly / restricted zone', color: '#ff595e' },
 };
@@ -80,6 +82,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if (a.enter === 'drop') { dy = -(1 - H.bounce(enter)) * 220 * u; alpha = H.clamp01(enter * 3); } else if (a.enter === 'fade') alpha = enter; else if (a.enter === 'grow') sc = H.ease('backOut', enter);
   if (a.idle === 'pulse') sc *= 1 + .08 * Math.sin(t * .35); else if (a.idle === 'shake') { dx = Math.sin(t * 2.3) * 2.2 * u; dy += Math.cos(t * 3.1) * 1.6 * u; } else if (a.idle === 'bob') dy += Math.sin(t * .2) * 5 * u; else if (a.idle === 'spin') rot = t * .12;
   if (a.exit === 'fade') alpha *= 1 - xd; else if (a.exit === 'shrink') sc *= 1 - xd;
+  alpha *= (a.groupOpacity??1)*(a.opacity??1);
   if (alpha <= 0 || sc <= 0) return;
   const lift = ic.air ? 38 * size * u : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
   if (g.z < v.near) return;
@@ -164,13 +167,21 @@ export function drawEffect(H, c, v, geo, a, frame, labels) {
 
 // ---------------------------------------------------------------- shapes (arrows, front lines, zones)
 export function drawShape(H, c, v, geo, a, frame, labels) {
+  if(a.pathKeys?.length)a={...a,path:pathAt(a,frame)};
   if (!H.actAlpha(a, frame) || a.mode !== 'path' || (a.path || []).length < 2) return;
   const r = H.planeRoute(geo, a); if (!r) return;
-  const u = v.unit, k = Math.round(v.cx - r.mid), p = H.ease(a.easing, H.actionProgress(a, frame)), P = [];
+  const u = v.unit, k = Math.round(v.cx - r.mid), p = a.revealPath===false?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
   for (let i = 0; i < r.n; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); P.push(q.z < v.near ? null : q); }
   const zone = a.shape === 'zone' || a.shape === 'noFly', w = (a.width || 6) * u;
   let text = null;
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  if(Object.hasOwn(NETWORK_SHAPES,a.shape)){
+    const visible=['static','flow'].includes(a.networkAnimation)?P:revealPolyline(P,p);
+    drawNetwork(c,clipPolyline(visible,v.W,v.H,40*u),a,u,(frame-a.start)/(v.fps||30));
+    const end=visible.filter(Boolean).at(-1);c.restore();
+    if(a.showLabel&&a.label&&end)labels.push({x:end.x,y:end.y-16*u,text:a.label,alpha:1,scale:1});
+    return;
+  }
   if (zone) {
     const pts = P.filter(Boolean); if (pts.length < 3) { c.restore(); return; }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
@@ -184,21 +195,26 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     text = { x: pts.reduce((s, q) => s + q.x, 0) / pts.length, y: pts.reduce((s, q) => s + q.y, 0) / pts.length };
   } else {
     const e = p * (r.n - 1), L = []; let i = 0;
-    for (; i <= Math.floor(e) && i < r.n; i++) { if (!P[i]) break; L.push(P[i]); }
-    if (i === Math.floor(e) + 1 && P[i] && e % 1 > 0) L.push({ x: P[i - 1].x + (P[i].x - P[i - 1].x) * (e % 1), y: P[i - 1].y + (P[i].y - P[i - 1].y) * (e % 1) });
-    if (L.length < 2) { c.restore(); return; }
-    const path = () => { c.beginPath(); L.forEach((q, j) => (j ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); };
+    if(a.shape==='front')L.push(...revealPolyline(P,p));
+    else{
+      for (; i <= Math.floor(e) && i < r.n; i++) { if (!P[i]) break; L.push(P[i]); }
+      if (i === Math.floor(e) + 1 && P[i] && e % 1 > 0) L.push({ x: P[i - 1].x + (P[i].x - P[i - 1].x) * (e % 1), y: P[i - 1].y + (P[i].y - P[i - 1].y) * (e % 1) });
+    }
+    if (L.filter(Boolean).length < 2) { c.restore(); return; }
+    const path = () => { c.beginPath();let pen=false;for(const q of L){if(q){if(pen)c.lineTo(q.x,q.y);else c.moveTo(q.x,q.y);}pen=!!q;} };
     const lw = a.shape === 'front' ? w * .8 : w * 1.4, dash = a.shape === 'retreat' ? [10 * u, 7 * u] : [];
     path(); c.globalAlpha = .35; c.strokeStyle = '#000'; c.lineWidth = lw + 3 * u; c.setLineDash(dash); c.stroke();
     path(); c.globalAlpha = .95; c.strokeStyle = a.color; c.lineWidth = lw; c.stroke(); c.setLineDash([]);
-    const end = L[L.length - 1];
+    const end = L.filter(Boolean).at(-1);
     if (a.shape === 'front') {
       const gap = 24 * u * (.6 + (a.width || 6) / 12), th = 9 * u * (.6 + (a.width || 6) / 12); let acc = gap / 2;
       c.fillStyle = a.color; c.globalAlpha = .95;
-      for (let j = 1; j < L.length; j++) {
-        const dx = L[j].x - L[j - 1].x, dy = L[j].y - L[j - 1].y, len = Math.hypot(dx, dy); if (!len) continue;
-        const ux = dx / len, uy = dy / len; let d = acc;
-        for (; d < len; d += gap) { const bx = L[j - 1].x + ux * d, by = L[j - 1].y + uy * d; c.beginPath(); c.moveTo(bx - ux * th * .6, by - uy * th * .6); c.lineTo(bx + ux * th * .6, by + uy * th * .6); c.lineTo(bx - uy * th * 1.2, by + ux * th * 1.2); c.closePath(); c.fill(); }
+      const visible=clipPolyline(L,v.W,v.H,th*3);let teeth=0;
+      for (let j = 1; j < visible.length&&teeth<4000; j++) {
+        if(!visible[j]||!visible[j-1]){acc=gap/2;continue;}
+        const dx = visible[j].x - visible[j - 1].x, dy = visible[j].y - visible[j - 1].y, len = Math.hypot(dx, dy); if (!len) continue;
+        const side=a.frontSide==='right'?-1:1,ux = dx / len, uy = dy / len; let d = acc;
+        for (; d < len&&teeth<4000; d += gap,teeth++) { const bx = visible[j - 1].x + ux * d, by = visible[j - 1].y + uy * d; c.beginPath(); c.moveTo(bx - ux * th * .6, by - uy * th * .6); c.lineTo(bx + ux * th * .6, by + uy * th * .6); c.lineTo(bx - uy * th * 1.2*side, by + ux * th * 1.2*side); c.closePath(); c.fill(); }
         acc = d - len;
       }
     } else if (p > .03) {

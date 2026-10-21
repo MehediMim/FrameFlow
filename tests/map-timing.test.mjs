@@ -65,7 +65,9 @@ const commandsOf = (commands, names) => commands.filter(([name]) => names.includ
 
 // Every visible part, including labels, trails, planned paths and dimming, must
 // disappear at the clip boundary even when an old file requests keep:true.
-for (const type of Object.keys(E.ACTION_TYPES)) {
+// Groups own child objects; their visibility/animation is tested with members
+// in map-campaign tests rather than as an empty drawing action.
+for (const type of Object.keys(E.ACTION_TYPES).filter(type=>type!=='group')) {
   for (const keep of [true, false]) {
     const p = project(), a = E.makeAction(type, 20, {
       dur: 80, animDur: 20, keep, easing: 'linear',
@@ -150,7 +152,7 @@ for (const easing of ['linear', 'easeIn']) {
 
 // Existing projects retain their animation speed when edited and saved again.
 {
-  for (const type of Object.keys(E.ACTION_TYPES)) {
+  for (const type of Object.keys(E.ACTION_TYPES).filter(type=>type!=='group')) {
     assert.equal(E.makeAction(type, 0).animDur, E.ACTION_TYPES[type].dur);
     assert.equal(E.makeAction(type, 0, { dur: 77 }).animDur, 77);
     assert.equal(E.makeAction(type, 0, { dur: 77, animDur: 12 }).animDur, 12);
@@ -175,7 +177,7 @@ for (const easing of ['linear', 'easeIn']) {
 }
 
 // Cuts preserve the source animation on both sides, including fades and keys.
-for (const type of Object.keys(E.ACTION_TYPES)) {
+for (const type of Object.keys(E.ACTION_TYPES).filter(type=>type!=='group')) {
   const p = project(), a = E.makeAction(type, 20, {
     dur: 100, animDur: 90, easing: 'easeInOut',
     target: { kind: 'country', name: 'Testland' },

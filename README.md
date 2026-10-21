@@ -80,6 +80,15 @@ Supported animated properties: position X/Y, scale, rotation, opacity, and shape
 
 ## Map Studio
 
+Map Studio also includes campaign-map editing:
+
+- **Front line**: draw the line on the map. In **Path animation**, key its starting shape, move the playhead, and choose **Edit shape at playhead** to drag or add points. The line interpolates between keyed shapes. Shape diamonds can be dragged or moved with arrow keys on the timeline; the teeth can face either side.
+- **Road, Railway, River**: use the dedicated buttons, draw the geographic path, and press Enter to finish. Choose a static path, a progressive reveal, moving traffic/current, or both. Negative flow speed reverses the animation. These are authored paths, so you can trace a modern or historical route without changing the basemap.
+- **Highlight / Border → Draw an area**: click corners or drag an outline. Choose **Select existing regions inside** to replace the current selection using region centers or fully enclosed outlines. Loaded detail packs use their chosen region level. Choose **Use drawn boundary as one region** to highlight or outline your exact polygon, then name it and apply. Enter applies; Esc cancels. Regions spanning the date line are supported.
+- **Object groups**: check multiple objects in the left item list and press **Group selected**. The group appears as a collapsible layer in the item list and timeline. Position, scale, rotation, and opacity changes create group keyframes at the playhead while retaining child animations. Move the group bar to move its children and keys together. Groups can be hidden, duplicated, split, or ungrouped at the playhead; undo restores the previous structure.
+
+These edits are included in saved projects, PNG snapshots, and video renders. Run `npm run test:map-campaign` and `npm run test:map-campaign:browser` for the geometry and editor workflow checks.
+
 For a retro campaign-map look, open **Canvas settings → Map appearance → Map style** and select **War documentary · archival terrain**. This applies khaki elevation relief, muted water, paper grain, and uppercase country/ocean labels. Terrain, label colors, and texture remain editable; applying the look keeps your existing clips and camera work and can be undone. Terrain reset restores the selected style's palette.
 
 Add an **Object**, then choose a unit under **Documentary · field troops**: rifleman, field officer, radio operator, or field medic. These vector miniatures include uniform webbing, packs, helmets, boots, and role-specific equipment. A **Mixed army formation** also offers **Documentary · rifle platoon** and **Documentary · armored column** presets. New Map labels use military lettering when the documentary style is active; individual labels also offer a **War documentary** style preset.

@@ -11,6 +11,9 @@ import { armyCopies, validateArmyUnits } from './map-armies.mjs';
 import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { DOCUMENTARY_TERRAIN, DOCUMENTARY_LABEL } from './map-documentary.mjs';
+import { validatePathAnimation } from './map-path-animation.mjs';
+import { validPolygon } from './map-area-selection.mjs';
+import { transformGroupObject, validateObjectGroups } from './map-object-groups.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
 import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
@@ -413,8 +416,8 @@ export function lonLatOf(geo, loc) {
 }
 export function resolveLoc(geo, loc, nearX) {
   let X, Y, bbox = null;
-  if (['country', 'region', 'regions'].includes(loc?.kind)) {
-    const f = loc.kind === 'regions' ? featureForTarget(geo,loc) : geo.byName.get(loc.name); if (!f) return null;
+  if (['country', 'region', 'regions', 'polygon'].includes(loc?.kind)) {
+    const f = ['regions','polygon'].includes(loc.kind) ? featureForTarget(geo,loc) : geo.byName.get(loc.name); if (!f) return null;
     X = f.cx; Y = f.cy; bbox = f.mainBox.slice();
   } else if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)) { X = lonToX(loc.lon); Y = latToY(loc.lat); } else return null;
   if (nearX != null) { const k = Math.round(nearX - X); X += k; if (bbox) { bbox[0] += k; bbox[2] += k; } }
@@ -565,7 +568,7 @@ function shotState(s, from, tr, frame, c) {
     }
     case 'flyTo': case 'swoop': {
       const r = resolveLoc(geo, s.target, from.cx); if (!r) return from;
-      const fit = s.autoFit && ['country', 'region', 'regions'].includes(s.target.kind) && r.bbox;
+      const fit = s.autoFit && ['country', 'region', 'regions', 'polygon'].includes(s.target.kind) && r.bbox;
       return fly(from, {
         cx: fit ? (r.bbox[0] + r.bbox[2]) / 2 : r.X, cy: fit ? (r.bbox[1] + r.bbox[3]) / 2 : r.Y,
         zoom: fit ? fitZoom(r.bbox, W, H, .24) : s.zoom, pitch: s.pitch, bearing: s.bearing,
@@ -727,7 +730,7 @@ const bounce = t => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * 
 const animationDuration = a => a.animDur ?? a.dur;
 export const actionProgress = (a, frame) => { const keys = animationKeysOf(a); return clamp01((frame - keys.start) / Math.max(1, keys.end - keys.start)); };
 export const objectMoveProgress = (a, frame) => a.moveStart === undefined ? actionProgress(a, frame) : clamp01((frame - a.moveStart) / Math.max(1, a.moveEnd - a.moveStart));
-const actAlpha = (a, frame) => frame >= (a.clipStart ?? a.start) && frame < (a.clipEnd ?? a.start + a.dur) ? 1 : 0;
+const actAlpha = (a, frame) => frame >= (a.clipStart ?? a.start) && frame < (a.clipEnd ?? a.start + a.dur) ? (a.groupOpacity??1)*(a.opacity??1) : 0;
 
 function groundCircle(ctx, v, X, Y, rPx, off = 0) { // circle of radius rPx screen-pixels (at the map's scale) lying on the map
   const r = rPx / v.S, xy = new Float64Array(2 * 49);
@@ -1142,7 +1145,7 @@ export function highlightExtent(a, f) {
   return { x, y, radius };
 }
 export function drawHighlightExtentHandles(ctx, v, geo, a) {
-  if (a?.type !== 'highlight' || !['country', 'region', 'regions'].includes(a.target?.kind)) return;
+  if (a?.type !== 'highlight' || !['country', 'region', 'regions', 'polygon'].includes(a.target?.kind)) return;
   const f = featureForTarget(geo, a.target); if (!f) return;
   const { x, y, radius } = highlightExtent(a, f), off = Math.round(v.cx - f.cx);
   const center = project(v, x + off, y), end = project(v, x + off + radius, y);
@@ -1157,7 +1160,7 @@ export function drawHighlightExtentHandles(ctx, v, geo, a) {
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t0 = actionProgress(a, frame), t = a.invert ? 1 - t0 : t0, p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3)); // invert: the same grow played backwards
-  if (['country', 'region', 'regions'].includes(a.target?.kind)) {
+  if (['country', 'region', 'regions', 'polygon'].includes(a.target?.kind)) {
     const f = featureForTarget(geo,a.target); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
     const { x, y, radius } = highlightExtent(a, f);
@@ -1629,6 +1632,13 @@ const OBJ_H = { drawBadge, objectLocationAt, objectImage: src => { const e = bad
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
   const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
+  const groups=proj.actions.filter(a=>a.type==='group');
+  if(groups.length)proj={...proj,actions:proj.actions.flatMap(a=>{
+    if(a.type!=='object')return[a];const group=groups.find(g=>g.memberIds.includes(a.id));
+    if(!group)return[a];if(group.visible===false||!actAlpha(group,frame))return[];
+    const child={...a};for(const key of ['place','from','to'])if(child[key]&&!Number.isFinite(child[key].lon)){const p=resolveLoc(geo,child[key]);if(p)child[key]={kind:'point',name:child[key].name,lon:xToLon(p.X),lat:yToLat(p.Y)};}
+    return[transformGroupObject(child,mapSourceItem(group),frame)];
+  })};
   proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false && (a.sourceStart === undefined || (frame >= a.start && frame < a.start + a.dur))).map(mapSourceItem) };
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(camera, W, H), labels = [];
   v.fps = proj.fps; v.objects = new Map(proj.actions.filter(a=>a.type==='object').map(a=>[a.id,a]));
@@ -1660,7 +1670,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     if(newer.some(b=>JSON.stringify(b.target)===JSON.stringify(a.target)))continue;
     ctx.save();
     for(const b of newer) {
-      if(!['country','region','regions'].includes(b.target?.kind))continue;
+      if(!['country','region','regions','polygon'].includes(b.target?.kind))continue;
       const f=featureForTarget(geo,b.target);
       if(!f)continue;
       ctx.beginPath();ctx.rect(0,0,W,H);
@@ -1680,7 +1690,9 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
     else if (a.type === 'object') tag(a, () => {
       if (!actAlpha(a, frame)) return;
-      const item = {...a,...objectPoseAt(a,frame),size:objectSizeAt(a,frame,v.cam.zoom)};
+      const pose=objectPoseAt(a,frame);
+      const followsHeading=a.mode==='wallPath'||(['path','move'].includes(a.mode)&&OBJECT_ICONS[a.glyph]?.rot);
+      const item = {...a,...pose,size:objectSizeAt(a,frame,v.cam.zoom)*(a._groupScale??1),objectAngle:pose.objectAngle+(followsHeading?0:(a._groupRotation??0)),formationAngle:(a.formationAngle||0)+(a._groupRotation||0)};
       if(item.mode==='wallPath'){drawWallPath(ctx,v,geo,item,frame,labels);return;}
       const troops = item.glyph==='army' ? armyCopies(item) : null;
       const offsets = objectOffsets(troops?{...item,count:troops.length}:item), scale = (item.size || 1) * v.unit;
@@ -1704,6 +1716,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
 
 // ---------------------------------------------------------------- Project model
 export const ACTION_TYPES = {
+  group: { label: 'Object group', icon: '▣', dur: 90, hidden: true, hint: 'Animate multiple objects as one layer' },
   scene: { label: 'Scene panel', icon: 'T', dur: 240, hint: 'Side gradient with an automatic year, event title and description' },
   border: { label: 'Border', icon: '▱', dur: 60, hint: 'Draw a country outline, or sweep every border' },
   plane: { label: 'Travel', icon: '✈', dur: 90, hint: 'Move a plane, bus, person, coin… from one place to another' },
@@ -1733,6 +1746,7 @@ const uid = () => crypto.randomUUID();
 export function makeAction(type, start, extra = {}) {
   const base = { id: uid(), type, name: ACTION_TYPES[type].label, start, dur: ACTION_TYPES[type].dur, easing: 'easeInOut' };
   const own = {
+    group: { color:'#a7b887', origin:{lon:0,lat:0}, transform:{lon:0,lat:0,scale:1,rotation:0,opacity:1}, memberIds:[], groupKeys:[] },
     scene: { ...SCENE_PANEL_DEFAULTS, color: '#d9b767' },
     border: { target: { kind: 'country', name: 'Brazil' }, color: '#e4572e', width: 3.5, glow: true, fillAlpha: .18, invert: false },
     plane: { from: city('London', 51.5072, -0.1276), to: city('New York', 40.7128, -74.006), color: '#ff6b35', planeColor: '#ffffff', icon: 'plane', symbol: '$', fromLabel: '', toLabel: '', width: 3, size: 20, lift: 50, glow: true, dashed: false, showPath: true, showLabels: true, showRouteLabels: false, routeLabelMode: 'auto', routeLabelTiming: 'visited', mode: 'direct', path: [], curve: 'smooth', showWaypoints: true },
@@ -1775,7 +1789,7 @@ export function demoMapProject() {
 }
 
 const ENUMS = { theme: Object.keys(THEMES), preset: Object.keys(PRESETS), easing: ['linear', 'easeIn', 'easeOut', 'easeInOut', 'backOut', 'hold'] };
-const isLoc = l => l && typeof l.name === 'string' && l.name.length < 200 && (l.kind === 'regions' ? Array.isArray(l.members) && l.members.length > 0 && l.members.length <= 200 && l.members.every(m => ['country','region'].includes(m?.kind) && isLoc(m)) : ['city', 'point', 'country', 'region'].includes(l.kind) && (['country', 'region'].includes(l.kind) || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360)));
+const isLoc = l => l && typeof l.name === 'string' && l.name.length < 200 && (l.kind==='polygon'?validPolygon(l.path):l.kind === 'regions' ? Array.isArray(l.members) && l.members.length > 0 && l.members.length <= 200 && l.members.every(m => ['country','region'].includes(m?.kind) && isLoc(m)) : ['city', 'point', 'country', 'region'].includes(l.kind) && (['country', 'region'].includes(l.kind) || (Number.isFinite(l.lat) && Number.isFinite(l.lon) && Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 360)));
 const num = (v, a, b) => Number.isFinite(v) && v >= a && v <= b;
 const col = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
 function checkArea(s) {
@@ -1847,7 +1861,7 @@ export function validateMapProject(p) {
     if (!ACTION_TYPES[a.type]) throw Error('Unknown animation type.');
     if(a.type === 'scene')validateScenePanel(a);
     if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
-    if (a.type === 'border' && !(a.target?.kind === 'all' || (['country','region','regions'].includes(a.target?.kind) && isLoc(a.target)))) throw Error('Invalid border target.');
+    if (a.type === 'border' && !(a.target?.kind === 'all' || (['country','region','regions','polygon'].includes(a.target?.kind) && isLoc(a.target)))) throw Error('Invalid border target.');
     if (a.type === 'border') {
       for(const k of ['borderFrom','borderTo'])if(a[k]!==undefined&&!num(a[k],0,100))throw Error('Invalid border endpoint.');
       if(a.borderRing!==undefined&&(!Number.isSafeInteger(a.borderRing)||a.borderRing<0))throw Error('Invalid border ring.');
@@ -1926,9 +1940,10 @@ export function validateMapProject(p) {
       if (a.battleIntensity !== undefined && (!Number.isInteger(a.battleIntensity) || !num(a.battleIntensity,1,12))) throw Error('Invalid battle intensity.');
     }
     if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
-    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); }
+    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); validatePathAnimation(a); }
     if (['object', 'effect', 'shape'].includes(a.type) && a.label !== undefined && (typeof a.label !== 'string' || a.label.length > 100)) throw Error('Invalid label.');
     if (((a.type !== 'label' || a.color !== undefined) && !col(a.color)) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
+    if (a.opacity !== undefined && !num(a.opacity,0,1)) throw Error('Invalid opacity.');
     if (a.reliefOpacity !== undefined && !num(a.reliefOpacity, 0, 1)) throw Error('Invalid highlight opacity.');
     if (a.reliefColor !== undefined && !col(a.reliefColor)) throw Error('Invalid highlight color.');
     for (const [k, lo, hi] of [['width', .5, 20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
@@ -1951,6 +1966,7 @@ export function validateMapProject(p) {
     if (!isLoc(s.target)) throw Error('Invalid camera target.');
     for (const [k, lo, hi] of [['zoom', 0, 14], ['pitch', 0, 75], ['bearing', -3600, 3600], ['amount', -10, 10], ['degrees', -3600, 3600]]) if (!num(s[k], lo, hi)) throw Error('Invalid camera ' + k + '.');
   }
+  validateObjectGroups(p);
   // Freeze the original animation speed when opening projects saved before animDur.
   for (const a of p.actions) {
     a.animDur ??= a.sourceDur ?? a.dur;

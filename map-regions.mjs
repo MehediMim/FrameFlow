@@ -1,9 +1,11 @@
 // Shared geometry for multi-region items and partial border animation.
+import { polygonFeature } from './map-area-selection.mjs';
 export function detailCountriesOf(area) {
  return [...new Set([...(area.detailCountries || []), ...(area.mode === 'country' ? [area.country] : [])])];
 }
 export function targetMembers(target) { return target?.kind === 'regions' ? target.members : target ? [target] : []; }
 export function targetFeatures(geo, target) {
+ if(target?.kind==='polygon'){const f=featureForTarget(geo,target);return f?[f]:[];}
  const members=targetMembers(target),countries=new Set(members.filter(t=>t.kind==='country').map(t=>t.name));
  return [...new Set(members.filter(t=>t.kind!=='region'||!countries.has(t.country)).flatMap(t => t.kind === 'all'
   ? t.country ? Object.values(geo.details?.get(t.country)?.levels || {}).flat().filter(f => !t.level || f.level === t.level) : geo.hi.features
@@ -11,6 +13,11 @@ export function targetFeatures(geo, target) {
 }
 const groupCache=new WeakMap();
 export function featureForTarget(geo,target){
+ if(target?.kind==='polygon'){
+  const signature=JSON.stringify([target.name,target.path]),prior=groupCache.get(target);
+  if(prior?.signature===signature)return prior.feature;
+  const feature=polygonFeature(target);groupCache.set(target,{signature,feature});return feature;
+ }
  if(target?.kind!=='regions')return targetFeatures(geo,target)[0];
  const features=targetFeatures(geo,target),prior=groupCache.get(target);
  if(prior&&prior.name===target.name&&prior.features.length===features.length&&features.every((f,i)=>f===prior.features[i]))return prior.feature;

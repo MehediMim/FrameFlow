@@ -29,6 +29,9 @@ import { cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=highlight
 import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs?v=map-split-1';
 import { cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs';
 import { trimMapHistory } from './map-history.mjs';
+import { installCampaignUI } from './map-campaign-ui.mjs';
+import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
+import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 let cameraProperty = 'all', objectProperty = 'all';
 const WALL_GLYPHS = ['stoneWall','palisade','earthwork','gatehouse','stoneFort','watchtower','bastion'];
 
@@ -45,9 +48,14 @@ let undoStack = [], redoStack = [], geo = null, geoState = 'idle', geoError = ''
 let pathDraw = null, pathDrag = null; // pathDraw = { id } while points of a travel path are being clicked on the map
 let previewCamera = null, mapPan = null;
 let arrangeSelection = new Set(), arrangeGap = 80;
+let campaign=null;
 
 // ------------------------------------------------------------------ helpers
-const items = () => [...proj.shots].sort((a, b) => a.start - b.start).concat(proj.actions);
+const items = () => {
+  const groups=proj.actions.filter(a=>a.type==='group'),members=new Set(groups.flatMap(g=>g.memberIds));
+  return [...proj.shots].sort((a,b)=>a.start-b.start).concat(proj.actions.flatMap(a=>a.type==='group'?[a,...proj.actions.filter(o=>a.memberIds.includes(o.id))]:members.has(a.id)?[]:[a]));
+};
+function retimeEditorItem(it,start,dur,moveKeys=true){if(it.type==='group')retimeGroup(proj,it,start,dur,moveKeys);else retimeMapItem(it,start,dur,moveKeys);}
 const current = () => items().find(i => i.id === sel);
 const isShot = it => it.kind === 'shot';
 const iconOf = it => (isShot(it) ? PRESETS[it.preset].icon : ACTION_TYPES[it.type].icon);
@@ -191,17 +199,22 @@ function draw() {
   if(!playing&&current()?.visible!==false){drawBorderEndpoints(ctx,lastView,geo,current());drawHighlightExtentHandles(ctx,lastView,geo,current());}
   $('#mResetView').hidden = !previewCamera;
   if (pathDraw) { const a = proj.actions.find(x => x.id === pathDraw.id); if (a) drawPathEditor(ctx, lastView, a); }
+  campaign?.overlay(ctx,lastView);
 }
 function setFrame(n) {
   if (pick?.kinds === 'cameraCenter' && Math.round(n) !== frame) cancelPick();
   if (!pathDraw && !pick) previewCamera = null;
-  frame = clamp(Math.round(n) || 0, 0, proj.frames - 1);
+  const nextFrame=clamp(Math.round(n)||0,0,proj.frames-1);
+  if(pathDraw){const a=proj.actions.find(a=>a.id===pathDraw.id);if(a?.type==='shape'&&a.pathKeys?.length&&(nextFrame<a.start||nextFrame>a.start+a.dur))endPathDraw(true);}
+  if(nextFrame!==frame&&pathDraw){const a=proj.actions.find(a=>a.id===pathDraw.id);if(a?.type==='shape'&&a.pathKeys?.length)a.path=pathAt(a,nextFrame);}
+  frame = nextFrame;
   $('#mFrame').value = +(frame / proj.fps).toFixed(3); $('#mFrame').max = +((proj.frames - 1) / proj.fps).toFixed(3); $('#mFrame').step = '0.001';
   $('#mTimecode').textContent = [Math.floor(frame / proj.fps / 60), Math.floor(frame / proj.fps) % 60, frame % proj.fps].map(x => String(x).padStart(2, '0')).join(':');
   $('#mPlayhead').style.left = `${frame / (proj.frames - 1) * 100}%`;
   draw();
   if (current()?.type === 'object') updateObjectInspector(current());
   if (current()?.preset === 'keyframed') { if (!playing) updateCameraInspector(current()); updateCameraKeySelection(); }
+  if(!playing&&['shape','group'].includes(current()?.type))renderInspector();
   window.dispatchEvent(new CustomEvent("ff-frame",{detail:{studio:"map",frame,fps:proj.fps,playing}}));
 }
 function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
@@ -220,9 +233,9 @@ function play() {
 // ------------------------------------------------------------------ left panel
 // ---- several countries / regions on one Border or Highlight item (edited in its Properties)
 const regionKey = t => `${t.kind}:${t.country || ''}:${t.name}`;
-const regionTarget = a => ['country', 'region', 'regions'].includes(a?.target?.kind);
+const regionTarget = a => ['country', 'region', 'regions', 'polygon'].includes(a?.target?.kind);
 const memberLabel = t => (t.kind === 'region' && geo?.byName.get(t.name)?.name) || t.name;
-const membersOf = a => (regionTarget(a) ? [...targetMembers(a.target)] : []);
+const membersOf = a => (regionTarget(a)&&a.target.kind!=='polygon' ? [...targetMembers(a.target)] : []);
 function setMembers(a, members) {
   const list = members.map(({ label, ...t }) => t);
   a.target = list.length === 1 ? list[0] : { kind: 'regions', name: `${list.length} regions`, members: list };
@@ -251,13 +264,14 @@ function splitRegions(a) {
 }
 function regionFields(a) {
   const list = membersOf(a), picking = pick?.key === '__members' && pick.id === a.id, border = a.type === 'border';
+  if(a.target.kind==='polygon')return `<p class="mini-label">Custom region: ${esc(a.target.name)} · ${a.target.path.length} boundary points</p>`+campaign.regionFields(a)+`<button type="button" data-mregpick>⌖ Pick existing regions instead</button>`;
   return `<div class="m-regions"><span class="mini-label">${border ? 'Countries / regions' : isDetail() ? 'Regions / countries' : 'Countries'} <b class="m-val">${list.length}</b></span>`
     + `<div class="m-region-chips">${list.map((t, i) => `<button type="button" data-mrm="${i}" title="Remove from this item">${esc(memberLabel(t))} ×</button>`).join('')}</div>`
     + `<div class="m-loc"><label>Add another<input data-madd data-kinds="${border ? 'border' : 'country'}" list="${border ? 'mDlBorder' : 'mDlCountry'}" placeholder="Type a ${isDetail() ? 'region or country' : 'country'}" autocomplete="off"></label><button type="button" data-mregpick class="${picking ? 'active' : ''}" title="Click regions on the map to add or remove them (Shift-click = whole country)">⌖</button></div>`
     + (picking ? '<p class="mini-label">Click the map to add or remove regions. Shift-click picks a whole country. Press ⌖ or Esc when done.</p>' : '')
     + (isDetail() ? '' : '<p class="mini-label">For states, districts and other local regions, add that country under <button type="button" class="link" data-mopenset>Map settings → Country details</button>.</p>')
     + (list.length > 1 ? `<label>Several regions<select data-mcombine><option value="together" selected>Together as one region</option><option value="separate">Separately, as different regions</option></select></label><p class="mini-label">Together draws one outline around all of them. Separately makes one item per region, so each can be timed or partly animated on its own.</p>` : '')
-    + '</div>';
+    + campaign.regionFields(a) + '</div>';
 }
 function buildStaticUI() {
   $('#mAddGrid').innerHTML = Object.entries(ACTION_TYPES).filter(([, a]) => !a.hidden).map(([k, a]) => `<button data-madd="${k}" title="${esc(a.hint)}"><b>${a.icon}</b>${a.label}</button>`).join('');
@@ -265,6 +279,10 @@ function buildStaticUI() {
   $$('[data-madd]').forEach(el => el.onclick = () => addAction(el.dataset.madd));
   $$('[data-mpre]').forEach(el => el.onclick = () => addShot(el.dataset.mpre));
   $('#mTheme').innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
+  for(const shape of ['front','road','railway','river']){
+    const button=document.createElement('button');button.type='button';button.dataset.mapFeature=shape;button.textContent=SHAPES[shape].label;
+    button.onclick=()=>addAction('shape',{shape,color:SHAPES[shape].color,name:SHAPES[shape].label,revealPath:shape==='front'?false:true,networkAnimation:'both',flowSpeed:24});$('#mAddGrid').append(button);
+  }
   $('#mImagery').innerHTML = Object.entries(IMAGERY_SOURCES).map(([k, x]) => `<option value="${k}">${x.label}</option>`).join('');
   if (!$('#mTexture')) $('#mImageryBox').insertAdjacentHTML('afterend', `
     <details open id="mTextureSection">
@@ -281,11 +299,11 @@ function suggestTarget() {
   const t = src.type === 'border' || src.type === 'highlight' ? src.target : ['pin', 'object', 'effect'].includes(src.type) ? src.place : src.type === 'plane' ? src.to : null;
   return t && t.kind !== 'all' ? clone(t) : null;
 }
-function addAction(type) {
+function addAction(type,extra={}) {
   const dc = detailCountry();
   if (dc && !geo?.details?.has(dc)) { notify(detailErrors.has(dc) ? `${dc} detail could not load. Check map settings for Retry.` : `Loading ${dc} detail. Try again in a moment.`); return; }
   pause(); checkpoint();
-  const a = makeAction(type, frame); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
+  const a = makeAction(type, frame,extra); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
   if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
   if (type === 'label') { const [lon, lat] = centerLonLat(); Object.assign(a, { labelPlacement: 'map', place: { kind: 'point', name: 'Map position', lon: ((lon + 180) % 360 + 360) % 360 - 180, lat }, offsetX: 0, offsetY: 0, labelStyle: { ...DEFAULT_LABEL_STYLE, ...(proj.theme==='documentary'?DOCUMENTARY_LABEL:LABEL_PRESETS.atlasGround.style) } }); }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
@@ -313,6 +331,7 @@ function renderItems() {
   $$('[data-mid]').forEach(el => el.onclick = () => select(el.dataset.mid));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current();
   audioUI?.renderList();
+  campaign?.decorateItems();
   updateMoveButtons();
 }
 /** Step the selected layer up or down the list. Camera shots follow their start time, so only animations and audio layers move. */
@@ -355,12 +374,16 @@ function renderInspector() {
   const shot = isShot(it);
   $('#mInspTitle').textContent = shot ? 'Camera shot' : ACTION_TYPES[it.type].label;
   let h = `<div class="inspector-title"><span>${iconOf(it)}</span> <em id="mInspName">${esc(it.name)}</em></div>`;
+  if(it.type==='group'){
+    h+='<div class="section-title m-sep">GROUP TRANSFORM</div>'+campaign.groupFields(it)+F.sel('easing','Motion',it.easing,EASE_OPTS);
+    box.innerHTML=h;bindInspector(it);campaign.bind(it);return;
+  }
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
   h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : it.type === 'object' ? F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
   h += '<p class="mini-label">' + (shot && it.preset === 'keyframed' ? 'Edit the camera at the playhead. Changes create keyframes automatically. Choose a property to see and retime its diamonds.' : 'The bar controls when this item appears and disappears. Drag the two centered diamonds to set when its animation starts and finishes.') + '</p>' + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
   if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it) + (it.type === 'object' ? objectArrangementFields(it) : '');
-  box.innerHTML = h; bindInspector(it); if (it.type === 'object') { bindObjectArrangement(); bindObjectKeys(it); bindArmyFields(it); updateObjectInspector(it); }
+  box.innerHTML = h; bindInspector(it); campaign?.bind(it); if (it.type === 'object') { bindObjectArrangement(); bindObjectKeys(it); bindArmyFields(it); updateObjectInspector(it); }
 }
 function bannerFields(a) {
   return `<div class="m-badge"><span class="mini-label">Flag artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*" data-badgefile hidden><p class="mini-label">Upload your artwork. The cloth hangs from a rigid crossbar and waves in the wind. Its proportions follow your uploaded image.</p>`
@@ -407,6 +430,7 @@ function objectFields(a) {
     + F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
     + (a.sizeMode==='map'?F.num('sizeZoom','Reference zoom',a.sizeZoom??3,0,14,.1)+'<p class="mini-label">Size is measured at this zoom. Zooming in one level doubles it. Size keyframes still apply.</p>':'')
     + F.range('size','Size',pose.size,.2,8,.05,x=>x.toFixed(2)+'x')
+    + F.range('opacity','Opacity',a.opacity??1,0,1,.05,x=>Math.round(x*100)+'%')
     + F.num('objectAngle',a.formation==='wall'?'Extra facing angle (degrees)':'Rotation (degrees)',pose.objectAngle,-3600,3600,1)
     + (a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
     + objectKeyFields(a)
@@ -558,17 +582,18 @@ function scenePanelFields(a) {
 }
 function actionFields(a) {
   switch (a.type) {
+    case 'group': return campaign.groupFields(a);
     case 'scene': return scenePanelFields(a);
     case 'label': return F.text('text', 'Text', a.text, 160, 'Your label') + F.sel('labelPlacement', 'Anchor', a.labelPlacement || 'screen', [['map', 'Geographic position'], ['screen', 'Canvas position']]) + (a.labelPlacement === 'map' ? F.loc('place', 'Position on map', a.place, 'place') + F.num('offsetX', 'Horizontal offset', a.offsetX ?? 0, -1000, 1000) + F.num('offsetY', 'Vertical offset', a.offsetY ?? 0, -1000, 1000) : F.num('x', 'Horizontal position (%)', a.x ?? 50, 0, 100) + F.num('y', 'Vertical position (%)', a.y ?? 15, 0, 100));
     case 'border': return (regionTarget(a) ? regionFields(a) : F.loc('target', 'Country / region', a.target, 'border') + '<p class="mini-label">Type a country or region to choose specific ones. You can then add more.</p>') + (regionTarget(a) && !a.borderPartial ? F.num('borderFrom','Border animation start (%)',a.borderFrom ?? 0,0,100,.1) + '<button type="button" data-borderpoint="borderFrom">Pick start on border</button>' + F.chk('borderReverse','Reverse direction',a.borderReverse) : '') + F.chk('borderPartial','Animate part of the border',a.borderPartial) + (a.borderPartial ? `<div class="two">${F.num('borderFrom','From (%)',a.borderFrom ?? 0,0,100,.1)}${F.num('borderTo','To (%)',a.borderTo ?? 100,0,100,.1)}</div><div class="two"><button type="button" data-borderpoint="borderFrom">Pick start on border</button><button type="button" data-borderpoint="borderTo">Pick end on border</button></div>` + F.chk('borderReverse','Reverse direction',a.borderReverse) + '<p class="mini-label">Click near the outline to set each endpoint. Start and end follow the same outline; each island has its own outline.</p>' : '') + F.color('color', 'Line color', a.color) + F.range('width', 'Line width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + (a.borderPartial ? '' : F.range('fillAlpha', 'Fill after drawing', a.fillAlpha, 0, .6, .02, x => Math.round(x * 100) + '%')) + F.chk('invert', 'Invert (start fully drawn, then shrink away)', a.invert);
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
     case 'highlight': {
-      const country = ['country','region','regions'].includes(a.target.kind);
+      const country = ['country','region','regions','polygon'].includes(a.target.kind);
       return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country?highlightExtentFields(a)+flagHighlightFields(a):'') + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || terrainSettingsOf(proj).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? terrainSettingsOf(proj).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
-    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '');
+    case 'shape': return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a) + F.color('color', 'Color', a.color) + F.range('width', 'Line width', a.width, 1, 16, .5) + (['zone', 'noFly'].includes(a.shape) ? F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%') : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'e.g. 3rd Army advance') : '') + campaign.pathFields(a);
     case 'pin': {
       const display = a.badge ? 'badge' : a.showIcon === false ? 'text' : a.showLabel ? 'both' : 'icon';
       const mv = a.mode === 'move' || a.mode === 'path' ? a.mode : 'stay', ownColor = a.badge || a.showIcon === false;
@@ -597,19 +622,21 @@ function placeAt(p) {
   return best ? { kind: 'city', name: best[0], lat: p.lat, lon: p.lon } : { kind: 'point', name: `${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}`, lat: p.lat, lon: p.lon };
 }
 /** Keeps From / To equal to the first and last point, so labels and camera shots that name the route keep working. */
-function syncPathEnds(a) { const p = a.path || []; if (p.length) { a.from = placeAt(p[0]); a.to = placeAt(p[p.length - 1]); if (a.type === 'pin') a.place = a.from; } }
+function syncPathEnds(a) { const p = a.path || []; if (p.length) { a.from = placeAt(p[0]); a.to = placeAt(p[p.length - 1]); if (a.type === 'pin') a.place = a.from; } if(a.type==='shape'&&a.pathKeys?.length&&p.length>=2&&frame>=a.start&&frame<=a.start+a.dur)putPathKey(a,frame,p); }
 function pathFields(a) {
-  const pts = a.path || [], drawing = pathDraw?.id === a.id;
+  const drawing = pathDraw?.id === a.id,pts = a.type==='shape'&&a.pathKeys?.length&&!drawing?pathAt(a,frame):a.path||[];
   return F.sel('curve', 'Path shape', a.curve === 'straight' ? 'straight' : 'smooth', Object.entries(PATH_CURVES)) +
     `<div class="m-path-actions"><button type="button" data-mpath="draw" class="${drawing ? 'active' : ''}" title="Click the map to add points. Drag a point to move it. Alt+click removes it.">${drawing ? '✓ Finish drawing' : '✎ Draw path on map'}</button>` +
     `<button type="button" data-mpath="undo" ${pts.length ? '' : 'disabled'} title="Remove the last point">↶ Last point</button>` +
     `<button type="button" data-mpath="reverse" ${pts.length > 1 ? '' : 'disabled'} title="Travel the path the other way">⇄ Reverse</button>` +
-    `<button type="button" data-mpath="clear" ${pts.length ? '' : 'disabled'} title="Remove every point">Clear</button></div>` +
+    `<button type="button" data-mpath="clear" ${pts.length ? '' : 'disabled'} title="Remove every point and shape keyframe">${a.pathKeys?.length?'Clear animation':'Clear'}</button></div>` +
     (pts.length ? `<ol class="m-wps">${pts.map((p, i) => `<li><b>${i + 1}</b><span title="${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}">${esc(placeAt(p).name)}</span><button type="button" data-mwdel="${i}" title="Remove this point" aria-label="Remove point ${i + 1}">✕</button></li>`).join('')}</ol>` : '') +
     `<p class="mini-label">${drawing ? 'Click to add points · drag a point to move it · right-drag or middle-drag to pan · scroll to zoom · Alt+click removes a point · Enter when done.' : pts.length < 2 ? 'Press “Draw path on map”, then click at least two points. They are used in order.' : `${pts.length} points. They are used in order.`}</p>`;
 }
 function startPathDraw(id) {
-  cancelPick(); pause(); pathDraw = { id }; canvas.style.cursor = 'crosshair';
+  const action=proj.actions.find(a=>a.id===id);
+  if(action?.type==='shape'&&action.pathKeys?.length){if(frame<action.start||frame>action.start+action.dur)setFrame(clamp(frame,action.start,action.start+action.dur));action.path=pathAt(action,frame);}
+  campaign?.cancel();cancelPick(); pause(); pathDraw = { id }; canvas.style.cursor = 'crosshair';
   $('#mHint').textContent = 'Click to add points · right-drag or middle-drag to pan · scroll to zoom · Enter to finish';
   notify('Click the map to add points to the path'); renderInspector(); draw();
 }
@@ -622,9 +649,11 @@ function endPathDraw(silent) {
 }
 function pathAction(a, what) {
   if (what === 'draw') { if (pathDraw?.id === a.id) { endPathDraw(); notify('Path ready'); } else startPathDraw(a.id); return; }
+  if(a.type==='shape'&&a.pathKeys?.length&&!pathDraw)a.path=pathAt(a,frame);
   if (!(a.path || []).length) return;
+  if(what==='undo'&&a.pathKeys?.length&&a.path.length<=2){notify('Keep two points in a keyed shape, or clear the animation.');return;}
   checkpoint();
-  if (what === 'undo') a.path.pop(); else if (what === 'clear') a.path = []; else if (what === 'reverse') a.path.reverse();
+  if (what === 'undo') a.path.pop(); else if (what === 'clear') {a.path = [];if(a.type==='shape')a.pathKeys=[];} else if (what === 'reverse') a.path.reverse();
   syncPathEnds(a); changed(); renderInspector();
 }
 const cameraEditFrame = s => clamp(frame, s.start, s.start + s.dur);
@@ -694,9 +723,9 @@ function shotFields(s) {
   const P = PRESETS[s.preset], has = k => P.fields.includes(k);
   let h = `<p class="mini-label">${esc(P.hint)}.</p>`;
   if (has('target')) h += F.loc('target', 'Target', s.target, 'any');
-  if (has('autoFit') && ['country','region','regions'].includes(s.target.kind)) h += F.chk('autoFit', 'Fit the whole region in view', s.autoFit);
+  if (has('autoFit') && ['country','region','regions','polygon'].includes(s.target.kind)) h += F.chk('autoFit', 'Fit the whole region in view', s.autoFit);
   if (has('planeId')) h += F.sel('planeId', 'Travel route', s.planeId, [['', 'Choose a route…'], ...planes().map(a => [a.id, a.mode === 'path' ? `${a.name} (drawn path)` : `${a.name} (${(a.from || a.place)?.name ?? '?'} → ${a.to?.name ?? '?'})`])]);
-  if (has('zoom') && !(has('autoFit') && s.autoFit && ['country','region','regions'].includes(s.target.kind))) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
+  if (has('zoom') && !(has('autoFit') && s.autoFit && ['country','region','regions','polygon'].includes(s.target.kind))) h += F.num('zoom', 'Zoom level', s.zoom, 1, 12, .1);
   if (has('amount')) h += F.num('amount', s.preset === 'pullBack' ? 'Zoom out by' : 'Zoom in by', s.amount, 0, 8, .1);
   if (has('degrees')) h += F.num('degrees', 'Rotate by (degrees)', s.degrees, -720, 720, 5);
   if (has('pitch')) h += F.range('pitch', 'Tilt', s.pitch, 0, 70, 1, x => x + '°');
@@ -767,8 +796,8 @@ function bindInspector(it) {
           if (!Number.isFinite(v) || v < 0 || !Number.isSafeInteger(target) || (key === '__startSeconds' ? target >= finish : target <= it.start)) {
             notify('Enter a valid time, with Finish after Start.'); renderInspector(); return;
           }
-          if (key === '__startSeconds') retimeMapItem(it, target, finish - target, false);
-          else retimeMapItem(it, it.start, target - it.start, false);
+          if (key === '__startSeconds') retimeEditorItem(it, target, finish - target, false);
+          else retimeEditorItem(it, it.start, target - it.start, false);
           ensureLength(it.start + it.dur); changed(); renderInspector(); return;
         }
         const lo = Number(el.min), hi = el.max === '' ? Infinity : Number(el.max);
@@ -777,7 +806,7 @@ function bindInspector(it) {
           v = Math.max(lo, Math.round(v));
           const end = key === 'start' ? v + it.dur : key === 'dur' ? it.start + v : it.start + it.dur;
           if (!Number.isSafeInteger(v) || !Number.isSafeInteger(end)) { el.value = it[key]; notify('Enter a valid frame number.'); return; }
-          if (key === 'start' || key === 'dur') retimeMapItem(it, key === 'start' ? v : it.start, key === 'dur' ? v : it.dur);
+          if (key === 'start' || key === 'dur') retimeEditorItem(it, key === 'start' ? v : it.start, key === 'dur' ? v : it.dur);
           it[key] = v; if (key !== 'animDur') ensureLength(end); el.value = v; changed(); renderInspector(); return;
         }
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
@@ -822,7 +851,7 @@ function bindInspector(it) {
   $$('#mInspector [data-movekey]').forEach(el => el.onclick = () => { const key = el.dataset.movekey; if (frame < it.start || frame > it.start + it.dur || (key === 'moveStart' ? frame >= it.moveEnd : frame <= it.moveStart)) { notify('Choose a frame inside the bar, with end after start.'); return; } checkpoint(); it[key] = frame; changed(); renderInspector(); });
   $$('#mInspector [data-borderpoint]').forEach(el=>el.onclick=()=>startPick(el.dataset.borderpoint,'borderpoint'));
   $$('#mInspector [data-mpath]').forEach(el => el.onclick = () => pathAction(it, el.dataset.mpath));
-  $$('#mInspector [data-mwdel]').forEach(el => el.onclick = () => { checkpoint(); it.path.splice(+el.dataset.mwdel, 1); syncPathEnds(it); changed(); renderInspector(); });
+  $$('#mInspector [data-mwdel]').forEach(el => el.onclick = () => {if(it.pathKeys?.length&&it.path.length<=2){notify('Keep two points in a keyed shape, or clear the animation.');return;} checkpoint();if(it.type==='shape'&&it.pathKeys?.length&&!pathDraw)it.path=pathAt(it,frame);it.path.splice(+el.dataset.mwdel, 1); syncPathEnds(it); changed(); renderInspector(); });
   if (!isShot(it) && it.labelStyle) bindLabelStyle($('#mInspector'), 'mItemLbl', () => it.labelStyle, v => { it.labelStyle = v; }, () => renderInspector());
 }
 function centerLonLat() { const l = screenToLonLat(lastView, proj.width / 2, proj.height / 2); return l ? [l.lon, l.lat] : [0, 0]; }
@@ -942,7 +971,7 @@ function pathPointerDown(e) {
   hs.forEach((h, i) => { const d = Math.hypot(h.x - sx, h.y - sy); if (d < bd) { bd = d; hit = i; } });
   if (hit >= 0) {
     checkpoint();
-    if (e.altKey) { a.path.splice(hit, 1); syncPathEnds(a); changed(); renderInspector(); return; }
+    if (e.altKey) {if(a.pathKeys?.length&&a.path.length<=2){undoStack.pop();updateHistory();notify('Keep two points in a keyed shape, or clear the animation.');return;} a.path.splice(hit, 1); syncPathEnds(a); changed(); renderInspector(); return; }
     pathDrag = { id: a.id, i: hit, moved: false }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     return;
   }
@@ -1162,12 +1191,14 @@ function updateTimelineItem(it) {
   row.insertAdjacentHTML('beforeend', timelineKeys(it, last)); bindTimelineKeys(row);
 }
 function timelineKeys(it, last) {
+  const extraKeys=(field,kind)=>(it[field]||[]).filter(k=>k.frame>=it.start&&k.frame<=it.start+it.dur).map(k=>`<button type="button" class="m-key m-campaign-key" data-map-key="${kind}:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px,${Math.min(last,k.frame)/last*100}%,calc(100% - 11px))" aria-label="${kind} keyframe, frame ${k.frame}" title="${kind} keyframe · frame ${k.frame}. Drag to retime."></button>`).join('');
+  if(it.type==='group')return extraKeys('groupKeys','group');
   if (it.preset === 'keyframed') return cameraKeysOf(it).filter(k => k.frame >= it.start && k.frame <= it.start + it.dur).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).map(k => `<button type="button" class="m-key ${k.frame === frame && it.id === sel ? 'current' : ''}" data-map-key="camera:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Camera keyframe - frame ${k.frame}. Drag to retime." aria-label="Camera keyframe, frame ${k.frame}"></button>`).join('');
   const fields=objectProperty==='all'?['size','objectAngle','damageState']:[objectProperty];
   const objectMarkers=it.type==='object'&&objectProperty!=='animation'?(it.objectKeys||[]).filter(k=>k.frame>=it.start&&k.frame<=it.start+it.dur).filter(k=>fields.some(field=>k.values[field]!==undefined)).map(k=>`<button type="button" class="m-key m-object-key" data-map-key="object:${objectProperty}:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Object ${esc(objectProperty)} keyframe at frame ${k.frame}" aria-label="Object keyframe at frame ${k.frame}"></button>`).join(''):'';
   if(it.type==='object'&&!['all','animation'].includes(objectProperty))return objectMarkers;
   const keys = animationKeysOf(it);
-  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].filter(([, time]) => time >= it.start && time <= it.start + it.dur).map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('')+objectMarkers;
+  return [['animationStart', keys.start, 'Animation start'], ['animationEnd', keys.end, 'Animation finish']].filter(([, time]) => time >= it.start && time <= it.start + it.dur).map(([key, time, label]) => `<button type="button" class="m-key" data-map-key="${key}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last, time) / last * 100}%, calc(100% - 11px))" title="${label}: frame ${time}. Drag to retime animation." aria-label="${esc(it.name)} ${label} keyframe, frame ${time}"></button>`).join('')+objectMarkers+extraKeys('pathKeys','path');
 }
 function bindTimelineKeys(root = document) {
   [...root.querySelectorAll('[data-map-key]')].forEach(el => {
@@ -1178,7 +1209,7 @@ function bindTimelineKeys(root = document) {
       sel = it.id; renderItems(); renderInspector();
       if (el.dataset.mapKey.startsWith('camera:')) setFrame(+el.dataset.mapKey.split(':')[1]);
       if (el.dataset.mapKey.startsWith('object:')) setFrame(+el.dataset.mapKey.split(':')[2]);
-      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
+      checkpoint(); drag = { kind: 'clip', id: it.id, mode: el.dataset.mapKey, x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, pathKeys: it.pathKeys ? clone(it.pathKeys) : null, groupKeys: it.groupKeys ? clone(it.groupKeys) : null, groupChildren: it.type === 'group' ? clone(proj.actions.filter(a=>it.memberIds.includes(a.id))) : null, moved: false };
       renderTimeline();
     };
     el.onkeydown = e => {
@@ -1190,6 +1221,7 @@ function bindTimelineKeys(root = document) {
       let focusKey = key;
       if (key.startsWith('camera:')) { const from = +key.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur); moveCameraKey(it, from, to, cameraTrackFields()); setFrame(to); focusKey = `camera:${to}`; }
       else if(key.startsWith('object:')){const [,field,time]=key.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);focusKey=`object:${field}:${to}`;}
+      else if(key.startsWith('path:')||key.startsWith('group:')){const[kind,time]=key.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);(kind==='path'?movePathKey:moveGroupKey)(it,from,to);setFrame(to);focusKey=`${kind}:${to}`;}
       else setAnimationKey(it, key, animationKeysOf(it)[key === 'animationStart' ? 'start' : 'end'] + d);
       ensureLength(it.start + it.dur); changed(); renderInspector();
       $$('[data-map-key]').find(b => b.dataset.keyItem === it.id && b.dataset.mapKey === focusKey)?.focus();
@@ -1211,18 +1243,23 @@ function renderTimeline() {
     e.preventDefault(); e.stopPropagation(); pause();
     const id = el.dataset.mclip, it = items().find(i => i.id === id); if (!it) return;
     if (sel !== id) { sel = id; renderItems(); renderInspector(); }
-    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, moved: false };
+    checkpoint(); drag = { kind: 'clip', id, mode: e.target.dataset.h || 'move', x0: frameFromEvent(e), start: it.start, dur: it.dur, sourceStart: it.sourceStart, moveStart: it.moveStart, moveEnd: it.moveEnd, animDur: it.animDur, animStart: it.animStart, animEnd: it.animEnd, cameraKeys: it.preset === 'keyframed' ? clone(cameraKeysOf(it)) : null, objectKeys: it.objectKeys ? clone(it.objectKeys) : null, pathKeys: it.pathKeys ? clone(it.pathKeys) : null, groupKeys: it.groupKeys ? clone(it.groupKeys) : null, groupChildren: it.type === 'group' ? clone(proj.actions.filter(a=>it.memberIds.includes(a.id))) : null, moved: false };
     renderTimeline();
   });
   bindTimelineKeys();
   $$('[data-mrow]').forEach(el => el.onpointerdown = e => { if (e.target.closest('[data-mclip], [data-map-key]')) return; select(el.dataset.mrow); scrub(e); });
   audioUI?.renderTimeline();
+  campaign?.decorateTimeline();
 }
 function scrub(e) { pause(); setFrame(frameFromEvent(e)); drag = { kind: 'scrub' }; }
 window.addEventListener('pointermove', e => {
   if (!drag) return;
   if (drag.kind === 'scrub') { const next = frameFromEvent(e); if (next !== frame) setFrame(next); return; }
   const it = items().find(i => i.id === drag.id); if (!it) return;
+  if(drag.mode?.startsWith('path:')||drag.mode?.startsWith('group:')){
+    const[kind,time]=drag.mode.split(':'),from=+time,to=clamp(from+frameFromEvent(e)-drag.x0,it.start,it.start+it.dur);if(drag.lastTo===to)return;drag.lastTo=to;
+    const field=kind==='path'?'pathKeys':'groupKeys';it[field]=clone(drag[field]||[]);(kind==='path'?movePathKey:moveGroupKey)(it,from,to);drag.moved=true;setFrame(to);updateTimelineItem(it);return;
+  }
   const rawDelta = frameFromEvent(e) - drag.x0; const d = ['move','l','r'].includes(drag.mode) ? snapTimelineDelta($('#mTracks'),rawDelta,drag.start,drag.start+drag.dur,drag.mode,drag.id,proj.frames-1,proj.fps,e) : rawDelta; if (d !== 0) drag.moved = true;
   if(drag.mode.startsWith('object:')){const [,field,time]=drag.mode.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);if(drag.lastTo===to)return;drag.lastTo=to;it.objectKeys=clone(drag.objectKeys||[]);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);updateTimelineItem(it);return;}
   if (drag.mode.startsWith('camera:')) {
@@ -1245,9 +1282,13 @@ window.addEventListener('pointermove', e => {
   if (drag.moveStart !== undefined) { it.moveStart = drag.moveStart; it.moveEnd = drag.moveEnd; }
   if (drag.cameraKeys) it.cameraKeys = clone(drag.cameraKeys);
   if (drag.objectKeys) it.objectKeys = clone(drag.objectKeys);
-  retimeMapItem(it, start, dur, drag.mode === 'move');
+  if(drag.pathKeys)it.pathKeys=clone(drag.pathKeys);
+  if(drag.groupKeys)it.groupKeys=clone(drag.groupKeys);
+  if(drag.groupChildren)for(const original of drag.groupChildren){const child=proj.actions.find(a=>a.id===original.id);if(child)Object.assign(child,clone(original));}
+  retimeEditorItem(it, start, dur, drag.mode === 'move');
   const oldFrames = proj.frames; ensureLength(it.start + it.dur);
   if (proj.frames !== oldFrames) renderTimeline(); else updateTimelineItem(it);
+  if(it.type==='group')for(const child of proj.actions.filter(a=>it.memberIds.includes(a.id)))updateTimelineItem(child);
   draw(); const s = $('#mInspector [data-mf="start"]'), l = $('#mInspector [data-mf="dur"]'); if (s) s.value = it.start; if (l) l.value = it.dur;
 });
 window.addEventListener('pointerup', () => { if (drag?.kind === 'clip') { if (!drag.moved) undoStack.pop(); changed(); renderInspector(); updateHistory(); } drag = null; });
@@ -1301,6 +1342,11 @@ function bindToolbar() {
     pause(); checkpoint();
     if (isShot(it) && !it.sourceFrom) it.sourceFrom = cameraAt(proj, geo, proj.width, proj.height, it.start);
     const right = splitMapItem(it, frame, crypto.randomUUID());
+    if(it.type==='group'){
+      const children=proj.actions.filter(a=>it.memberIds.includes(a.id));
+      if(proj.actions.length+children.length+1>200){history('undo');notify('This split would exceed 200 items.');return;}
+      right.memberIds=children.map(child=>{const copy=clone(child);copy.id=crypto.randomUUID();proj.actions.push(copy);return copy.id;});
+    }
     const list = isShot(it) ? proj.shots : proj.actions;
     list.splice(list.indexOf(it) + 1, 0, right);
     sel = right.id; saveLocal(); renderAll(); notify('Item split at playhead');
@@ -1324,6 +1370,12 @@ function bindToolbar() {
   $('#mDuplicate').onclick = () => {
     if (audioUI?.duplicate()) return;
     const it = current(); if (!it) return; checkpoint();
+    if(it.type==='group'){
+      const children=proj.actions.filter(a=>it.memberIds.includes(a.id));
+      if(proj.actions.length+children.length+1>200){undoStack.pop();updateHistory();notify('This copy would exceed 200 items.');return;}
+      const copy=clone(it);copy.id=crypto.randomUUID();copy.name+=' copy';copy.memberIds=children.map(child=>{const c=clone(child);c.id=crypto.randomUUID();proj.actions.push(c);return c.id;});proj.actions.push(copy);
+      retimeGroup(proj,copy,Math.min(proj.frames-1,it.start+10),it.dur);ensureLength(copy.start+copy.dur);sel=copy.id;saveLocal();renderAll();return;
+    }
     const c = clone(it); c.id = crypto.randomUUID(); c.name += ' copy'; retimeMapItem(c, Math.min(proj.frames - 1, it.start + 10), c.dur);
     if (!ensureLength(c.start + c.dur)) { notify('Choose an earlier start frame before duplicating this item.'); return; }
     (isShot(it) ? proj.shots : proj.actions).push(c); sel = c.id; saveLocal(); renderAll();
@@ -1332,6 +1384,9 @@ function bindToolbar() {
     if (audioUI?.remove()) return;
     const it = current(); if (!it) return; checkpoint();
     proj.shots = proj.shots.filter(s => s.id !== it.id); proj.actions = proj.actions.filter(a => a.id !== it.id);
+    if(it.type==='group')proj.actions=proj.actions.filter(a=>!it.memberIds.includes(a.id));
+    for(const group of proj.actions.filter(a=>a.type==='group'))group.memberIds=group.memberIds.filter(id=>id!==it.id);
+    proj.actions=proj.actions.filter(a=>a.type!=='group'||a.memberIds.length);
     for (const s of proj.shots) if (s.planeId === it.id) s.planeId = '';
     sel = null; saveLocal(); renderAll();
   };
@@ -1359,7 +1414,7 @@ window.addEventListener('keydown', e => {
   else if ((e.key === 'Backspace' || e.key === 'Delete') && !typing) {
     e.preventDefault(); e.stopImmediatePropagation();
     const a = proj.actions.find(x => x.id === pathDraw.id);
-    if (a?.path?.length) { checkpoint(); a.path.pop(); syncPathEnds(a); changed(); renderInspector(); }
+    if (a?.path?.length) {if(a.pathKeys?.length&&a.path.length<=2){notify('Keep two points in a keyed shape, or clear the animation.');return;} checkpoint(); a.path.pop(); syncPathEnds(a); changed(); renderInspector(); }
   }
 }, true);
 window.addEventListener('keydown', e => {
@@ -1412,6 +1467,10 @@ window.addEventListener('keydown', event => {
 
 // ------------------------------------------------------------------ boot
 try { const saved = localStorage.getItem(STORE); proj = saved ? validateMapProject(JSON.parse(saved)) : demoMapProject(); } catch { proj = demoMapProject(); }
+campaign=installCampaignUI({canvas,F,project:()=>proj,current,frame:()=>frame,geo:()=>geo,area:()=>areaOf(proj),detailLevelOf,pause,checkpoint,changed,renderInspector,notify,select,seek:setFrame,draw,startPathDraw,endPathDraw,cancelPick,editingPath:id=>pathDraw?.id===id,resolve:loc=>geo&&resolveLoc(geo,loc),exporting:()=>exporting,
+  projectPoint:(view,p)=>{const X=lonToX(p.lon);return projectPoint(view,X+Math.round(view.cx-X),latToY(p.lat));},
+  pointAt:e=>{if(!lastView||!geo)return null;const{sx,sy}=canvasXY(e);return screenToLonLat(lastView,sx,sy);}
+});
 buildStaticUI(); buildLists(); bindSettings(); bindToolbar(); $('#mHint').textContent = HINT;
 audioUI = registerAudioStudio('map', {
  getSelected:()=>sel, getFrame:()=>frame, getFps:()=>proj.fps, getFrames:()=>proj.frames,

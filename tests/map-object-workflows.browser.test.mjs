@@ -120,6 +120,20 @@ try {
     assert.equal(project.actions.at(-1).glyph,glyph,'time props can be selected and saved');
   }
   assert.ok((await evaluate(`Array.from(document.querySelectorAll('#mInspector optgroup')).map(g=>g.label)`)).includes('Time & planning'));
+  const beforeFilter=await saved();
+  await change('#mInspector [data-object-type]','time');
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).map(o=>o.value)`),['clock','stopwatch','hourglass','calendar']);
+  await change('#mInspector [data-object-type]','transport');
+  assert.deepEqual(await saved(),beforeFilter,'browsing types leaves the project unchanged');
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="glyph"]').value`),'calendar','filtering preserves the current object');
+  assert.ok(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).every(o=>o.value!=='clock'&&o.value!=='calendar')`));
+  await change('#mInspector [data-mf="glyph"]','ferry');
+  assert.equal((await saved()).actions.at(-1).glyph,'ferry','filtered selection changes the object');
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-type]').value`),'transport','type selection survives inspector updates');
+  await change('#mInspector [data-object-type]','time');
+  await change('#mInspector [data-mf="glyph"]','calendar');
+  await change('#mInspector [data-object-type]','all');
+  assert.ok((await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] option').length`))>50,'All types restores the catalog');
   await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   assert.deepEqual((await saved()).actions.slice(-4).map(a=>a.glyph),['clock','stopwatch','hourglass','calendar'],'time props survive reload');
   const render=await evaluate(`(async()=>{

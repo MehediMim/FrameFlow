@@ -33,6 +33,15 @@ import { installCampaignUI } from './map-campaign-ui.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 let cameraProperty = 'all', objectProperty = 'all';
+const objectTypeFilters = new Map();
+const OBJECT_CATEGORIES = [
+  ['transport', 'Travel & civilian transport'], ['places', 'Cities & everyday places'],
+  ['infrastructure', 'Infrastructure & clean energy'], ['nature', 'Nature & outdoors'],
+  ['modern', 'Modern military'], ['documentary', 'Documentary · field troops'],
+  ['leaders', 'Leaders & characters'], ['time', 'Time & planning'],
+  ['general', 'Markers & other objects'], ['exploration', 'Exploration · Age of Sail'],
+  ['warfare', 'Warfare · 1500s–1600s'], ['defense', 'Defenses & walls'], ['armies', 'Army groups'],
+];
 const WALL_GLYPHS = ['stoneWall','palisade','earthwork','gatehouse','stoneFort','watchtower','bastion'];
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -537,8 +546,12 @@ function arrangeObjects(operation) {
   pause();checkpoint();for(const {a,patch} of changes)Object.assign(a,patch);changed();notify('Object positions arranged');
 }
 function objectPicker(glyph) {
+  const filter = objectTypeFilters.get(sel) || 'all';
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Travel &amp; civilian transport">${options('transport')}</optgroup><optgroup label="Cities &amp; everyday places">${options('places')}</optgroup><optgroup label="Infrastructure &amp; clean energy">${options('infrastructure')}</optgroup><optgroup label="Nature &amp; outdoors">${options('nature')}</optgroup><optgroup label="Modern military">${options('modern')}</optgroup><optgroup label="Documentary · field troops">${options('documentary')}</optgroup><optgroup label="Leaders &amp; characters">${options('leaders')}</optgroup><optgroup label="Time &amp; planning">${options('time')}</optgroup><optgroup label="Markers &amp; other objects">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
+  const types = [['all', 'All types'], ...OBJECT_CATEGORIES];
+  const outside = filter !== 'all' && (OBJECT_ICONS[glyph]?.group || 'general') !== filter;
+  return `<label>Object type<select data-object-type>${types.map(([key,label]) => `<option value="${key}" ${key === filter ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
+    + `<label>Object<select data-mf="glyph" data-t="sel">${outside ? `<option value="${glyph}" selected disabled>Current: ${esc(OBJECT_ICONS[glyph].label)}</option>` : ''}${OBJECT_CATEGORIES.filter(([key]) => filter === 'all' || key === filter).map(([key,label]) => `<optgroup label="${esc(label)}">${options(key)}</optgroup>`).join('')}</select></label>`;
 }
 function highlightExtentFields(a) {
   const mode = a.highlightExtent || 'full';
@@ -732,6 +745,12 @@ function shotFields(s) {
 
 function bindInspector(it) {
   bindCameraInspector(it);
+  const objectType = $('#mInspector [data-object-type]');
+  if (objectType) objectType.onchange = () => {
+    objectTypeFilters.set(it.id, objectType.value);
+    renderInspector();
+    $('#mInspector [data-object-type]')?.focus();
+  };
   let gesture = false;
   $$('#mInspector [data-mf]').forEach(el => {
     const key = el.dataset.mf, t = el.dataset.t;

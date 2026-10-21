@@ -67,7 +67,7 @@ try {
 
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(el.type==='checkbox')el.checked=${JSON.stringify(value)};else el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const stored=()=>evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);
-  await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=E.newMapProject(),at=(lon,lat)=>({kind:'point',name:'Anchor',lon,lat});p.frames=300;p.camera.init={lon:0,lat:44,zoom:4,bearing:0,pitch:0};p.actions=[
+  await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=E.newMapProject(),at=(lon,lat)=>({kind:'point',name:'Anchor',lon,lat});p.frames=3600;p.camera.init={lon:0,lat:44,zoom:4,bearing:0,pitch:0};p.actions=[
     E.makeAction('object',0,{id:'object',glyph:'tank',place:at(-12,47),dur:240,animDur:60}),
     E.makeAction('pin',0,{id:'pin',place:at(-5,47),dur:240,animDur:60}),
     E.makeAction('effect',0,{id:'effect',place:at(3,47),dur:240,animDur:60}),
@@ -76,6 +76,9 @@ try {
     E.makeAction('plane',0,{id:'travel',from:at(2,39),to:at(10,39),dur:240,animDur:60}),
     E.makeAction('label',0,{id:'screen',text:'Screen note',x:25,y:22,dur:240,animDur:60})];localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
   await waitFor(`document.querySelectorAll('#mItems [data-mid]').length===8&&document.querySelectorAll('#mDlCountry option').length>100`);
+  assert.ok(await evaluate(`Number(document.querySelector('#mZoomT').value)>5`),'long sparse timelines fit the actual content');
+  assert.equal(await evaluate(`document.querySelectorAll('.ff-track-heading').length`),0,'no redundant section-heading rows');
+  assert.ok(await evaluate(`[...document.querySelectorAll('#mTrackRows [data-mrow]')].every(row=>parseFloat(row.style.height)<=32)`),'timeline rows stay compact');
   await change('#mFrame',1);
   const point=(lon,lat)=>evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),i=p.camera.init,v=E.makeView({cx:E.lonToX(i.lon),cy:E.latToY(i.lat),zoom:i.zoom,bearing:i.bearing,pitch:i.pitch},p.width,p.height),q=E.project(v,E.lonToX(${lon}),E.latToY(${lat})),r=document.querySelector('#mCanvas').getBoundingClientRect();return{x:r.x+q.x/p.width*r.width,y:r.y+q.y/p.height*r.height};})()`);
   const screen=()=>evaluate(`(()=>{const r=document.querySelector('#mCanvas').getBoundingClientRect();return{x:r.x+r.width*.25,y:r.y+r.height*.22};})()`);

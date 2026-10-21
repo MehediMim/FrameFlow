@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=consistent-editor-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=inspector-order-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=compact-timeline-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"></head><body class="landing">
 <style>
 /* Support links for Map Studio and the landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -265,7 +265,7 @@ body.landing #landing{display:block}
 </aside>
 </div>
 <section class="timeline">
-<div class="timeline-head"><div><b>Map timeline</b><span class="pill" id="mFpsLabel">30 FPS</span></div><div class="timeline-tools"><button type="button" id="mSplit" title="Split selected item at playhead (S)">✂ Split</button><label>Zoom <input id="mZoomT" type="range" min="1" max="4" step=".25" value="1"></label></div></div>
+<div class="timeline-head"><div><b>Map timeline</b><span class="pill" id="mFpsLabel">30 FPS</span></div><div class="timeline-tools"><button type="button" id="mSplit" title="Split selected item at playhead (S)">✂ Split</button><button type="button" id="mFitTimeline" title="Fit layers and camera keys in the timeline view">Fit layers</button><label>Zoom <input id="mZoomT" type="range" min="1" max="32" step=".25" value="1"></label></div></div>
 <div class="timeline-body"><div class="timeline-labels"><div class="ruler-label">ITEM <span>SECONDS →</span></div><div id="mTrackLabels"></div></div><div class="tracks-scroll" id="mScroll"><div class="m-tracks" id="mTracks"><div class="m-ruler" id="mRuler"></div><div id="mTrackRows"></div><div class="m-playhead" id="mPlayhead"><span></span></div></div></div></div>
 <footer><span><i class="dot"></i> <span id="mStatus">Ready to map</span></span><span>Space Play / pause <em>·</em> ← → Step frame <em>·</em> Drag bars to retime</span></footer>
 </section>
@@ -273,7 +273,7 @@ body.landing #landing{display:block}
 <input hidden type="file" id="mProjectFile" accept="application/json,.json">
 <dialog id="mModal"><div id="mModalBody"></div><button id="mCloseModal">Close</button></dialog>
 </div>
-<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=paired-camera-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
+<div id="toast" role="status"></div><script type="module" src="map-ui.js?v=compact-timeline-1"></script><script type="module" src="audio-reference.mjs?v=motion-media-1"></script><script type="module">
 // Protect interface text, while preserving normal editing and clipboard use in fields.
 const editable = target => target instanceof Element && !!target.closest('input,textarea,[contenteditable="true"]');
 for (const name of ['copy', 'cut', 'selectstart']) {

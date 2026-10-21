@@ -63,29 +63,25 @@ export function installMagneticTimeline(timeline) {
       const clip = row.querySelector(clipSelector), left = parseFloat(clip?.style.left) || 0;
       const end = clip?.style.width ? left + parseFloat(clip.style.width) : 100 - (parseFloat(clip?.style.right) || 0);
       return { id, row, label: labels.children[id], group: groupOf(row), start: left, end };
-    });
+    }).filter(entry=>!entry.row.hidden&&!entry.label?.hidden);
     let top = 0;
     for (const group of ['Camera', 'Subject', 'Audio']) {
-      for (const parent of [rows, labels]) {
-        const heading = document.createElement('div'); heading.className = 'ff-track-heading';
-        heading.style.top = `${top}px`; heading.textContent = group; parent.append(heading);
-      }
-      top += 24;
-      const members = entries.filter(e => e.group === group), packed = packTimeline(members);
+      const members = entries.filter(e => e.group === group);if(!members.length)continue;
+      const packed = packTimeline(members);
       const representatives = new Map();
       for (const entry of members) {
         const lane = packed.lanes.get(entry.id);
         if (!representatives.has(lane) || entry.row.classList.contains('selected') || entry.row.querySelector('.selected')) representatives.set(lane, entry);
-        Object.assign(entry.row.style, { position: 'absolute', top: `${top + lane * 38}px`, width: '100%', height: '38px', pointerEvents: 'none', background: 'transparent' });
+        Object.assign(entry.row.style, { position: 'absolute', top: `${top + lane * 32}px`, width: '100%', height: '32px', pointerEvents: 'none', background: 'transparent' });
         for (const child of entry.row.children) child.style.pointerEvents = 'auto';
       }
       for (const entry of members) if (entry.label) {
-        Object.assign(entry.label.style, { position: 'absolute', top: `${top + packed.lanes.get(entry.id) * 38}px`, width: '100%', height: '38px', display: representatives.get(packed.lanes.get(entry.id)) === entry ? '' : 'none' });
+        Object.assign(entry.label.style, { position: 'absolute', top: `${top + packed.lanes.get(entry.id) * 32}px`, width: '100%', height: '32px', display: representatives.get(packed.lanes.get(entry.id)) === entry ? '' : 'none' });
       }
-      top += packed.count * 38;
+      top += packed.count * 32;
     }
     for (const parent of [rows, labels]) Object.assign(parent.style, { position: 'relative', height: `${top}px` });
-    observer.observe(rows, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+    observer.observe(rows, { childList: true, subtree: true, attributes: true, attributeFilter: ['style','hidden'] });
   }
   const observer = new MutationObserver(layout);
   layout();

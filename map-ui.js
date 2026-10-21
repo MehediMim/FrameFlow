@@ -4,7 +4,7 @@ import { paintObjectPreviews } from './map-object-preview.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
-import { installTimelineControls } from './timeline-controls.mjs';
+import { installTimelineControls } from './timeline-controls.mjs?v=compact-timeline-1';
 import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=paired-camera-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, featureForTarget, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
@@ -65,6 +65,7 @@ let undoStack = [], redoStack = [], geo = null, geoState = 'idle', geoError = ''
 let pathDraw = null, pathDrag = null; // pathDraw = { id } while points of a travel path are being clicked on the map
 let previewCamera = null, mapPan = null;
 let directMapEditing=null;
+let timelineAutoFit=true;
 let campaign=null;
 
 // ------------------------------------------------------------------ helpers
@@ -1453,6 +1454,12 @@ function bindTimelineKeys(root = document) {
 }
 bindTimelineRename($('#mTrackLabels'), { attribute: 'data-mtl', getItem: id => items().find(it => it.id === id), checkpoint, changed: () => { changed(); renderInspector(); }, pause });
 function renderTimeline() {
+  if(timelineAutoFit&&!drag){
+    let end=Math.max(0,...proj.actions.map(a=>a.start+a.dur),...proj.shots.flatMap(s=>s.preset==='keyframed'?cameraKeysOf(s).map(k=>k.frame):[s.start+s.dur]));
+    try{for(const layer of getAudioSnapshot('map')?.layers||[])end=Math.max(end,(layer.start+layer.duration)*proj.fps);}catch{}
+    const visible=end?Math.min(proj.frames-1,Math.max(proj.fps*2,end+Math.max(proj.fps*.5,end*.05))):proj.frames-1;
+    $('#mZoomT').value=clamp((proj.frames-1)/visible,1,32);
+  }
   const zoom = +$('#mZoomT').value, its = displayItems(), last = proj.frames - 1;
   $('#mTracks').style.width = `${zoom * 100}%`;
   const step = Math.max(1, Math.round(proj.frames / proj.fps / (10 * zoom))) * proj.fps;
@@ -1591,7 +1598,8 @@ function bindToolbar() {
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
   $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };
   $('#mFrame').onchange = e => { pause(); setFrame(Math.round(+e.target.value * proj.fps)); };
-  $('#mZoomT').oninput = () => { renderTimeline(); setFrame(frame); };
+  $('#mZoomT').oninput = () => { timelineAutoFit=false;renderTimeline();setFrame(frame); };
+  $('#mFitTimeline').onclick=()=>{timelineAutoFit=true;renderTimeline();setFrame(frame);$('#mScroll').scrollLeft=0;};
   $('#mMoveUp').onclick = () => moveItem(-1); $('#mMoveDown').onclick = () => moveItem(1);
   $('#mDuplicate').onclick = () => { if(!audioUI?.duplicate())runLayerAction(directMapEditing?.selectionIds()||[sel],'duplicate'); };
   $('#mDelete').onclick = () => { if(!audioUI?.remove())runLayerAction(directMapEditing?.selectionIds()||[sel],'delete'); };

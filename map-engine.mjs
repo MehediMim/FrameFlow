@@ -1159,6 +1159,14 @@ export function drawHighlightExtentHandles(ctx, v, geo, a) {
   }
   ctx.beginPath(); ctx.arc(center.x, center.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
 }
+// Orient rings for a nonzero clip: outer cutouts subtract from the viewport,
+// while excluded areas add the underlying map/highlights back into that clip.
+function emitHighlightRing(ctx,v,ring,off,positive){
+  let signed=0;for(let i=0;i<ring.n-1;i++)signed+=ring.xy[2*i]*ring.xy[2*i+3]-ring.xy[2*i+2]*ring.xy[2*i+1];
+  let xy=ring.xy;
+  if((signed>=0)!==positive){xy=new Float64Array(ring.n*2);for(let i=0;i<ring.n;i++){xy[2*i]=ring.xy[2*(ring.n-1-i)];xy[2*i+1]=ring.xy[2*(ring.n-1-i)+1];}}
+  loadXY(v,xy,ring.n,off);emit(ctx,v,ring.n,true);
+}
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t0 = actionProgress(a, frame), t = a.invert ? 1 - t0 : t0, p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3)); // invert: the same grow played backwards
@@ -1168,6 +1176,14 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
     const { x, y, radius } = highlightExtent(a, f);
     const c = project(v, f.cx + off, f.cy), rad = radius * v.S * p;
     ctx.save();
+    // Intersect separate exclusion clips so overlapping excluded areas stay empty.
+    for(const excluded of a.highlightExclude||[]){
+      const cut=featureForTarget(geo,excluded);if(!cut)continue;
+      ctx.beginPath();ctx.rect(0,0,v.W,v.H);
+      const cutOff=Math.round(v.cx-cut.cx);
+      for(const ring of cut.rings){loadXY(v,ring.xy,ring.n,cutOff);emit(ctx,v,ring.n,true);}
+      ctx.clip('evenodd');
+    }
     if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
     if (rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
       ctx.save(); ctx.beginPath(); groundCircle(ctx, v, x, y, rad, off); ctx.clip();
@@ -1669,7 +1685,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
     .map((a,index)=>({a,index})).sort((x,y)=>x.a.start-y.a.start||x.index-y.index).map(x=>x.a);
   for (let i=0;i<highlights.length;i++) {
     const a=highlights[i], newer=highlights.slice(i+1);
-    if(newer.some(b=>JSON.stringify(b.target)===JSON.stringify(a.target)))continue;
+    if(newer.some(b=>!b.highlightExclude?.length&&JSON.stringify(b.target)===JSON.stringify(a.target)))continue;
     ctx.save();
     for(const b of newer) {
       if(!['country','region','regions','polygon'].includes(b.target?.kind))continue;
@@ -1677,8 +1693,13 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
       if(!f)continue;
       ctx.beginPath();ctx.rect(0,0,W,H);
       const off=Math.round(v.cx-f.cx);
-      for(const r of f.rings){loadXY(v,r.xy,r.n,off);emit(ctx,v,r.n,true);}
-      ctx.clip('evenodd');
+      for(const r of f.rings)emitHighlightRing(ctx,v,r,off,!!r.hole);
+      for(const excluded of b.highlightExclude||[]){
+        const cut=featureForTarget(geo,excluded);if(!cut)continue;
+        const cutOff=Math.round(v.cx-cut.cx);
+        for(const ring of cut.rings)emitHighlightRing(ctx,v,ring,cutOff,!ring.hole);
+      }
+      ctx.clip('nonzero');
     }
     tag(a,()=>drawHighlight(ctx,v,geo,th,a,frame,labels));ctx.restore();
   }
@@ -1875,6 +1896,7 @@ export function validateMapProject(p) {
     checkLabelStyle(a.labelStyle);
     if (a.type === 'plane' && ((a.icon !== undefined && !Object.hasOwn(TRAVEL_ICONS, a.icon)) || (a.symbol !== undefined && (typeof a.symbol !== 'string' || a.symbol.length > 4)) || [a.fromLabel, a.toLabel].some(x => x !== undefined && (typeof x !== 'string' || x.length > 80)))) throw Error('Invalid travel icon settings.');
     if(a.type==='highlight'){
+      if(a.highlightExclude!==undefined&&(!Array.isArray(a.highlightExclude)||a.highlightExclude.length>100||a.highlightExclude.some(part=>!['country','region','polygon'].includes(part?.kind)||!isLoc(part))))throw Error('Invalid highlight exclusions.');
       if(a.highlightExtent!==undefined&&!['full','percentage','radius'].includes(a.highlightExtent))throw Error('Invalid highlight extent.');
       if(a.highlightPercent!==undefined&&!num(a.highlightPercent,0,100))throw Error('Invalid highlight percentage.');
       if(a.highlightFill!==undefined&&!['color','flag'].includes(a.highlightFill))throw Error('Invalid highlight fill.');

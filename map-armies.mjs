@@ -1,4 +1,6 @@
 export const ARMY_PRESETS={
+  riflePlatoon:{name:'Documentary · rifle platoon',units:[{glyph:'soldier',count:8,color:'#737b50'},{glyph:'fieldOfficer',count:1,color:'#72765a'},{glyph:'radioOperator',count:1,color:'#6c7752'},{glyph:'fieldMedic',count:1,color:'#8a8764'}]},
+  armoredColumn:{name:'Documentary · armored column',units:[{glyph:'tank',count:3,color:'#75794e'},{glyph:'soldier',count:6,color:'#737b50'},{glyph:'radioOperator',count:1,color:'#6c7752'}]},
   pikeShot:{name:'Pike & shot company',units:[{glyph:'pikeman',count:5,color:'#667e8c'},{glyph:'musketeer',count:6,color:'#9d4d40'},{glyph:'flag',count:1,color:'#a43d39'}]},
   siege:{name:'Siege army',units:[{glyph:'musketeer',count:4,color:'#9d4d40'},{glyph:'cannon',count:3,color:'#656d55'},{glyph:'supplyWagon',count:2,color:'#8d6844'},{glyph:'flag',count:1,color:'#a43d39'}]},
   cavalry:{name:'Cavalry wing',units:[{glyph:'cavalry',count:6,color:'#8c493d'},{glyph:'pikeman',count:2,color:'#667e8c'},{glyph:'flag',count:1,color:'#c5a052'}]},

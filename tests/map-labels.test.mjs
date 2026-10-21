@@ -167,7 +167,8 @@ const attached = label => {
   assert.equal(E.LABEL_PRESETS.map2d.label, '2D · Attached to map');
   assert.equal(E.LABEL_PRESETS.map2d.style.placement, 'map');
   for (const [key, preset] of Object.entries(E.LABEL_PRESETS)) {
-    if (!['map2d', 'atlasGround', 'curved'].includes(key)) assert.equal(preset.style.placement, 'screen', `${key} switches an attached label back to screen-facing`);
+    if (['map2d', 'atlasGround', 'curved', 'documentary'].includes(key)) assert.equal(preset.style.placement, 'map', `${key} stays attached to the map`);
+    else assert.equal(preset.style.placement, 'screen', `${key} switches an attached label back to screen-facing`);
   }
   p.labelStyle.font = 'Verdana';
   a.labelStyle = { ...E.LABEL_PRESETS.map2d.style };

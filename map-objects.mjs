@@ -3,6 +3,7 @@
 // same on every device and in exported video. The engine passes its helpers in as `H`.
 import { drawBanner } from './map-banner.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
+import { DOCUMENTARY_OBJECTS } from './map-documentary-objects.mjs';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
 import { drawDamage, drawRubble } from './map-damage.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
@@ -21,7 +22,7 @@ export const OBJECT_ICONS = {
   banner: { label: 'Hanging image flag', color: '#b89963' },
   army: { label: 'Mixed army formation', color: '#9d4d40', group:'armies', historic:true, draw:(c,s,col,t)=>{for(const x of[-.55,.05,.65]){c.save();c.translate(x*s,0);OBJECT_ICONS.musketeer.draw(c,s*.55,col,t);c.restore();}} },
   ...HISTORIC_OBJECTS,
-  soldier: { label: 'Soldier', color: '#5b7f3a', draw: (c, s, col) => { rect(c, -.2, .2, .16, .55, dark, s); rect(c, .04, .2, .16, .55, dark, s); rect(c, -.22, -.42, .44, .62, col, s); circ(c, 0, -.6, .2, '#e0b88f', s); poly(c, [[-.25, -.62], [.25, -.62], [.2, -.84], [-.2, -.84]], col, s); seg(c, .1, -.15, .85, -.4, dark, .1, s); } },
+  ...DOCUMENTARY_OBJECTS,
   tank: { label: 'Tank', color: '#6b7f4a', draw: (c, s, col) => { rect(c, -.9, .25, 1.8, .4, dark, s, .2); poly(c, [[-.85, .25], [.85, .25], [.7, -.1], [-.7, -.1]], col, s); rect(c, -.35, -.42, .7, .34, col, s, .12); rect(c, .3, -.34, .75, .12, metal, s); for (let x = -.65; x <= .66; x += .26) circ(c, x, .45, .12, metal, s); } },
   warship: { label: 'Warship', color: '#8a9aa6', draw: (c, s, col) => { poly(c, [[-1, 0], [1, 0], [.8, .4], [-.85, .4]], col, s); rect(c, -.3, -.35, .55, .35, light, s); rect(c, -.1, -.68, .2, .33, dark, s); rect(c, .4, -.2, .5, .1, dark, s); seg(c, -.6, 0, -.6, -.5, dark, .05, s); } },
   jet: { label: 'Fighter jet', color: '#b9c3cc', rot: 1, air: 1, draw: (c, s, col) => { const w = [[.2, 0], [-.4, -.85], [-.62, -.85], [-.3, 0]]; poly(c, w, metal, s); poly(c, mirrorY(w), metal, s); poly(c, [[-1, 0], [-.8, -.3], [-.62, 0], [-.8, .3]], metal, s); poly(c, [[-1, 0], [.6, -.13], [1, 0], [.6, .13]], col, s); circ(c, .3, 0, .08, '#2b6cb0', s); } },

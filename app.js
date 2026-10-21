@@ -676,6 +676,7 @@ $('.workspace.motion-only .stage-area').addEventListener('wheel',evt=>{
   if(evt.ctrlKey||evt.metaKey){evt.preventDefault();setCanvasZoom(canvasZoom*(evt.deltaY<0?1.1:1/1.1))}
 },{passive:false});
 window.addEventListener('resize',updateCanvasZoom);
+new ResizeObserver(updateCanvasZoom).observe($('.workspace.motion-only .stage-area'));
 
 // Only the Motion Studio preview enters fullscreen; the timeline and sidebars stay unchanged.
 

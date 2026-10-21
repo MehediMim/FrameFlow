@@ -10,6 +10,7 @@ import { objectPoseAt, objectSizeAt, validateObjectKeys } from './map-object-key
 import { armyCopies, validateArmyUnits } from './map-armies.mjs';
 import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
+import { DOCUMENTARY_TERRAIN, DOCUMENTARY_LABEL } from './map-documentary.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
 import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
@@ -36,6 +37,7 @@ export const yToLat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / RAD;
 
 // ---------------------------------------------------------------- Themes
 export const THEMES = {
+  documentary: { label: 'War documentary · archival terrain', relief: true, terrain: DOCUMENTARY_TERRAIN, void: '#b6ab8e', ocean: '#859795', land: ['#aaa783', '#b0ac89', '#b8b18f', '#a5a180', '#c0b596'], border: '#4b4c3b', borderA: .62, bw: .9, grat: '#494e42', gratA: .2, dim: '#2b2b20', vignette: .2, pill: 'rgba(233,223,197,.94)', pillText: '#34392e' },
   relief: { label: 'Cartographic Relief', relief: true, void: '#263f4b', ocean: '#246c93', land: ['#596653', '#596653', '#596653', '#596653', '#596653'], border: '#45534a', borderA: .42, bw: .65, grat: '#dce5da', gratA: .12, dim: '#14242a', vignette: .12, pill: 'rgba(31,43,42,.9)', pillText: '#f5f0dc' },
   earth: { label: 'Earth vector', void: '#0b1620', ocean: '#a8d5ee', land: ['#e3ebc6', '#dbe7bc', '#e8e8c8', '#d8e5c3', '#e5e1c1'], border: '#ffffff', borderA: .9, bw: 1.1, grat: '#ffffff', gratA: .28, dim: '#06121c', vignette: .16, pill: 'rgba(12,28,40,.9)', pillText: '#ffffff' },
   dark: { label: 'Night', void: '#03060a', ocean: '#0c1a28', land: ['#1a2a3a', '#1d2e3f', '#182736', '#1b2c3b', '#203243'], border: '#3d5b75', borderA: .95, bw: 1, grat: '#6f9bbd', gratA: .12, dim: '#000000', vignette: .35, pill: 'rgba(235,242,248,.92)', pillText: '#0b1620' },
@@ -44,6 +46,8 @@ export const THEMES = {
   satellite: { label: 'Satellite · photo-realistic', imagery: true, void: '#02070b', ocean: '#0b2a3d', land: ['#4f6b45', '#5d6e49', '#7c7a5c', '#5a7050', '#8a7d5e'], border: '#ffffff', borderA: .55, bw: .8, grat: '#ffffff', gratA: .16, dim: '#000000', vignette: .24, pill: 'rgba(8,16,22,.9)', pillText: '#ffffff' },
   blueprint: { label: 'Blueprint', void: '#071a3d', ocean: '#0f2f66', land: ['#1b4b9b', '#1d4fa3', '#1a4794', '#1e53aa', '#1c4d9e'], border: '#8fb8ff', borderA: .85, bw: 1, grat: '#8fb8ff', gratA: .2, dim: '#020b1d', vignette: .25, pill: 'rgba(255,255,255,.92)', pillText: '#0a2250' },
 };
+
+export const terrainSettingsOf = proj => reliefSettings({ ...THEMES[proj.theme]?.terrain, ...proj.terrain });
 
 // Texture tiles are seeded and cached: no per-frame noise or flickering in exports.
 export const TEXTURES = { none: 'None', paper: 'Paper grain', grain: 'Film grain', linen: 'Linen', dots: 'Halftone dots', abstract: 'Abstract blotches', brush: 'Brush strokes' };
@@ -628,6 +632,7 @@ export const LABEL_SHAPES = { pill: 'Pill', rounded: 'Rounded box', square: 'Squ
 export const LABEL_WEIGHTS = [[400, 'Regular'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold']];
 export const DEFAULT_LABEL_STYLE = { font: 'Arial', weight: 600, italic: false, size: 14, caps: false, spacing: 0, textPath: 'straight', curveAngle: 90, shape: 'pill', placement: 'screen', useTheme: true, text: '#ffffff', bg: '#0c1c28', bgAlpha: .9, border: '#ffffff', borderW: 0, halo: false, shadow: false };
 export const LABEL_PRESETS = {
+  documentary: { label: 'War documentary · military lettering', style: { ...DOCUMENTARY_LABEL } },
   atlasGround: { label: 'Atlas serif · fixed to map', style: { placement: 'map', scaleMode: 'fixed', font: 'Libre Baskerville', weight: 700, size: 48, shape: 'none', halo: true, haloWidth: .08, useTheme: false, text: '#d5e3df', bg: '#172c30', spacing: 8 } },
   curved: { label: 'Curved atlas text', style: { placement:'map', shape:'none', font:'Libre Baskerville', size:36, halo:true, textPath:'arc', curveAngle:90 } },
   default: { label: 'Default pill', style: { placement: 'screen' } },
@@ -810,7 +815,7 @@ function planTiles(v, maxZoom, detail = 0) {
 export function imageryNeeds(proj, geo, W, H, frame) {
   const th = THEMES[proj.theme], provider = th?.relief ? geo.relief : geo.imagery;
   if (!(th?.imagery || th?.relief) || !provider) return [];
-  if (th.relief) provider.configure(proj.terrain);
+  if (th.relief) provider.configure(terrainSettingsOf(proj));
   const id = th.relief ? 'relief' : proj.imagery || 'gibs', v = makeView(cameraAt(proj, geo, W, H, frame), W, H), plan = planTiles(v, provider.maxZoom(id), th.relief ? 1 : 0);
   if (!plan) return [];
   const seen = new Set(), out = [];
@@ -958,8 +963,9 @@ function nameAnchor(f, cities, midX) {
 export function atlasMapLabels(proj, geo, v) {
   const s = atlasLabelSettings(proj.atlasLabels), out = [], occupied = [];
   if (!s.countries && !s.oceans) return out;
-  const style = { font: s.font, weight: 700, shape: 'none', halo: true, haloWidth: s.haloWidth, useTheme: false, text: s.text, bg: s.outline, spacing: s.spacing, placement: s.placement, scaleMode: s.scaleMode, referenceZoom: s.referenceZoom, textPath:s.textPath, curveAngle:s.curveAngle, caps: false, italic: false };
+  const style = { font: s.font, weight: 700, shape: 'none', halo: true, haloWidth: s.haloWidth, useTheme: false, text: s.text, bg: s.outline, spacing: s.spacing, placement: s.placement, scaleMode: s.scaleMode, referenceZoom: s.referenceZoom, textPath:s.textPath, curveAngle:s.curveAngle, caps: s.caps, italic: false };
   const add = (text, X, Y, size, ocean = false, angle = 0) => {
+    if(s.caps)text=text.toUpperCase();
     const ground = { X, Y }, q = project(v, X, Y);
     if (q.z <= v.near) return;
     const scale = s.scaleMode === 'world' ? 2 ** (v.cam.zoom - s.referenceZoom) : 1;
@@ -1635,8 +1641,8 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   }
   if (th.imagery && geo.imagery) v.img = { im: geo.imagery, id: proj.imagery || 'gibs' };
   if (th.relief) {
-    v.terrain = reliefSettings(proj.terrain);
-    if (geo.relief) { geo.relief.configure(proj.terrain); v.img = { im: geo.relief, id: 'relief' }; }
+    v.terrain = terrainSettingsOf(proj);
+    if (geo.relief) { geo.relief.configure(v.terrain); v.img = { im: geo.relief, id: 'relief' }; }
     v.tileFade = cacheBase;
   }
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';

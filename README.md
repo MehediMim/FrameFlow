@@ -80,6 +80,10 @@ Supported animated properties: position X/Y, scale, rotation, opacity, and shape
 
 ## Map Studio
 
+For a retro campaign-map look, open **Canvas settings → Map appearance → Map style** and select **War documentary · archival terrain**. This applies khaki elevation relief, muted water, paper grain, and uppercase country/ocean labels. Terrain, label colors, and texture remain editable; applying the look keeps your existing clips and camera work and can be undone. Terrain reset restores the selected style's palette.
+
+Add an **Object**, then choose a unit under **Documentary · field troops**: rifleman, field officer, radio operator, or field medic. These vector miniatures include uniform webbing, packs, helmets, boots, and role-specific equipment. A **Mixed army formation** also offers **Documentary · rifle platoon** and **Documentary · armored column** presets. New Map labels use military lettering when the documentary style is active; individual labels also offer a **War documentary** style preset.
+
 Switch to **Map Studio** with the toggle in the header. It animates a vector world map (the default Earth look; other styles: Night, Paper atlas, Blueprint).
 
 **Animations** (added at the playhead):

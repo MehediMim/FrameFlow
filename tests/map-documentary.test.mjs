@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { applyDocumentaryLook, DOCUMENTARY_TERRAIN } from '../map-documentary.mjs';
+import { newMapProject, makeAction, makeShot, validateMapProject, terrainSettingsOf, imageryNeeds, buildGeo, atlasMapLabels, makeView, lonToX, latToY } from '../map-engine.mjs';
+import { shadeRelief, RELIEF_DEFAULTS } from '../map-relief.mjs';
+import { ARMY_PRESETS, armyCopies } from '../map-armies.mjs';
+import { DOCUMENTARY_OBJECTS } from '../map-documentary-objects.mjs';
+
+const p=newMapProject();p.actions=[makeAction('object',0,{glyph:'soldier'})];p.shots=[makeShot('pushIn',0)];
+const content=structuredClone({actions:p.actions,shots:p.shots,camera:p.camera,width:p.width,height:p.height});
+applyDocumentaryLook(p);
+assert.deepEqual({actions:p.actions,shots:p.shots,camera:p.camera,width:p.width,height:p.height},content,'applying the look preserves edit content and framing');
+assert.equal(p.texture.type,'paper');assert.equal(p.atlasLabels.caps,true);
+validateMapProject(JSON.parse(JSON.stringify(p)));
+const other=applyDocumentaryLook(newMapProject());p.terrain.low='#112233';p.atlasLabels.size=40;
+assert.equal(other.terrain.low,DOCUMENTARY_TERRAIN.low,'preset values are independently editable');
+assert.equal(other.atlasLabels.size,27);
+delete p.terrain;
+assert.deepEqual(terrainSettingsOf(p),DOCUMENTARY_TERRAIN,'reset terrain uses the documentary palette');
+p.terrain={low:'#998877'};assert.equal(terrainSettingsOf(p).low,'#998877');
+assert.equal(terrainSettingsOf(newMapProject()).low,RELIEF_DEFAULTS.low,'existing themes keep their defaults');
+let configured;
+imageryNeeds(p,{relief:{configure:s=>configured=s,maxZoom:()=>4}},1280,720,0);
+assert.equal(configured.low,'#998877');assert.equal(configured.deep,DOCUMENTARY_TERRAIN.deep,'export preloading uses the same palette');
+const n=24,heights=Float32Array.from({length:n*n},(_,i)=>i%n*170+Math.sin(Math.floor(i/n)) * 90);
+const shade=shadeRelief(heights,n,8,110,DOCUMENTARY_TERRAIN);
+assert.deepEqual(shade,shadeRelief(heights,n,8,110,DOCUMENTARY_TERRAIN),'terrain rendering is deterministic');
+assert.notDeepEqual(shade,shadeRelief(heights,n,8,110,RELIEF_DEFAULTS));
+assert.ok(new Set(Array.from(shade).filter((_,i)=>i%4===0)).size>20,'the aged palette retains relief detail');
+const geo=buildGeo(JSON.parse(readFileSync(new URL('../map-data/countries-50m.json',import.meta.url),'utf8')));
+const v=makeView({cx:lonToX(12),cy:latToY(47),zoom:3.7,bearing:0,pitch:0},1280,720);
+const labels=atlasMapLabels(other,geo,v);
+assert.ok(labels.length>5);assert.ok(labels.every(l=>l.text===l.text.toUpperCase()),'atlas capitals apply to actual rendered text');
+assert.throws(()=>validateMapProject({...other,atlasLabels:{caps:'yes'}}));
+for(const [glyph,icon] of Object.entries(DOCUMENTARY_OBJECTS)){
+  const project=applyDocumentaryLook(newMapProject());project.actions=[makeAction('object',0,{glyph,color:icon.color})];
+  validateMapProject(JSON.parse(JSON.stringify(project)));
+}
+const army=makeAction('object',0,{glyph:'army',armyUnits:ARMY_PRESETS.riflePlatoon.units});
+other.actions=[army];validateMapProject(other);
+assert.equal(armyCopies(army).length,11);assert.ok(armyCopies(army).some(u=>u.glyph==='radioOperator'));
+console.log('Documentary styling preserves content, persists, resets, shades relief, labels in capitals, and validates detailed troops/formations');

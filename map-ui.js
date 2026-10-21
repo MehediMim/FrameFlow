@@ -16,8 +16,10 @@ import { CITIES, REGIONS } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './engine.mjs?v=sparse-blur-1';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
 import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.mjs';
-import { createRelief, reliefSettings, RELIEF_DEFAULTS } from './map-relief.mjs';
+import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
+import { applyDocumentaryLook, DOCUMENTARY_LABEL } from './map-documentary.mjs';
+import { terrainSettingsOf } from './map-engine.mjs?v=highlight-extent-1';
 import { FORMATIONS, arrangementTargets, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
@@ -285,7 +287,7 @@ function addAction(type) {
   pause(); checkpoint();
   const a = makeAction(type, frame); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
   if (isDetail()) { if (type === 'border' || type === 'highlight') a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
-  if (type === 'label') { const [lon, lat] = centerLonLat(); Object.assign(a, { labelPlacement: 'map', place: { kind: 'point', name: 'Map position', lon: ((lon + 180) % 360 + 360) % 360 - 180, lat }, offsetX: 0, offsetY: 0, labelStyle: { ...DEFAULT_LABEL_STYLE, ...LABEL_PRESETS.atlasGround.style } }); }
+  if (type === 'label') { const [lon, lat] = centerLonLat(); Object.assign(a, { labelPlacement: 'map', place: { kind: 'point', name: 'Map position', lon: ((lon + 180) % 360 + 360) % 360 - 180, lat }, offsetX: 0, offsetY: 0, labelStyle: { ...DEFAULT_LABEL_STYLE, ...(proj.theme==='documentary'?DOCUMENTARY_LABEL:LABEL_PRESETS.atlasGround.style) } }); }
   proj.actions.push(a); sel = a.id; saveLocal(); renderAll(); notify(`${ACTION_TYPES[type].label} added at frame ${frame}`);
   if (type === 'shape') startPathDraw(a.id);
 }
@@ -516,7 +518,7 @@ function arrangeObjects(operation) {
 }
 function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Leaders &amp; characters">${options('leaders')}</optgroup><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
+  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Documentary · field troops">${options('documentary')}</optgroup><optgroup label="Leaders &amp; characters">${options('leaders')}</optgroup><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
 }
 function highlightExtentFields(a) {
   const mode = a.highlightExtent || 'full';
@@ -562,7 +564,7 @@ function actionFields(a) {
     case 'plane': return F.sel('icon', 'Icon', a.icon || 'plane', Object.entries(TRAVEL_ICONS).map(([k, i]) => [k, i.label])) + (a.icon === 'money' ? F.text('symbol', 'Coin symbol', a.symbol ?? '$', 4, '$  €  £  ৳  ₹  ¥') : '') + F.sel('mode', 'Travel along', a.mode === 'path' ? 'path' : 'direct', [['direct', 'Start → end (flight arc)'], ['path', 'My own path (draw points)']]) + (a.mode === 'path' ? pathFields(a) : F.loc('from', 'From', a.from, 'place') + F.loc('to', 'To', a.to, 'place')) + F.color('color', 'Trail color', a.color) + F.color('planeColor', 'Icon color', a.planeColor) + `<div class="two">${F.num('size', 'Icon size', a.size, 8, 80)}${F.num('lift', 'Arc height', a.lift, 0, 300)}</div>` + F.range('width', 'Trail width', a.width, 1, 12, .5) + F.chk('glow', 'Glow', a.glow) + F.chk('dashed', 'Dashed trail', a.dashed) + F.chk('showPath', 'Show planned route', a.showPath) + (a.mode === 'path' ? F.chk('showWaypoints', 'Show path points', a.showWaypoints !== false) : '') + F.chk('showLabels', 'Show place names', a.showLabels) + (a.showLabels ? F.text('fromLabel', 'Start label text', a.fromLabel, 80, 'Uses the place name') + F.text('toLabel', 'End label text', a.toLabel, 80, 'Uses the place name') : '') + routeLabelFields(a);
     case 'highlight': {
       const country = ['country','region','regions'].includes(a.target.kind);
-      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country?highlightExtentFields(a)+flagHighlightFields(a):'') + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || reliefSettings(proj.terrain).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? reliefSettings(proj.terrain).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
+      return F.sel('__hmode', 'Highlight a', country ? 'country' : 'place', [['country', isDetail() ? 'Region' : 'Country'], ['place', 'Place (radius)']]) + (country ? regionFields(a) + '<div class="section-title">FILL START POINT</div>' + F.loc('highlightOrigin', 'Highlight fill starts from', a.highlightOrigin, 'place') + '<button type="button" data-highlight-reset>Reset to region center</button><p class="mini-label">Pick a point on the map or enter latitude, longitude. The fill spreads outward from this point.</p>' : F.loc('target', 'Place', a.target, 'place')) + (country?highlightExtentFields(a)+flagHighlightFields(a):'') + (country && THEMES[proj.theme]?.relief ? F.color('reliefColor', 'Highlight color', a.reliefColor || terrainSettingsOf(proj).highlightColor) + F.range('reliefOpacity', 'Highlight opacity', a.reliefOpacity ?? terrainSettingsOf(proj).highlightOpacity, 0, 1, .05, x => Math.round(x * 100) + '%') : F.color('color', 'Color', a.color)) + (country ? '' : F.num('radius', 'Radius (km)', a.radius, 5, 10000)) + F.range('dim', 'Dim the rest of the map', a.dim, 0, .85, .05, x => Math.round(x * 100) + '%') + F.chk('pulse', 'Pulse', a.pulse) + F.chk('invert', 'Invert (start fully shown, then shrink away)', a.invert) + F.chk('showLabel', 'Show label', a.showLabel) + F.text('label', 'Label text', a.label, 60, 'Uses the place name');
     }
     case 'object': return objectFields(a);
     case 'effect': return effectPicker(a.fx) + (EFFECTS[a.fx]?.battle ? battleFields(a) : '') + effectLocationFields(a) + F.color('color', 'Color', a.color) + F.range('size', 'Size', a.size, .4, 6, .1, x => x + '×') + (EFFECTS[a.fx]?.battle || ['explosion', 'shockwave', 'quake', 'strike'].includes(a.fx) ? F.num('repeat', 'Repeat', a.repeat || 1, 1, 10, 1) : '') + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60, 'Uses the default name') : '');
@@ -883,7 +885,7 @@ function renderAtlasLabelPanel() {
   const color = (key, title) => `<label>${title}<input type="color" data-atlas="${key}" value="${s[key]}"></label>`;
   box.innerHTML = `<details ${open ? 'open' : ''}><summary class="section-title" style="cursor:pointer;margin:14px 0 10px">COUNTRY &amp; OCEAN LABELS</summary>
     <p class="mini-label">Names fit each country’s mainland shape and follow its natural direction. Use the country size multiplier to adjust all names together. Fixed zoom sizing preserves these proportions as you zoom.</p>
-    ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
+    ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('caps', 'Uppercase military lettering')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
     ${fontPickerHtml('mAtlasFont', 'Font', s.font)}
     <div class="two">${num('size', 'Country size multiplier (30 = normal)', 6, 240)}${num('oceanSize', 'Ocean text size', 6, 240)}</div>
     <label>Text path<select data-atlas="textPath"><option value="straight" ${s.textPath==='straight'?'selected':''}>Straight</option><option value="arc" ${s.textPath==='arc'?'selected':''}>Circular arc</option></select></label>
@@ -1086,7 +1088,7 @@ function renderAreaSettings() {
 }
 function renderTerrainSettings() {
   $('#mTerrainBox').hidden = !THEMES[proj.theme]?.relief;
-  const settings = reliefSettings(proj.terrain);
+  const settings = terrainSettingsOf(proj);
   for (const [key, value] of Object.entries(settings)) {
     if (!(key in RELIEF_DEFAULTS)) continue;
     const id = '#mTerrain' + key[0].toUpperCase() + key.slice(1), el = $(id);
@@ -1106,7 +1108,10 @@ function bindSettings() {
   $('#mFps').onchange = edit(el => proj.fps = +el.value);
   $('#mDuration').onchange = edit(el => { const seconds = Number(el.value), frames = Math.max(2, Math.round(seconds * proj.fps)); if (el.value.trim() && Number.isFinite(seconds) && Number.isSafeInteger(frames)) proj.frames = frames; frame = Math.min(frame, proj.frames - 1); });
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
-  $('#mTheme').onchange = edit(el => proj.theme = el.value);
+  $('#mTheme').onchange = edit(el => {
+    if(el.value==='documentary')applyDocumentaryLook(proj);
+    else proj.theme=el.value;
+  });
   $('#mImagery').onchange = edit(el => proj.imagery = el.value);
   for (const key of Object.keys(RELIEF_DEFAULTS)) {
     const el = $('#mTerrain' + key[0].toUpperCase() + key.slice(1));

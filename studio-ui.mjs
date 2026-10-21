@@ -114,6 +114,23 @@ export function installCanvasZoom(canvas,root) {
   window.addEventListener('resize',update);document.addEventListener('fullscreenchange',()=>requestAnimationFrame(update));update();
   return {update,set,get scale(){return scale},get mode(){return mode}};
 }
+function installPortraitPreview(canvas) {
+  const area=canvas.closest('.stage-area,.sc-stage');
+  const workspace=canvas.closest('.workspace,.sc-workspace');
+  const timeline=workspace?.nextElementSibling;
+  if(!area||!workspace||!timeline?.matches('.timeline,.sc-timeline'))return;
+  // Keep the existing workspace ancestry and event listeners in both layouts.
+  const layout=document.createElement('div');layout.className='ff-editor-layout';
+  if(workspace.classList.contains('motion-only'))layout.classList.add('motion-only');
+  workspace.before(layout);layout.append(workspace,timeline);
+  if(canvas.id==='scCanvas'){
+    const footer=layout.nextElementSibling;
+    if(footer?.matches('footer'))layout.append(footer);
+  }
+  const update=()=>layout.classList.toggle('ff-portrait-layout',canvas.height>canvas.width);
+  new MutationObserver(update).observe(canvas,{attributes:true,attributeFilter:['width','height']});
+  update();
+}
 function install() {
   if(!document.getElementById('ffStudioStyles')){const css=document.createElement('link');css.id='ffStudioStyles';css.rel='stylesheet';css.href=new URL('./studio-ui.css',import.meta.url).href;document.head.append(css);}
   document.body.classList.add('ff-unified');
@@ -133,8 +150,10 @@ function install() {
     installCanvasZoom(document.getElementById(canvasId),document.getElementById(rootId));
   }
   for(const canvasId of ['canvas','mCanvas','pCanvas','scCanvas']){
-    const preview=document.getElementById(canvasId)?.closest('main');
+    const canvas=document.getElementById(canvasId);
+    const preview=canvas?.closest('main');
     if(!preview)continue;
+    installPortraitPreview(canvas);
     preview.classList.add('ff-preview');
     const png=preview.querySelector('#snapshot,#mSnapshot,#pSnapshot,[data-action="png"]');
     if(png){png.textContent='PNG ↓';png.title='Download current frame as PNG';png.setAttribute('aria-label','Download current frame as PNG');}

@@ -32,6 +32,24 @@ if(root){
   reduced.addEventListener('change',()=>{if(reduced.matches)setPlaying(false);});
   render(Number(seek.value));
 
+  // Keep visible map studies moving; suspend work offscreen and in the editor.
+  const atlasMaps=[...root.querySelectorAll('.mh-story-stage svg')];
+  const visibleMaps=new Set();
+  function syncAtlasMotion(){
+    const active=!reduced.matches&&!document.hidden&&document.body.classList.contains('landing');
+    for(const svg of atlasMaps){if(active&&visibleMaps.has(svg))svg.unpauseAnimations();else svg.pauseAnimations();}
+  }
+  const atlasObserver=new IntersectionObserver(entries=>{
+    for(const entry of entries){if(entry.isIntersecting)visibleMaps.add(entry.target);else visibleMaps.delete(entry.target);}
+    syncAtlasMotion();
+  },{rootMargin:'80px'});
+  atlasMaps.forEach(svg=>atlasObserver.observe(svg));
+  reduced.addEventListener('change',syncAtlasMotion);
+  document.addEventListener('visibilitychange',syncAtlasMotion);
+  new MutationObserver(syncAtlasMotion).observe(document.body,{attributes:true,attributeFilter:['class']});
+  syncAtlasMotion();
+  if(!reduced.matches)setPlaying(true);
+
   const search=root.querySelector('#mhFeatureSearch');
   const cards=[...root.querySelectorAll('[data-feature-category]')];
   const filters=[...root.querySelectorAll('[data-feature-filter]')];

@@ -18,7 +18,7 @@ const server = createServer(async (req, res) => {
     const path = resolve(workspace, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
     assert.ok(path.startsWith(resolve(workspace) + sep));
     const file = path.endsWith(sep) ? join(path, 'index.html') : path;
-    res.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json' })[extname(file)] || 'application/octet-stream');
+    res.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' })[extname(file)] || 'application/octet-stream');
     res.end(await readFile(file));
   } catch { res.writeHead(404); res.end(); }
 });
@@ -65,8 +65,31 @@ try {
   assert.deepEqual(evaluateInfo.duplicates,[],'landing IDs do not collide with editor controls');
   assert.ok(evaluateInfo.title.includes('Map Animation Studio'));
   assert.ok(evaluateInfo.assets[0].loaded,'hero map image loads');
+  await waitFor(`document.getElementById('landing').dataset.showcaseReady`);
+  assert.equal(await evaluate(`document.getElementById('landing').dataset.showcaseReady`),'true','real map and texture renderers complete');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-map-object]').length`),56,'historical, modern, and civilian map objects are on display');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-map-texture][data-rendered="true"]').length`),6,'six real texture finishes render without selection');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-map-style][data-rendered="true"]').length`),4,'four map palettes render with the actual map engine');
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-map-object]')).every(canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((v,i)=>i%4===3&&v>0))`),true,'every object preview contains a rendered illustration');
+  const liveScene=await evaluate(`document.querySelector('[data-live-scene]').toDataURL()`);
+  await sleep(250);
+  assert.notEqual(await evaluate(`document.querySelector('[data-live-scene]').toDataURL()`),liveScene,'hero objects visibly animate without a click');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('[data-map-object]')).boxShadow`),'none','editor canvas shadows do not leak into the object collection');
   for(const id of ['features','journeys','markers','terrain','regions','campaign','networks','units','animation','sharing','feature-library','how','support'])assert.equal(await evaluate(`!!document.getElementById('${id}')`),true,'feature section '+id);
   assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),16,'all map feature groups are initially discoverable');
+  assert.equal(await evaluate(`document.querySelectorAll('.mh-story-stage').length`),6,'six map storytelling themes are shown without selection');
+  assert.equal(await evaluate(`document.querySelectorAll('.mh-story-picker, [data-story]').length`),0,'no click-to-reveal story controls remain');
+  assert.equal(await evaluate(`document.getElementById('mhPreviewPlay').getAttribute('aria-pressed')`),'true','hero map starts animating automatically');
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-story-stage')).every(card=>card.getBoundingClientRect().height>0&&card.querySelector('.mh-atlas-caption>p:not(.mh-eyebrow)').textContent.length>40&&card.querySelector('animateMotion'))`),true,'every story includes a visible description and animated map');
+  assert.equal(await evaluate(`new Set(Array.from(document.querySelectorAll('.mh-story-stage .mh-atlas-route:first-of-type')).map(path=>path.getAttribute('d'))).size`),6,'each story has its own map route');
+  await evaluate(`document.getElementById('features').scrollIntoView()`);
+  await waitFor(`document.querySelector('.mh-atlas-map img').complete&&document.querySelector('.mh-atlas-map img').naturalWidth>0`);
+  const storyRect=await evaluate(`(()=>{const r=document.querySelector('.mh-story-stage').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+100}})()`);
+  await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...storyRect});await sleep(500);
+  assert.notEqual(await evaluate(`getComputedStyle(document.querySelector('.mh-story-stage')).transform`),'none','hover lifts the story card');
+  assert.notEqual(await evaluate(`getComputedStyle(document.querySelector('.mh-atlas-map img')).transform`),'none','hover zooms the map');
+  await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});await sleep(500);
+  await writeFile(join(tmpdir(),'frameflow-map-landing-atlas.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('#landing a[href^="#"]')).map(a=>a.hash).filter(hash=>hash!=='#map'&&hash!=='#home'&&!document.getElementById(hash.slice(1)))`),[],'every feature link has a destination');
   await evaluate(`document.querySelector('[data-feature-filter="movement"]').click()`);
   assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),4,'category filter shows movement features');
@@ -78,7 +101,7 @@ try {
   await evaluate(`document.querySelector('#mhFeatureReset').click()`);
   assert.equal(await evaluate(`document.querySelectorAll('.mh-library-card:not([hidden])').length`),16,'reset clears both search and category');
   assert.equal(await evaluate(`document.activeElement.id`),'mhFeatureSearch','reset returns keyboard focus to search');
-  for(const section of ['journeys','markers','feature-library']){
+  for(const section of ['terrain','textures','units','journeys','markers','feature-library']){
     await evaluate(`document.getElementById('${section}').scrollIntoView()`);
     await writeFile(join(tmpdir(),`frameflow-map-landing-${section}.png`),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   }
@@ -102,7 +125,9 @@ try {
     const layout=await evaluate(`(()=>{const root=document.getElementById('landing'),r=document.querySelector('.mh-nav').getBoundingClientRect();return{pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,navRight:r.right,heroRight:document.querySelector('.mh-preview').getBoundingClientRect().right,sections:[...root.querySelectorAll('.mh-section')].length};})()`);
     assert.ok(layout.pageWidth<=width,`no horizontal page overflow at ${width}px: ${JSON.stringify(layout)}`);
     assert.ok(layout.navRight<=width&&layout.heroRight<=width,'navigation and map preview fit');
-    assert.equal(layout.sections,11);
+    assert.equal(layout.sections,12);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-style-study,.mh-texture-study,.mh-object-specimen')).every(card=>{const r=card.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})`),true,'terrain, texture, and object collections fit the viewport');
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-story-stage')).every(card=>{const r=card.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth})`),true,'all story maps fit the viewport without selection');
     await evaluate(`document.getElementById('feature-library').scrollIntoView()`);
     assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-library-card')).every(card=>{const r=card.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})`),true,'feature library fits viewport');
     await evaluate(`document.getElementById('units').scrollIntoView()`);await waitFor(`document.querySelector('.mh-troop-sheet img').complete&&document.querySelector('.mh-troop-sheet img').naturalWidth>0`);
@@ -118,6 +143,7 @@ try {
   await evaluate(`document.getElementById('homeLink').click()`);await waitFor(`document.body.classList.contains('landing')`);
   await cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   const motion=await evaluate(`getComputedStyle(document.querySelector('.mh-flow')).animationName`);assert.equal(motion,'none','reduced motion stops decorative animation');
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('.mh-story-stage svg')).every(svg=>svg.animationsPaused())`),true,'reduced motion pauses all SVG atlas animations');
   assert.deepEqual(errors,[],'no browser runtime errors');
   console.log('Map-only landing content, all sections, unique IDs, preview controls, anchor routing, desktop/tablet/mobile layout, reduced motion and editor entry passed');
 } finally {

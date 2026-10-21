@@ -4,6 +4,7 @@
 import { drawBanner } from './map-banner.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
 import { DOCUMENTARY_OBJECTS } from './map-documentary-objects.mjs';
+import { MODERN_OBJECTS, CIVILIAN_OBJECTS } from './map-modern-objects.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork } from './map-path-animation.mjs';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
 import { drawDamage, drawRubble } from './map-damage.mjs';
@@ -12,8 +13,6 @@ const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55
 const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = fill; c.fill(); stroke(c, s); };
 const rect = (c, x, y, w, h, fill, s, r = .06) => { c.beginPath(); c.roundRect(x * s, y * s, w * s, h * s, r * s); c.fillStyle = fill; c.fill(); stroke(c, s); };
 const circ = (c, x, y, r, fill, s) => { c.beginPath(); c.arc(x * s, y * s, r * s, 0, TAU); c.fillStyle = fill; c.fill(); stroke(c, s); };
-const seg = (c, x0, y0, x1, y1, col, w, s) => { c.beginPath(); c.moveTo(x0 * s, y0 * s); c.lineTo(x1 * s, y1 * s); c.strokeStyle = col; c.lineWidth = w * s; c.lineCap = 'round'; c.stroke(); };
-const mirrorY = pts => pts.map(([x, y]) => [x, -y]);
 
 // Each icon is drawn in a box of about -1..1 (s = half size in px), facing right.
 // rot: turns fully to its heading when it moves; otherwise it just mirrors. air: floats above the ground.
@@ -24,20 +23,10 @@ export const OBJECT_ICONS = {
   army: { label: 'Mixed army formation', color: '#9d4d40', group:'armies', historic:true, draw:(c,s,col,t)=>{for(const x of[-.55,.05,.65]){c.save();c.translate(x*s,0);OBJECT_ICONS.musketeer.draw(c,s*.55,col,t);c.restore();}} },
   ...HISTORIC_OBJECTS,
   ...DOCUMENTARY_OBJECTS,
-  tank: { label: 'Tank', color: '#6b7f4a', draw: (c, s, col) => { rect(c, -.9, .25, 1.8, .4, dark, s, .2); poly(c, [[-.85, .25], [.85, .25], [.7, -.1], [-.7, -.1]], col, s); rect(c, -.35, -.42, .7, .34, col, s, .12); rect(c, .3, -.34, .75, .12, metal, s); for (let x = -.65; x <= .66; x += .26) circ(c, x, .45, .12, metal, s); } },
-  warship: { label: 'Warship', color: '#8a9aa6', draw: (c, s, col) => { poly(c, [[-1, 0], [1, 0], [.8, .4], [-.85, .4]], col, s); rect(c, -.3, -.35, .55, .35, light, s); rect(c, -.1, -.68, .2, .33, dark, s); rect(c, .4, -.2, .5, .1, dark, s); seg(c, -.6, 0, -.6, -.5, dark, .05, s); } },
-  jet: { label: 'Fighter jet', color: '#b9c3cc', rot: 1, air: 1, draw: (c, s, col) => { const w = [[.2, 0], [-.4, -.85], [-.62, -.85], [-.3, 0]]; poly(c, w, metal, s); poly(c, mirrorY(w), metal, s); poly(c, [[-1, 0], [-.8, -.3], [-.62, 0], [-.8, .3]], metal, s); poly(c, [[-1, 0], [.6, -.13], [1, 0], [.6, .13]], col, s); circ(c, .3, 0, .08, '#2b6cb0', s); } },
-  helicopter: { label: 'Helicopter', color: '#6b7f4a', air: 1, draw: (c, s, col, t) => { rect(c, -1, -.06, .7, .12, col, s, .05); rect(c, -.45, -.25, .95, .5, col, s, .22); circ(c, .3, -.05, .13, '#bcd7ea', s); seg(c, -.6, .42, .5, .42, dark, .06, s); c.save(); c.translate(0, -.32 * s); c.rotate(t * .9); seg(c, -1.1, 0, 1.1, 0, dark, .08, s); c.restore(); } },
-  drone: { label: 'Drone', color: '#444b52', rot: 1, air: 1, draw: (c, s, col, t) => { for (const [x, y] of [[-.55, -.45], [.55, -.45], [-.55, .45], [.55, .45]]) { seg(c, 0, 0, x, y, dark, .07, s); c.save(); c.translate(x * s, y * s); c.rotate(t * 1.3); seg(c, -.25, 0, .25, 0, light, .06, s); c.restore(); } rect(c, -.22, -.14, .44, .28, col, s, .1); } },
-  submarine: { label: 'Submarine', color: '#4a5a66', draw: (c, s, col) => { rect(c, -1, -.2, 2, .4, col, s, .2); rect(c, -.2, -.5, .35, .32, col, s, .06); seg(c, .05, -.5, .05, -.78, dark, .05, s); seg(c, .05, -.78, .25, -.78, dark, .05, s); circ(c, -1.02, 0, .1, dark, s); } },
-  missile: { label: 'Missile', color: '#d9d9d9', rot: 1, air: 1, draw: (c, s, col, t) => { const f = [[-.8, -.12], [-1, -.38], [-.55, -.12]]; poly(c, [[-.8, -.07], [-1.15 - .2 * Math.sin(t * 1.7), 0], [-.8, .07]], '#ffb703', s); poly(c, f, metal, s); poly(c, mirrorY(f), metal, s); rect(c, -.8, -.12, 1.4, .24, light, s, .12); poly(c, [[.6, -.12], [1, 0], [.6, .12]], '#e63946', s); } },
-  base: { label: 'Military base', color: '#8b6f47', draw: (c, s, col) => { poly(c, [[-.8, .4], [-.8, 0], [-.4, -.35], [.4, -.35], [.8, 0], [.8, .4]], col, s); rect(c, -.15, .05, .3, .35, dark, s); seg(c, .5, -.35, .5, -.95, light, .06, s); poly(c, [[.5, -.95], [.95, -.82], [.5, -.7]], '#e63946', s); } },
+  ...MODERN_OBJECTS,
+  ...CIVILIAN_OBJECTS,
   flag: { label: 'Flag', color: '#e63946', draw: (c, s, col, t) => { const top = [], bot = []; for (let i = 0; i <= 10; i++) { const x = .03 + i / 10 * .9, w = Math.sin(t * .2 + i * .6) * .05 * (i / 10 + .3); top.push([x, -.98 + w]); bot.push([x, -.45 + w]); } poly(c, [...top, ...bot.reverse()], col, s); rect(c, -.05, -1, .08, 1.4, light, s, .03); } },
-  city: { label: 'City', color: '#9fb4c2', draw: (c, s, col) => { rect(c, -.9, -.1, .4, .5, col, s, .03); rect(c, -.4, -.7, .45, 1.1, col, s, .03); rect(c, .1, -.3, .4, .7, col, s, .03); rect(c, .55, 0, .35, .4, col, s, .03); for (const [x, y] of [[-.28, -.5], [-.28, -.2], [-.28, .1], [.22, -.1], [.22, .15]]) rect(c, x, y, .13, .1, '#ffe9a8', s, .02); } },
-  camp: { label: 'Camp / tents', color: '#a0875a', draw: (c, s, col) => { poly(c, [[-.9, .4], [-.4, -.4], [.1, .4]], col, s); poly(c, [[-.1, .4], [.4, -.5], [.95, .4]], '#d8c590', s); poly(c, [[-.5, .4], [-.4, .05], [-.3, .4]], dark, s); } },
   checkpoint: { label: 'Checkpoint', color: '#c9a227', draw: (c, s, col) => { rect(c, -.9, -.1, .5, .5, metal, s); rect(c, -.4, .08, 1.3, .12, '#e63946', s, .02); rect(c, -.05, .08, .2, .12, light, s, .01); rect(c, .4, .08, .2, .12, light, s, .01); rect(c, .85, -.1, .12, .5, dark, s, .02); } },
-  factory: { label: 'Factory', color: '#8d99a6', draw: (c, s, col, t) => { rect(c, -.9, -.1, 1.4, .5, col, s, .03); poly(c, [[-.9, -.1], [-.9, -.4], [-.5, -.1], [-.5, -.4], [-.1, -.1], [-.1, -.4], [.3, -.1]], col, s); rect(c, .2, -.8, .18, .7, dark, s, .02); rect(c, .5, -.65, .18, .55, dark, s, .02); for (let i = 0; i < 3; i++) { const q = ((t * .02) + i / 3) % 1; c.globalAlpha *= .8; circ(c, .29 + q * .25, -.9 - q * .6, .1 + q * .15, 'rgba(120,125,130,.6)', s); } } },
-  airport: { label: 'Airport', color: '#7d8c99', draw: (c, s, col) => { rect(c, -1, .1, 2, .32, dark, s, .03); for (let x = -.8; x < .9; x += .35) rect(c, x, .24, .2, .04, light, s, .01); rect(c, .4, -.5, .22, .6, col, s, .03); rect(c, .3, -.72, .42, .22, light, s, .05); } },
   storm: { label: 'Storm', color: '#7aa0c4', draw: (c, s, col) => { rect(c, -.75, -.2, 1.5, .35, col, s, .15); circ(c, -.4, -.2, .35, col, s); circ(c, 0, -.4, .45, col, s); circ(c, .4, -.2, .35, col, s); poly(c, [[0, .05], [-.25, .55], [0, .5], [-.1, 1], [.3, .35], [.05, .4]], '#ffd166', s); } },
   volcano: { label: 'Volcano', color: '#8b4a2b', draw: (c, s, col, t) => { poly(c, [[-1, .5], [-.25, -.4], [.25, -.4], [1, .5]], col, s); poly(c, [[-.25, -.4], [.25, -.4], [.12, -.18], [-.1, -.08]], '#ff5a1f', s); for (let i = 0; i < 3; i++) { const q = ((t * .015) + i / 3) % 1; c.globalAlpha *= .7; circ(c, Math.sin(i * 2 + q) * .2, -.55 - q * .8, .15 + q * .2, 'rgba(70,70,75,.55)', s); } } },
 };
@@ -91,7 +80,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
-  if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','warship','submarine'].includes(a.glyph));
+  if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','warship','submarine','ferry','cargoShip'].includes(a.glyph));
   else{
     if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
     else if(a.glyph==='artwork') {
@@ -99,7 +88,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
       if(img){const factor=3.5*s/Math.max(img.naturalWidth,img.naturalHeight),w=img.naturalWidth*factor,h=img.naturalHeight*factor;c.drawImage(img,-w/2,-h/2,w,h);}
       else {c.strokeStyle='#ffffff';c.lineWidth=2*u;c.strokeRect(-s,-s,2*s,2*s);}
     }
-    else ic.draw(c, s, a.color, ic.historic ? t/(v.fps||30) : t);
+    else ic.draw(c, s, a.color, ic.historic || ic.timeUnit==='seconds' ? t/(v.fps||30) : t);
     drawDamage(c,s,a.damageState,t/(v.fps||30));
   }
   c.restore();

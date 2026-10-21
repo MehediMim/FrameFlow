@@ -98,6 +98,21 @@ try {
   await change('#mInspector [data-mf="attackSourceId"]',p.actions[2].id);await change('#mInspector [data-mf="attackTargetId"]',p.actions[0].id);
   p=await saved();const E=await import('../map-engine.mjs');E.validateMapProject(p);assert.equal(p.actions[4].attackTargeted,true);assert.equal(p.actions[4].attackTargetId,p.actions[0].id);
   await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);p=await saved();E.validateMapProject(p);assert.equal(p.actions[0].objectKeys.length,4);assert.equal(p.actions[1].path.length,3);assert.equal(p.armyPresets[0].name,'Red siege guard');
+  // New miniatures must work as saved editor objects, not only as gallery art.
+  const {MODERN_OBJECTS,CIVILIAN_OBJECTS}=await import('../map-modern-objects.mjs');
+  await evaluate(`document.querySelector('[data-map-object-add="car"]').click()`);
+  assert.equal((await saved()).actions.at(-1).glyph,'car','civilian quick add creates the requested object');
+  for(const [glyph,icon] of Object.entries({...MODERN_OBJECTS,...CIVILIAN_OBJECTS})){
+    await change('#mInspector [data-mf="glyph"]',glyph);
+    const project=await saved();E.validateMapProject(JSON.parse(JSON.stringify(project)));
+    assert.equal(project.actions.at(-1).glyph,glyph,'picker saves '+glyph);
+    assert.equal(project.actions.at(-1).color,icon.color,'new objects use their default palette');
+  }
+  const categories=await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup')).map(group=>group.label)`);
+  for(const category of ['Travel & civilian transport','Cities & everyday places','Infrastructure & clean energy','Nature & outdoors','Modern military'])assert.ok(categories.includes(category),'picker exposes '+category);
+  await change('#mInspector [data-mf="glyph"]','ferry');await change('#mInspector [data-mf="__pinMove"]','move');
+  await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  p=await saved();E.validateMapProject(p);assert.equal(p.actions.at(-1).glyph,'ferry');assert.equal(p.actions.at(-1).mode,'move','civilian movement survives project reload');
   const render=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs');const topo=await fetch('map-data/countries-50m.json').then(r=>r.json()),geo=E.buildGeo(topo),p=JSON.parse(localStorage.getItem('frameflow-map-v1'));
     const c=document.createElement('canvas');c.width=1280;c.height=720;const x=c.getContext('2d');
@@ -123,6 +138,39 @@ try {
   })()`);
   assert.ok(video.size>1000&&video.type==='video/webm','keyframed objects and battle scene encode to video');
   const screenshot=await cdp('Page.captureScreenshot',{format:'png'});await writeFile(join(tmpdir(),'frameflow-object-workflows-review.png'),Buffer.from(screenshot.data,'base64'));
+  const modernReview=await evaluate(`(async()=>{
+    const {MODERN_OBJECTS,CIVILIAN_OBJECTS}=await import('./map-modern-objects.mjs');
+    const icons=Object.entries({...MODERN_OBJECTS,...CIVILIAN_OBJECTS});
+    const c=document.createElement('canvas');c.width=1536;c.height=1080;const x=c.getContext('2d');
+    x.fillStyle='#e7dfc9';x.fillRect(0,0,c.width,c.height);x.fillStyle='#334439';x.font='26px Georgia';x.fillText('Modern details & everyday map objects',38,43);
+    const probe=document.createElement('canvas');probe.width=probe.height=256;const pc=probe.getContext('2d');
+    let colored=0,deterministic=0;
+    for(let i=0;i<icons.length;i++){
+      const [key,icon]=icons[i],cx=128+(i%6)*256,cy=145+Math.floor(i/6)*196;
+      x.save();x.translate(cx,cy);icon.draw(x,65,icon.color,.7);x.restore();
+      x.fillStyle='#465747';x.font='13px Arial';x.textAlign='center';x.fillText(icon.label,cx,cy+81);
+      const render=(color,time)=>{pc.clearRect(0,0,256,256);pc.save();pc.translate(128,128);icon.draw(pc,72,color,time);pc.restore();return probe.toDataURL();};
+      const first=render(icon.color,.7);if(first===render(icon.color,.7))deterministic++;
+      if(first!==render('#ce536a',.7))colored++;
+    }
+    const changed=[];for(const key of ['helicopter','drone','submarine','factory','bicycle','ferry','windTurbine','traveler']){
+      const icon={...MODERN_OBJECTS,...CIVILIAN_OBJECTS}[key];
+      pc.clearRect(0,0,256,256);pc.save();pc.translate(128,128);icon.draw(pc,72,icon.color,0);pc.restore();const before=probe.toDataURL();
+      pc.clearRect(0,0,256,256);pc.save();pc.translate(128,128);icon.draw(pc,72,icon.color,.43);pc.restore();if(before!==probe.toDataURL())changed.push(key);
+    }
+    const E=await import('./map-engine.mjs'),project=E.newMapProject();project.theme='paper';project.camera.init={lon:0,lat:0,zoom:2,bearing:0,pitch:0};
+    project.actions=[E.makeAction('object',0,{glyph:'windTurbine',color:'#839e91',place:{kind:'point',lon:0,lat:0},size:3,enter:'none',idle:'none',exit:'none',dur:240})];
+    project.fps=30;E.drawMap(pc,256,256,project,30,window.workflowGeo);const atThirty=probe.toDataURL();
+    project.fps=60;E.drawMap(pc,256,256,project,60,window.workflowGeo);const equalSeconds=atThirty===probe.toDataURL();
+    document.body.replaceChildren(c);c.style.cssText='width:96vw;height:auto;display:block;margin:auto;box-shadow:none';
+    return{total:icons.length,colored,deterministic,changed,equalSeconds};
+  })()`);
+  assert.equal(modernReview.total,30);assert.equal(modernReview.colored,30,'all modern and civilian illustrations respond to object color');
+  assert.equal(modernReview.deterministic,30,'the same timeline time renders identical export frames');
+  assert.equal(modernReview.changed.length,8,'rotors, propellers, wakes, smoke, wheels, turbines and walking animate');
+  assert.equal(modernReview.equalSeconds,true,'modern object animation matches at equal elapsed seconds in 30 FPS and 60 FPS projects');
+  await cdp('Emulation.setDeviceMetricsOverride',{width:1600,height:1200,deviceScaleFactor:1,mobile:false});
+  await writeFile(join(tmpdir(),'frameflow-modern-civilian-objects-review.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   assert.deepEqual(errors,[],'no runtime errors');console.log('Five object workflows passed: keyframes/timeline, drawn walls, damage states, saved armies, targeted attacks, reload, PNG and video encoding');
 } finally {
   ws?.close(); chrome.kill(); server.closeAllConnections(); server.close();

@@ -283,6 +283,13 @@ function buildStaticUI() {
     const button=document.createElement('button');button.type='button';button.dataset.mapFeature=shape;button.textContent=SHAPES[shape].label;
     button.onclick=()=>addAction('shape',{shape,color:SHAPES[shape].color,name:SHAPES[shape].label,revealPath:shape==='front'?false:true,networkAnimation:'both',flowSpeed:24});$('#mAddGrid').append(button);
   }
+  for(const [glyph,label,symbol] of [['car','Vehicle','↝'],['house','Building','⌂'],['tree','Nature','♧']]){
+    const button=document.createElement('button');button.type='button';button.dataset.mapObjectAdd=glyph;
+    button.title=`Add ${OBJECT_ICONS[glyph].label.toLowerCase()}`;
+    const icon=document.createElement('b');icon.textContent=symbol;button.append(icon,document.createTextNode(label));
+    button.onclick=()=>addAction('object',{glyph,color:OBJECT_ICONS[glyph].color,name:OBJECT_ICONS[glyph].label});
+    $('#mAddGrid').append(button);
+  }
   $('#mImagery').innerHTML = Object.entries(IMAGERY_SOURCES).map(([k, x]) => `<option value="${k}">${x.label}</option>`).join('');
   if (!$('#mTexture')) $('#mImageryBox').insertAdjacentHTML('afterend', `
     <details open id="mTextureSection">
@@ -542,7 +549,7 @@ function arrangeObjects(operation) {
 }
 function objectPicker(glyph) {
   const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
-  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Documentary · field troops">${options('documentary')}</optgroup><optgroup label="Leaders &amp; characters">${options('leaders')}</optgroup><optgroup label="Objects &amp; modern units">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
+  return `<label>Object<select data-mf="glyph" data-t="sel"><optgroup label="Travel &amp; civilian transport">${options('transport')}</optgroup><optgroup label="Cities &amp; everyday places">${options('places')}</optgroup><optgroup label="Infrastructure &amp; clean energy">${options('infrastructure')}</optgroup><optgroup label="Nature &amp; outdoors">${options('nature')}</optgroup><optgroup label="Modern military">${options('modern')}</optgroup><optgroup label="Documentary · field troops">${options('documentary')}</optgroup><optgroup label="Leaders &amp; characters">${options('leaders')}</optgroup><optgroup label="Markers &amp; other objects">${options('general')}</optgroup><optgroup label="Exploration &middot; Age of Sail">${options('exploration')}</optgroup><optgroup label="Warfare &middot; 1500s&ndash;1600s">${options('warfare')}</optgroup><optgroup label="Defenses &amp; walls">${options('defense')}</optgroup><optgroup label="Army groups">${options('armies')}</optgroup></select></label>`;
 }
 function highlightExtentFields(a) {
   const mode = a.highlightExtent || 'full';

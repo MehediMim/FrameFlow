@@ -92,3 +92,13 @@ for(const source of [distance,areaShape]){
   drawShape(H,c,view,null,withGeometry,0,[]);
   assert.ok(strokes>before,'distance arrow and area boundary are optional');
 }
+
+for(const path of [[point(0,0),point(1,1)],[point(1,1),point(0,0)],[point(0,0),point(0,1)]]){
+  const action=makeAction('shape',0,{shape:'distance',path}),labels=[];
+  drawShape(H,c,view,null,action,0,labels);
+  const r=route(action),first=H.project(view,r.X[0],r.Y[0]),last=H.project(view,r.X[r.n-1],r.Y[r.n-1]);
+  let expected=Math.atan2(last.y-first.y,last.x-first.x)*180/Math.PI;
+  if(expected>90)expected-=180;else if(expected< -90)expected+=180;
+  near(labels[0].angle,expected);
+  assert.ok(Math.abs(labels[0].angle)<=90,'distance labels follow the arrow and remain upright');
+}

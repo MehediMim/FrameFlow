@@ -1,4 +1,6 @@
 export const ARMY_PRESETS={
+  mughalColumn:{name:'Mughal column',units:[{glyph:'mughalMatchlock',count:5,color:'#52725c'},{glyph:'mughalCavalry',count:3,color:'#8b4948'},{glyph:'mughalWarElephant',count:1,color:'#9c4943'},{glyph:'mughalCannon',count:2,color:'#658272'}]},
+  companyColumn:{name:'East India Company column',units:[{glyph:'companySepoy',count:7,color:'#ab4542'},{glyph:'companyOfficer',count:1,color:'#a44640'},{glyph:'companyFieldGun',count:2,color:'#465d60'},{glyph:'bullockCart',count:1,color:'#b38750'}]},
   riflePlatoon:{name:'Documentary · rifle platoon',units:[{glyph:'soldier',count:8,color:'#737b50'},{glyph:'fieldOfficer',count:1,color:'#72765a'},{glyph:'radioOperator',count:1,color:'#6c7752'},{glyph:'fieldMedic',count:1,color:'#8a8764'}]},
   armoredColumn:{name:'Documentary · armored column',units:[{glyph:'tank',count:3,color:'#75794e'},{glyph:'soldier',count:6,color:'#737b50'},{glyph:'radioOperator',count:1,color:'#6c7752'}]},
   pikeShot:{name:'Pike & shot company',units:[{glyph:'pikeman',count:5,color:'#667e8c'},{glyph:'musketeer',count:6,color:'#9d4d40'},{glyph:'flag',count:1,color:'#a43d39'}]},

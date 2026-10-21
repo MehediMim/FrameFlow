@@ -162,3 +162,18 @@ body.mode-map #mapStudio{display:flex}
 .m-group-tools button:disabled{opacity:.45}
 #mapStudio .m-campaign-key{background:#e9cc75;border-color:#f9e7b1;z-index:5}
 #mapStudio .t-group{background:#63814b55;border-color:#a7b887}
+
+.m-object-picker{margin-bottom:14px;position:relative}
+.m-object-picker>.mini-label{display:block;margin-bottom:5px}
+.m-object-picker select[hidden]{display:none!important}
+.m-object-picker details{position:relative}
+.m-object-picker summary{display:flex;align-items:center;gap:8px;min-height:36px;padding:5px 9px;border:1px solid #39434a;border-radius:6px;background:#20262a;color:#dce4e8;cursor:pointer;list-style:none;font-size:11px}
+.m-object-picker summary::-webkit-details-marker{display:none}
+.m-object-picker summary img{width:26px;height:26px;object-fit:contain;flex:none}
+.m-object-caret{margin-left:auto}
+.m-object-options{position:absolute;top:100%;left:0;right:0;z-index:50;max-height:280px;overflow:auto;background:#191f23;border:1px solid #46535c;border-radius:6px;box-shadow:0 8px 20px #0008;overscroll-behavior:contain;scrollbar-width:thin}
+.m-object-options h4{margin:0;padding:7px 9px;color:#abbcc5;background:#252e34;font-size:10px}
+#mInspector .m-object-options .m-object-choice{min-height:38px;gap:8px;padding:4px 9px}
+#mInspector .m-object-options .m-object-choice img{width:28px;height:28px}
+#mInspector .m-object-options [aria-selected="true"]{background:#303e2b;box-shadow:inset 3px 0 var(--accent)}
+.m-object-picker summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

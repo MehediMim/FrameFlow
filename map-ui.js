@@ -41,6 +41,7 @@ const OBJECT_CATEGORIES = [
   ['transport', 'Travel & civilian transport'], ['places', 'Cities & everyday places'],
   ['landmarks', 'Famous landmarks & infrastructure'], ['people', 'People & occupations'],
   ['infrastructure', 'Infrastructure & clean energy'], ['nature', 'Nature & outdoors'],
+  ['subcontinent', 'India & subcontinent'], ['mughal', 'Mughal era'], ['company', 'East India Company'],
   ['modern', 'Modern military'], ['documentary', 'Documentary · field troops'],
   ['leaders', 'Leaders & characters'], ['time', 'Time & planning'],
   ['general', 'Markers & other objects'], ['exploration', 'Exploration · Age of Sail'],
@@ -553,11 +554,15 @@ function arrangeObjects(operation) {
 function objectPicker(glyph) {
   const filter = objectTypeFilters.get(sel) || 'all';
   const groups = OBJECT_CATEGORIES.filter(([key]) => filter === 'all' || key === filter);
-  const options = group => Object.entries(OBJECT_ICONS).filter(([,icon]) => (icon.group || 'general') === group).map(([key,icon]) => `<option value="${key}" ${key === glyph ? 'selected' : ''}>${esc(icon.label)}</option>`).join('');
   const outside = filter !== 'all' && (OBJECT_ICONS[glyph]?.group || 'general') !== filter;
+  const entries=group=>Object.entries(OBJECT_ICONS).filter(([,icon])=>(icon.group||'general')===group);
+  const options=group=>entries(group).map(([key,icon])=>`<option value="${key}" ${key===glyph?'selected':''}>${esc(icon.label)}</option>`).join('');
   return `<label>Object type<select data-object-type>${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label]) => `<option value="${key}" ${key === filter ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
-    + `<label>Object<select data-mf="glyph" data-t="sel">${outside ? `<option value="" selected disabled>Choose an object</option>` : ''}${groups.map(([key,label]) => `<optgroup label="${esc(label)}">${options(key)}</optgroup>`).join('')}</select></label>`;
+    + `<div class="m-object-picker"><span class="mini-label">Object</span><select data-mf="glyph" data-t="sel" aria-label="Object" hidden>${outside?'<option value="" selected disabled>Choose an object</option>':''}${groups.map(([key,label])=>`<optgroup label="${esc(label)}">${options(key)}</optgroup>`).join('')}</select>`
+    + `<details data-object-menu><summary aria-label="Choose object">${outside?'':`<img data-object-preview="${glyph}" alt="">`}<span>${outside?'Choose an object':esc(OBJECT_ICONS[glyph]?.label||'Choose an object')}</span><span class="m-object-caret" aria-hidden="true">&#9662;</span></summary>`
+    + `<div class="m-object-options" role="listbox" aria-label="Objects">${groups.map(([group,label])=>`<div role="group" aria-label="${esc(label)}"><h4>${esc(label)}</h4>${entries(group).map(([key,icon])=>`<button type="button" class="m-object-choice" role="option" data-object-choice="${key}" aria-selected="${key===glyph}"><img data-object-preview-lazy="${key}" alt=""><span>${esc(icon.label)}</span></button>`).join('')}</div>`).join('')}</div></details></div>`;
 }
+
 function highlightExtentFields(a) {
   const mode = a.highlightExtent || 'full';
   return '<div class="section-title">HIGHLIGHT EXTENT</div>'
@@ -770,6 +775,28 @@ function shotFields(s) {
 function bindInspector(it) {
   bindCameraInspector(it);
   paintObjectPreviews($('#mInspector'));
+  const objectMenu=$('#mInspector [data-object-menu]');
+  if(objectMenu){
+    objectMenu.ontoggle=()=>{
+      if(!objectMenu.open)return;
+      for(const img of objectMenu.querySelectorAll('[data-object-preview-lazy]')){img.dataset.objectPreview=img.dataset.objectPreviewLazy;delete img.dataset.objectPreviewLazy;}
+      paintObjectPreviews(objectMenu);
+      objectMenu.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'});
+    };
+    for(const button of objectMenu.querySelectorAll('[data-object-choice]'))button.onclick=()=>{
+      const input=$('#mInspector [data-mf="glyph"]');input.value=button.dataset.objectChoice;
+      input.dispatchEvent(new Event('change',{bubbles:true}));
+      $('#mInspector [data-object-menu] summary')?.focus();
+    };
+    objectMenu.onkeydown=e=>{
+      if(e.key==='Escape'){objectMenu.open=false;objectMenu.querySelector('summary').focus();e.preventDefault();e.stopPropagation();return;}
+      if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;
+      e.preventDefault();e.stopPropagation();objectMenu.open=true;
+      const rows=[...objectMenu.querySelectorAll('[data-object-choice]')],i=rows.indexOf(document.activeElement);
+      const next=e.key==='Home'?0:e.key==='End'?rows.length-1:e.key==='ArrowDown'?Math.min(rows.length-1,i+1):Math.max(0,i-1);
+      rows[next]?.focus();
+    };
+  }
   const objectType = $('#mInspector [data-object-type]');
   if (objectType) objectType.onchange = () => {
     objectTypeFilters.set(it.id, objectType.value);

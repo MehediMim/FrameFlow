@@ -3,6 +3,7 @@ import { surface, polygonSurface } from './map-object-materials.mjs';
 // (war maps, disasters, logistics...). Everything is drawn as vector shapes in code, so it looks the
 // same on every device and in exported video. The engine passes its helpers in as `H`.
 import { drawBanner } from './map-banner.mjs';
+import { SUBCONTINENT_OBJECTS } from './map-subcontinent-objects.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
 import { DOCUMENTARY_OBJECTS } from './map-documentary-objects.mjs';
 import { MODERN_OBJECTS, CIVILIAN_OBJECTS } from './map-modern-objects.mjs';
@@ -27,6 +28,7 @@ export const OBJECT_ICONS = {
   banner: { label: 'Hanging image flag', color: '#b89963' },
   army: { label: 'Mixed army formation', color: '#9d4d40', group:'armies', historic:true, draw:(c,s,col,t)=>{for(const x of[-.55,.05,.65]){c.save();c.translate(x*s,0);OBJECT_ICONS.musketeer.draw(c,s*.55,col,t);c.restore();}} },
   ...HISTORIC_OBJECTS,
+  ...SUBCONTINENT_OBJECTS,
   ...DOCUMENTARY_OBJECTS,
   ...MODERN_OBJECTS,
   ...CIVILIAN_OBJECTS,
@@ -89,7 +91,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
-  if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','warship','submarine','ferry','cargoShip'].includes(a.glyph));
+  if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph));
   else{
     if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
     else if(a.glyph==='artwork') {
@@ -165,6 +167,7 @@ export function drawEffect(H, c, v, geo, a, frame, labels) {
 
 // ---------------------------------------------------------------- shapes (arrows, front lines, zones)
 export function drawShape(H, c, v, geo, a, frame, labels) {
+  const distanceShape=a.shape==='distance';
   const measurementShape=['distance','area'].includes(a.shape);
   const textOnly=measurementShape&&(a.shape==='distance'?!a.showDistanceArrow:!a.showAreaBoundary);
   if(measurementShape)a={...a,shape:a.shape==='area'?'zone':'arrow',showMeasurement:true,revealPath:false,curve:'straight',pathKeys:[]};
@@ -179,7 +182,16 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     const pts=P.filter(Boolean);
     const anchor=zone?(pts.length>=3?{x:pts.reduce((sum,q)=>sum+q.x,0)/pts.length,y:pts.reduce((sum,q)=>sum+q.y,0)/pts.length}:null):H.project(v,(r.X[0]+r.X[r.n-1])/2+k,(r.Y[0]+r.Y[r.n-1])/2);
     const label=shapeLabel(a,r);
-    if(label&&anchor&&(zone||anchor.z>=v.near))labels.push({x:anchor.x,y:anchor.y,text:label,alpha:1,scale:1});
+    if(label&&anchor&&(zone||anchor.z>=v.near)){
+      let angle=0;
+      if(distanceShape){
+        const first=H.project(v,r.X[0]+k,r.Y[0]),last=H.project(v,r.X[r.n-1]+k,r.Y[r.n-1]);
+        angle=Math.atan2(last.y-first.y,last.x-first.x)*180/Math.PI;
+        // Keep text readable while following the projected arrow axis.
+        if(angle>90)angle-=180;else if(angle< -90)angle+=180;
+      }
+      labels.push({x:anchor.x,y:anchor.y,text:label,alpha:1,scale:1,...(distanceShape?{angle}:{})});
+    }
   }
   if(textOnly)return;
   let text = null;

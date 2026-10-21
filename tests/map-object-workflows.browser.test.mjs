@@ -69,8 +69,11 @@ try {
   const change=(selector,value)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const saved=()=>evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);await change('#mInspector [data-mf="glyph"]','stoneFort');
-  assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], [data-object-choice], .m-object-library').length`),0,'object selection uses only the two dropdowns');
-  await change('#mInspector [data-mf="glyph"]','tank');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], .m-object-library').length`),0,'object selection uses only the two dropdowns');
+  await evaluate(`document.querySelector('[data-object-menu]').open=true`);
+  await waitFor(`document.querySelector('[data-object-choice="tank"] img').complete&&document.querySelector('[data-object-choice="tank"] img').naturalWidth>0`);
+  await evaluate(`document.querySelector('[data-object-choice="tank"]').click()`);
+  assert.equal((await saved()).actions[0].glyph,'tank','icon dropdown selects an object');
   assert.ok(await evaluate(`!!document.querySelector('#mItems img[data-object-preview="tank"]')`),'selected object keeps its layer preview');
   await change('#mInspector [data-mf="glyph"]','stoneFort');
   await evaluate(`document.querySelector('#mInspector [data-mf="autoObjectKey"]').click()`);
@@ -126,6 +129,10 @@ try {
   assert.ok((await evaluate(`Array.from(document.querySelectorAll('#mInspector optgroup')).map(g=>g.label)`)).includes('Time & planning'));
   const beforeFilter=await saved();
   await change('#mInspector [data-object-type]','time');
+  await evaluate(`document.querySelector('[data-object-menu]').open=true`);
+  await waitFor(`Array.from(document.querySelectorAll('[data-object-choice] img')).every(img=>img.complete&&img.naturalWidth>0)`);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-object-choice]')).map(row=>row.dataset.objectChoice)`),['clock','stopwatch','hourglass','calendar'],'icon menu shows only the selected type');
+
   assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] option:not(:disabled)')).map(o=>o.value)`),['clock','stopwatch','hourglass','calendar']);
   await change('#mInspector [data-object-type]','transport');
   assert.deepEqual(await saved(),beforeFilter,'browsing types leaves the project unchanged');

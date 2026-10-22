@@ -1,5 +1,59 @@
 import { surface } from './map-object-materials.mjs';
 // Damage is a persistent visual state, independent of entry/exit animation.
+export const COLLAPSE_SECONDS = .9;
+
+// Evaluate from the timeline so scrubbing and exported frames reproduce the same collapse.
+// An object that starts destroyed is already rubble; only later state changes collapse.
+export function destructionProgress(a, frame, fps = 30) {
+  const track = (a.objectKeys || []).filter(k => k.values.damageState !== undefined).sort((a, b) => a.frame - b.frame);
+  let state = track[0]?.values.damageState, start = null;
+  for (const key of track) {
+    if (key.frame > frame) break;
+    const next = key.values.damageState;
+    if (next !== state) start = next === 'destroyed' ? key.frame : null;
+    state = next;
+  }
+  return start === null ? 1 : Math.max(0, Math.min(1, (frame - start) / (fps * COLLAPSE_SECONDS)));
+}
+
+export function drawDestruction(c, s, ship, progress, drawIntact) {
+  if (progress >= 1) { drawRubble(c, s, ship); return; }
+  const p = Math.max(0, progress), fall = Math.min(1, p / .65), opacity = c.globalAlpha;
+  c.save();
+  c.globalAlpha = opacity * fall;
+  drawRubble(c, s, ship);
+  c.restore();
+  if (fall < 1) {
+    c.save();
+    c.globalAlpha = opacity * (1 - fall * fall);
+    c.translate(Math.sin(p * 55) * s * .035 * fall, s * .3 * fall * fall);
+    c.rotate(Math.sin(p * 9) * .12 * fall);
+    c.scale(1 + fall * .12, 1 - fall * .85);
+    drawIntact();
+    c.restore();
+  }
+  // Fixed particle trajectories keep playback independent of render order.
+  c.save();
+  for (let i = 0; i < 12; i++) {
+    const q = Math.min(1, p / (.5 + (i % 3) * .1));
+    const x = (i - 5.5) * s * (.08 + q * .16);
+    const y = s * (.2 - (1 - q) * .8 - Math.sin(q * Math.PI) * (.45 + (i % 4) * .13));
+    c.globalAlpha = opacity * Math.min(1, p * 20) * (1 - q);
+    c.fillStyle = ship ? '#66503d' : '#82796a';
+    c.save();c.translate(x, y);c.rotate(i + q * (i % 2 ? 5 : -5));
+    c.fillRect(-s * .055, -s * .04, s * .11, s * .08);c.restore();
+  }
+  for (let i = 0; i < 7; i++) {
+    const q = Math.max(0, (p - .1) / .9), r = s * (.15 + q * .42);
+    c.globalAlpha = opacity * Math.sin(q * Math.PI) * .25;
+    const x = (i - 3) * s * (.16 + q * .22), y = s * (.22 - q * (.4 + (i % 2) * .15));
+    const dust = c.createRadialGradient(x, y, 0, x, y, r);
+    dust.addColorStop(0, '#a99c85');dust.addColorStop(1, 'rgba(169,156,133,0)');
+    c.fillStyle = dust;c.beginPath();c.arc(x, y, r, 0, Math.PI * 2);c.fill();
+  }
+  c.restore();
+}
+
 export function drawRubble(c,s,ship=false){
   c.fillStyle=ship?'#4c392d':'#686052';c.strokeStyle='#302a25';c.lineWidth=s*.035;
   for(let i=0;i<9;i++){

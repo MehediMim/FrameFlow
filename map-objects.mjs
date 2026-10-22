@@ -15,7 +15,7 @@ import { TRADE_OBJECTS } from './map-trade-objects.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
-import { drawDamage, drawRubble } from './map-damage.mjs';
+import { drawDamage, drawDestruction, destructionProgress } from './map-damage.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
 const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = Math.max(1, s * .05); c.stroke(); };
 const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = polygonSurface(c,fill,s,pts); c.fill(); stroke(c, s); };
@@ -99,8 +99,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && !['banner','portrait'].includes(a.glyph)) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
-  if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph));
-  else{
+  const drawIntact = () => {
     if(a.glyph==='portrait')drawPortrait(c,s,a.color,a,H.objectImage?.(a.image));
     else if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
     else if(a.glyph==='artwork') {
@@ -109,7 +108,12 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
       else {c.strokeStyle='#ffffff';c.lineWidth=2*u;c.strokeRect(-s,-s,2*s,2*s);}
     }
     else ic.draw(c, s, a.color, ic.historic || ic.timeUnit==='seconds' ? t/(v.fps||30) : t);
-    drawDamage(c,s,a.damageState,t/(v.fps||30));
+  };
+  if(a.damageState==='destroyed'){
+    const ship=['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph);
+    drawDestruction(c,s,ship,destructionProgress(a,frame,v.fps||30),drawIntact);
+  } else {
+    drawIntact();drawDamage(c,s,a.damageState,t/(v.fps||30));
   }
   c.restore();
   if (a.showLabel && a.glyph!=='portrait') { const off = -s * (ic.labelOffset ?? (a.glyph==='banner'?6:ic.historic?2.8:1.5)) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }

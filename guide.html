@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Feature guide — FrameFlow</title>
+  <meta name="description" content="Learn FrameFlow with animated, step-by-step lessons covering maps, routes, objects, cameras, timelines, audio and export.">
+  <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="guide.css">
+</head>
+<body>
+  <header class="guide-header">
+    <a class="brand" href="index.html#home"><span aria-hidden="true">◈</span> FrameFlow <small>FIELD GUIDE</small></a>
+    <nav aria-label="Main navigation"><a href="index.html#home">Home</a><a class="studio-link" href="index.html#map">Open Map Studio <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="guideTitle"><div><p class="eyebrow">THE FRAMEFLOW FIELD GUIDE</p><h1 id="guideTitle">See how it works.<br><em>Then make it yours.</em></h1></div><p>From your first pin to your final film.<br>Pick a feature, watch it unfold, and follow the steps in Map Studio.</p></section>
+    <div class="guide-layout">
+      <aside class="lesson-sidebar" aria-label="Feature lessons">
+        <label class="search-label" for="lessonSearch">Find a feature</label>
+        <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="lessonSearch" type="search" placeholder="Try camera, flags, export…" autocomplete="off"></div>
+        <p class="lesson-count" id="lessonCount" role="status"></p>
+        <nav id="lessonNav" aria-label="Choose a lesson"></nav>
+        <div id="noLessons" hidden><p>No lessons found. Try a different feature name.</p><button id="clearSearch" type="button">Clear search</button></div>
+      </aside>
+      <article class="lesson" aria-labelledby="lessonTitle">
+        <div class="lesson-heading"><div><p class="eyebrow" id="lessonCategory"></p><h2 id="lessonTitle" tabindex="-1"></h2></div><span class="lesson-index" id="lessonIndex"></span></div>
+        <p class="lesson-description" id="lessonDescription"></p>
+        <div class="demo-player">
+          <div class="demo-top"><span><i></i> ANIMATED WALKTHROUGH</span><span id="demoPhase"></span></div>
+          <div class="demo-stage"><canvas id="featureCanvas" width="960" height="510" role="img" aria-label="Animated feature explanation"></canvas><div class="demo-caption"><span id="stepNumber"></span><p id="stepCaption"></p></div></div>
+          <div class="player-controls"><button id="playDemo" type="button" aria-label="Pause animation" aria-pressed="true">Pause</button><button id="replayDemo" type="button" aria-label="Replay animation">↺ <span>Replay</span></button><label class="sr-only" for="demoSeek">Animation position</label><input id="demoSeek" type="range" min="0" max="1000" value="0"><output id="demoTime" for="demoSeek">0:00 / 0:12</output></div>
+        </div>
+        <p class="steps-label">YOUR TURN <span>Choose a step to inspect the demonstration.</span></p>
+        <ol class="lesson-steps" id="lessonSteps"></ol>
+        <section class="coverage" aria-labelledby="coverageTitle"><h3 id="coverageTitle">Also in this toolkit</h3><div id="lessonCoverage"></div></section>
+        <footer class="lesson-footer"><button id="previousLesson" type="button">← Previous lesson</button><a href="index.html#map">Try it in Map Studio ↗</a><button id="nextLesson" type="button">Next lesson →</button></footer>
+      </article>
+    </div>
+    <section class="guide-note"><span aria-hidden="true">◈</span><p>A little movement. A clearer story.<br><small>These illustrative demos explain each workflow. Open Map Studio to create with the full tools.</small></p><a href="index.html#map">Start creating ↗</a></section>
+  </main>
+  <noscript><p class="no-script">Enable JavaScript to browse the animated lessons. You can still <a href="index.html#feature-library">read the feature library</a>.</p></noscript>
+  <script type="module" src="guide.mjs"></script>
+</body>
+</html>

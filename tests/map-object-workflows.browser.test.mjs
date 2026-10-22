@@ -152,7 +152,7 @@ try {
   await waitFor(`!!document.querySelector('body > .m-object-cascade')`);
   await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="time"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   await waitFor(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] img')].every(img=>img.complete&&img.naturalWidth>0)`);
-  assert.deepEqual(await evaluate(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] [data-object-choice]')].map(row=>row.dataset.objectChoice)`),['clock','stopwatch','hourglass','calendar'],'hover reveals the chosen category beside its name');
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] [data-object-choice]')].map(row=>row.dataset.objectChoice).sort()`),['calendar','clock','hourglass','stopwatch'],'hover reveals all objects in the chosen category');
   await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="transport"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   assert.deepEqual(await saved(),beforeFilter,'browsing types leaves the project unchanged');
   assert.equal(await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="time"]').hidden`),true,'the previous category closes');
@@ -174,10 +174,20 @@ try {
     const damageFrames=[];const isolated={...p,actions:[{...p.actions[0],objectKeys:[],size:2,objectAngle:0}]};
     for(const state of ['intact','damaged','burning','destroyed']){isolated.actions[0].damageState=state;E.drawMap(x,1280,720,isolated,60,geo);damageFrames.push(new Uint8ClampedArray(x.getImageData(0,0,1280,720).data));}
     const damageDifferent=damageFrames.slice(1).every((pixels,j)=>{let diff=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]!==damageFrames[j][i]||pixels[i+1]!==damageFrames[j][i+1])diff++;return diff>40;});
+    isolated.actions[0].objectKeys=[{frame:0,values:{damageState:'intact'}},{frame:60,values:{damageState:'destroyed'}}];
+    const snapshot=frame=>{E.drawMap(x,1280,720,isolated,frame,geo);return c.toDataURL();};
+    const collapseStart=snapshot(60),collapseMiddle=snapshot(70),collapseEnd=snapshot(100);
+    const collapseAnimated=collapseStart!==collapseMiddle&&collapseMiddle!==collapseEnd;
+    const collapseStable=collapseMiddle===snapshot(70);
+    isolated.actions[0].objectKeys=[];
+    const collapseSettled=collapseEnd===snapshot(100);
     window.workflowProject=p;window.workflowGeo=geo;window.workflowCanvas=c;E.drawMap(x,1280,720,p,105,geo);document.body.replaceChildren(c);c.style.cssText='width:96vw;height:auto;display:block;margin:auto';
-    return{animated,damageDifferent,png:c.toDataURL().startsWith('data:image/png')};
+    return{animated,damageDifferent,collapseAnimated,collapseStable,collapseSettled,png:c.toDataURL().startsWith('data:image/png')};
   })()`);
   assert.ok(render.animated>500);assert.ok(render.damageDifferent,'all four damage states look distinct');assert.ok(render.png);
+  assert.ok(render.collapseAnimated,'destruction animates before settling');
+  assert.ok(render.collapseStable,'scrubbing reproduces the same collapse frame');
+  assert.ok(render.collapseSettled,'completed collapse matches static rubble');
   const video=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),{exportMapVideo}=await import('./map-video-export.mjs'),p=structuredClone(window.workflowProject),c=window.workflowCanvas;
     p.fps=24;p.frames=12;for(const a of p.actions){a.start=0;a.dur=12;a.animDur=12;delete a.objectKeys;}

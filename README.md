@@ -8,12 +8,16 @@ Serve this directory with a static web server, for example `python -m http.serve
 
 ## Make an animated map
 
+Open [the animated feature guide](guide.html) from the home navigation or the editor sidebar for 29 searchable lessons. Each has a playable, scrubbable demonstration, three practical steps, a toolkit overview, and a direct lesson URL. The guide respects reduced-motion preferences and leaves editor projects untouched. Run `npm run test:guide:browser` to check all lessons and player interactions.
+
 1. Create a project and choose the canvas size, frame rate, duration, and map style in Canvas settings.
 2. Add regions, routes, pins, labels, objects, or effects.
 3. Animate items and the camera using timeline keyframes.
 4. Preview, save a project backup, or export video or PNG.
 
 Project duration has no fixed cap. Existing Map Studio projects and local saves remain supported. Old Motion, Paper, and Scene URLs redirect to Map Studio.
+
+To animate destruction, add an object damage keyframe for Intact, Damaged, or Burning, then a later Destroyed keyframe. The object collapses with falling debris and fading dust over 0.9 seconds, then remains rubble. Scrubbing and video export use the same animation. Objects that begin Destroyed appear as settled rubble.
 
 Add an **Object**, then use **Object type** in Properties to choose **Famous landmarks & infrastructure** or **People & occupations**. The library includes 16 landmarks (including Padma Bridge and Bangladesh National Parliament) and 16 occupations. These objects support color changes, labels, movement, size and rotation keyframes, and video export.
 

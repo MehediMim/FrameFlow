@@ -25,6 +25,9 @@ import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, 
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
 import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
+import { sceneLightingAt, validateLightingEffect } from './map-lighting-keys.mjs';
+import { lightingPreset } from './map-lighting.mjs';
+import { lightingOf, validateLighting, withSceneLighting, applySceneLighting } from './map-lighting.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
 export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=path-flow-1';
 
@@ -57,7 +60,7 @@ export const THEMES = {
   blueprint: { label: 'Blueprint', void: '#071a3d', ocean: '#0f2f66', land: ['#1b4b9b', '#1d4fa3', '#1a4794', '#1e53aa', '#1c4d9e'], border: '#8fb8ff', borderA: .85, bw: 1, grat: '#8fb8ff', gratA: .2, dim: '#020b1d', vignette: .25, pill: 'rgba(255,255,255,.92)', pillText: '#0a2250' },
 };
 
-export const terrainSettingsOf = proj => reliefSettings({ ...THEMES[proj.theme]?.terrain, ...proj.terrain });
+export const terrainSettingsOf = proj => {const light=lightingOf(proj);return reliefSettings({ ...THEMES[proj.theme]?.terrain, ...proj.terrain,...(light.enabled?{azimuth:light.azimuth,altitude:Math.max(5,light.altitude)}:{}) });};
 
 // Texture tiles are seeded and cached: no per-frame noise or flickering in exports.
 export const TEXTURES = { none: 'None', paper: 'Paper grain', grain: 'Film grain', linen: 'Linen', dots: 'Halftone dots', abstract: 'Abstract blotches', brush: 'Brush strokes' };
@@ -1706,6 +1709,10 @@ const OBJ_H = { drawBadge, objectLocationAt, objectImage: src => { const e = bad
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
+  proj={...proj,lighting:sceneLightingAt(proj,frame)};
+  return withSceneLighting(proj.lighting,()=>drawMapScene(ctx,W,H,proj,frame,geo,previewCamera,{cacheBase}));
+}
+function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
   proj={...proj,actions:mapStackOrder(proj.actions)};
   const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
   const groups=proj.actions.filter(a=>a.type==='group');
@@ -1785,6 +1792,7 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   vignette(ctx, v, th);
   for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
+  applySceneLighting(ctx,W,H,proj.lighting);
   ctx.restore();
   return v;
 }
@@ -1798,7 +1806,7 @@ export const ACTION_TYPES = {
   highlight: { label: 'Highlight', icon: '◎', dur: 45, hint: 'Light up a country or a place' },
   pin: { label: 'Pin / label', icon: '⌖', dur: 45, hint: 'Mark a location with a pin, text or picture, and move it from place to place' },
   object: { label: 'Object', icon: '◆', dur: 90, hint: 'Place a tank, ship, jet, soldier, base, city… and move or animate it' },
-  effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Explosion, fire, smoke, shockwave, earthquake, missile strike' },
+  effect: { label: 'Effect', icon: '✹', dur: 60, hint: 'Sunlight / day & night, explosion, fire, smoke, shockwave, earthquake, missile strike' },
   shape: { label: 'Arrow / zone', icon: '➜', dur: 90, hint: 'Arrows, roads, zones, distance and area measurements' },
   label: { hidden: true, label: 'Pin / label', icon: 'Aa', dur: 90, hint: 'Place outlined atlas text on the map' },
 };
@@ -1832,9 +1840,10 @@ export function makeAction(type, start, extra = {}) {
     shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, fillAlpha: .28, showLabel: false, label: '' },
     label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
   }[type];
-  const a = { ...base, ...own, ...(type==='shape'&&['distance','area'].includes(extra.shape)?{curve:'straight'}:{}), ...extra };
+  const a = { ...base, ...own, ...(type==='shape'&&['distance','area'].includes(extra.shape)?{curve:'straight'}:{}),...(type==='shape'&&['road','railway'].includes(extra.shape)?{color:SHAPES[extra.shape].color,name:SHAPES[extra.shape].label}:{}), ...extra };
   // Leave a short hold after the animation so its final diamond clears the trim edge.
   a.animDur ??= Math.max(1,a.dur-Math.max(1,Math.ceil(a.dur*.15)));
+  if(type==='effect'&&a.fx==='sunlight'){a.lighting??=lightingPreset('day');a.name=extra.name||EFFECTS.sunlight.label;a.color=extra.color||EFFECTS.sunlight.color;}
   return a;
 }
 export function makeShot(preset, start, extra = {}) {
@@ -1910,6 +1919,7 @@ export function validateMapProject(p) {
   if (!ENUMS.theme.includes(p.theme)) throw Error('Unknown map theme.');
   if (p.imagery !== undefined && !/^[a-z0-9_-]{1,20}$/i.test(p.imagery)) throw Error('Invalid imagery source.');
   validateRelief(p.terrain);
+  validateLighting(p.lighting);
   validateAtlasLabels(p.atlasLabels);
   if (p.texture !== undefined && (!p.texture || !Object.hasOwn(TEXTURES, p.texture.type) || !num(p.texture.strength, 0, 1) || !num(p.texture.scale, .5, 3))) throw Error('Invalid map texture.');
   const i = p.camera?.init;
@@ -2019,14 +2029,15 @@ export function validateMapProject(p) {
       for (const [key,lo,hi] of [['battleAngle',-360,360],['battleRange',40,800],['battleSpread',0,120]]) if (a[key] !== undefined && !num(a[key],lo,hi)) throw Error('Invalid battle effect setting.');
       if (a.battleIntensity !== undefined && (!Number.isInteger(a.battleIntensity) || !num(a.battleIntensity,1,12))) throw Error('Invalid battle intensity.');
     }
-    if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
+    if(a.type==='effect'&&a.fx==='sunlight')validateLightingEffect(a);
+    if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || (a.fx!=='sunlight'&&!isLoc(a.place)) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
     if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); validatePathAnimation(a); validateShapeMeasurement(a); validateZoneTerrain(a); }
     if (['object', 'effect', 'shape'].includes(a.type) && a.label !== undefined && (typeof a.label !== 'string' || a.label.length > 100)) throw Error('Invalid label.');
     if (((a.type !== 'label' || a.color !== undefined) && !col(a.color)) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
     if (a.opacity !== undefined && !num(a.opacity,0,1)) throw Error('Invalid opacity.');
     if (a.reliefOpacity !== undefined && !num(a.reliefOpacity, 0, 1)) throw Error('Invalid highlight opacity.');
     if (a.reliefColor !== undefined && !col(a.reliefColor)) throw Error('Invalid highlight color.');
-    for (const [k, lo, hi] of [['width', .5, 20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
+    for (const [k, lo, hi] of [['width', .5, a.type==='shape'&&['road','railway'].includes(a.shape)?120:20], ['fillAlpha', 0, 1], ['size', .2, 80], ['lift', 0, 400], ['dim', 0, 1], ['radius', 1, 20000]]) if (a[k] !== undefined && !num(a[k], lo, hi)) throw Error('Invalid ' + k + '.');
   }
   for (const s of p.shots.map(mapSourceItem)) {
     if (s.cameraKeys !== undefined) {

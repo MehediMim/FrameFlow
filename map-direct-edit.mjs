@@ -7,9 +7,10 @@ import { groupPoseAt, putGroupKey, makeObjectGroup } from './map-object-groups.m
 import { armyCopies } from './map-armies.mjs';
 import { pathAt } from './map-path-animation.mjs';
 import { objectOffsets } from './map-formations.mjs';
+import { networkHalfWidth } from './map-network-style.mjs';
 
 const wrap=lon=>((lon+180)%360+360)%360-180;
-const spatial=a=>['object','group','pin','label','effect','plane','shape'].includes(a?.type);
+const spatial=a=>!(a?.type==='effect'&&a.fx==='sunlight')&&['object','group','pin','label','effect','plane','shape'].includes(a?.type);
 const rotatable=a=>['object','group'].includes(a?.type);
 const scalable=a=>['object','group','pin','effect','label'].includes(a?.type);
 const key=t=>`${t.kind}:${t.country||''}:${t.name}`;
@@ -169,7 +170,7 @@ export function installDirectMapEditing(api){
         for(let i=1;i<points.length;i++){
           const A=points[i-1],B=points[i];if(A.z<=v.near||B.z<=v.near)continue;
           const dx=B.x-A.x,dy=B.y-A.y,t=Math.max(0,Math.min(1,((p.x-A.x)*dx+(p.y-A.y)*dy)/(dx*dx+dy*dy||1)));
-          if(Math.hypot(p.x-A.x-t*dx,p.y-A.y-t*dy)<Math.max(10,a.width||6)*v.unit)return a;
+          if(Math.hypot(p.x-A.x-t*dx,p.y-A.y-t*dy)<Math.max(10,['road','railway'].includes(a.shape)?networkHalfWidth(a):a.width||6)*v.unit)return a;
         }
         continue;
       }

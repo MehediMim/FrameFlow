@@ -1,6 +1,7 @@
 import { easings } from './easings.mjs';
+import { drawRoadOrRail, validateNetworkStyle } from './map-network-style.mjs';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-export const NETWORK_SHAPES={road:{label:'Road',color:'#8c7353'},railway:{label:'Railway',color:'#414941'},river:{label:'River',color:'#6496ad'}};
+export const NETWORK_SHAPES={road:{label:'Road',color:'#626867'},railway:{label:'Railway',color:'#839194'},river:{label:'River',color:'#6496ad'}};
 export const NETWORK_ANIMATIONS={reveal:'Draw along path',flow:'Flow / traffic',both:'Draw and flow',static:'Static'};
 export const pathAnimationMode=a=>a.networkAnimation??(a.revealPath===false?'flow':'both');
 const copy=path=>path.map(p=>({...p}));
@@ -28,6 +29,7 @@ export function putPathKey(a,frame,path,seed=true){
 }
 export function movePathKey(a,from,to){const key=a.pathKeys?.find(k=>k.frame===from);if(!key||from===to)return;a.pathKeys=a.pathKeys.filter(k=>k.frame!==from&&k.frame!==to);putPathKey(a,to,key.path,false);}
 export function validatePathAnimation(a){
+  validateNetworkStyle(a);
   if(a.revealPath!==undefined&&typeof a.revealPath!=='boolean')throw Error('Invalid path reveal.');
   if(a.networkAnimation!==undefined&&!Object.hasOwn(NETWORK_ANIMATIONS,a.networkAnimation))throw Error('Invalid network animation.');
   if(a.flowSpeed!==undefined&&(!Number.isFinite(a.flowSpeed)||Math.abs(a.flowSpeed)>200))throw Error('Invalid flow speed.');
@@ -55,6 +57,7 @@ export function clipPolyline(points,width,height,margin=40){
   }return out;
 }
 export function drawNetwork(c,points,a,unit,seconds){
+  if(a.shape!=='river'){drawRoadOrRail(c,points,a,unit,seconds);return;}
   const width=(a.width||6)*unit,flow=['flow','both'].includes(a.networkAnimation),phase=seconds*(a.flowSpeed??24)*unit;
   const path=()=>{c.beginPath();let prior=false;for(const p of points){if(p){if(prior)c.lineTo(p.x,p.y);else c.moveTo(p.x,p.y);}prior=!!p;}};
   const stroke=(color,w,dash=[],offset=0)=>{path();c.strokeStyle=color;c.lineWidth=w;c.setLineDash(dash);c.lineDashOffset=offset;c.stroke();};
@@ -62,14 +65,6 @@ export function drawNetwork(c,points,a,unit,seconds){
   if(a.shape==='river'){
     stroke('#365e64',width*1.8);stroke(a.color,width*1.5);
     if(flow){c.globalAlpha*=.6;stroke('#d9e8de',Math.max(.7*unit,width*.18),[10*unit,17*unit],-phase);}
-  }else if(a.shape==='road'){
-    stroke('#393d30',width*1.8);stroke(a.color,width*1.4);stroke('#e0d2a6',Math.max(.7*unit,width*.12),[9*unit,10*unit],flow?-phase:0);
-  }else{
-    stroke('#b6ab8b',width*2.2);
-    let offset=0;const gap=Math.max(5*unit,width*.8);c.strokeStyle=a.color;c.lineWidth=Math.max(unit,width*.2);
-    for(let i=1;i<points.length;i++){const l=points[i-1],r=points[i];if(!l||!r){offset=0;continue;}const dx=r.x-l.x,dy=r.y-l.y,len=Math.hypot(dx,dy);if(!len)continue;let d=offset;for(;d<len;d+=gap){const x=l.x+dx*d/len,y=l.y+dy*d/len;c.beginPath();c.moveTo(x-dy/len*width,y+dx/len*width);c.lineTo(x+dy/len*width,y-dx/len*width);c.stroke();}offset=d-len;}
-    stroke(a.color,width*1.3);stroke('#d7ceb5',width*.65);
-    if(flow){c.lineCap='butt';stroke('#e5b05b',width*.75,[14*unit,45*unit],-phase);}
   }
   c.restore();
 }

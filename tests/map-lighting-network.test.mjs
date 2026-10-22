@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import {newMapProject,makeAction,validateMapProject,terrainSettingsOf} from '../map-engine.mjs';
+import {DEFAULT_LIGHTING,LIGHTING_PRESETS,lightingPreset,lightingOf,validateLighting,withSceneLighting,currentSceneLighting,applySceneLighting} from '../map-lighting.mjs';
+import {ROAD_STYLES,RAIL_STYLES,validateNetworkStyle,offsetPolyline,networkMargin} from '../map-network-style.mjs';
+import {createIsometricModel} from '../map-isometric-objects.mjs';
+import {shadowGeometry} from '../map-isometric-shadow.mjs';
+import {lightingAt,sceneLightingAt,putLightingKey,moveLightingKey,removeLightingKey,validateLightingEffect} from '../map-lighting-keys.mjs';
+import {retimeMapItem,splitMapItem} from '../map-timing.mjs';
+const sunlight=makeAction('effect',10,{fx:'sunlight',dur:100,easing:'linear'});
+putLightingKey(sunlight,90,{altitude:-15,intensity:0,azimuth:315});
+assert.equal(sunlight.lightingKeys[0].frame,10,'first later edit seeds original light');
+assert.equal(lightingAt(sunlight,50).altitude,20);
+assert.equal(lightingAt(sunlight,50).intensity,.5);
+const lightingProject=newMapProject();lightingProject.actions=[sunlight];
+validateMapProject(structuredClone(lightingProject));
+assert.equal(sceneLightingAt(lightingProject,9).enabled,false);
+assert.equal(sceneLightingAt(lightingProject,110).enabled,false);
+assert.equal(sceneLightingAt(lightingProject,90).altitude,-15);
+sunlight.visible=false;assert.equal(sceneLightingAt(lightingProject,50).enabled,false);sunlight.visible=true;
+const overlap=makeAction('effect',40,{fx:'sunlight',dur:20,lighting:lightingPreset('night')});
+lightingProject.actions.push(overlap);assert.equal(sceneLightingAt(lightingProject,50).altitude,-15);assert.equal(sceneLightingAt(lightingProject,60).altitude,11.25);lightingProject.actions.pop();
+const original=structuredClone(sunlight),right=splitMapItem(sunlight,60,'sun-right');lightingProject.actions.push(right);
+for(const frame of [10,50,59,60,80,90,109])assert.deepEqual(sceneLightingAt(lightingProject,frame),lightingAt(original,frame),'split preserves light at '+frame);
+validateMapProject(structuredClone(lightingProject));
+retimeMapItem(right,80,right.dur);assert.deepEqual(lightingAt(right,100),lightingAt(original,80),'moving split preserves source clock');
+const arc=makeAction('effect',0,{fx:'sunlight',dur:100,easing:'linear',lighting:{...lightingPreset('day'),azimuth:350}});
+putLightingKey(arc,100,{azimuth:10});assert.equal(lightingAt(arc,50).azimuth,0,'sun takes shortest arc through north');
+moveLightingKey(arc,100,80);assert.equal(arc.lightingKeys.at(-1).frame,80);removeLightingKey(arc,80);assert.equal(arc.lightingKeys.length,1);
+for(const keys of [[{frame:101,values:{ambient:0}}],[{frame:10,values:{ambient:2}}],[{frame:10,values:{unknown:1}}],[{frame:10,values:null}],[{frame:10,values:{ambient:.5}},{frame:10,values:{ambient:.3}}]])assert.throws(()=>validateLightingEffect({...arc,lightingKeys:keys}));
+assert.equal(lightingOf(newMapProject()).enabled,false,'existing projects keep their current appearance');
+for(const key of Object.keys(LIGHTING_PRESETS)){
+  const p=newMapProject();p.lighting=lightingPreset(key);validateMapProject(JSON.parse(JSON.stringify(p)));
+}
+for(const lighting of [null,[],{azimuth:NaN},{altitude:90},{intensity:-1},{ambient:2},{warmth:2},{shadowStrength:2},{enabled:1},{preset:'bogus'}])assert.throws(()=>validateLighting(lighting));
+const base=currentSceneLighting();
+assert.throws(()=>withSceneLighting(lightingPreset('night'),()=>{throw Error('restore');}));
+assert.equal(currentSceneLighting(),base,'failed renders cannot leak lighting into another frame');
+const model=light=>withSceneLighting(light,()=>createIsometricModel('kingdomHouse','#b49375'));
+const day=model(lightingPreset('day')),night=model(lightingPreset('night')),turned=model({...lightingPreset('day'),azimuth:45});
+assert.notDeepEqual(day.faces.map(f=>f.color),night.faces.map(f=>f.color),'day and night affect actual model materials');
+assert.notDeepEqual(day.faces.map(f=>f.color),turned.faces.map(f=>f.color),'sun direction changes illuminated faces');
+assert.notDeepEqual(shadowGeometry(day).layers,shadowGeometry(turned).layers,'sun direction changes cast geometry');
+assert.ok(shadowGeometry(night).layers.every(layer=>!layer.length),'sun below the horizon produces no direct sunlight shadow');
+assert.ok(shadowGeometry(night).contact.length,'night retains ambient contact shading');
+const relief=terrainSettingsOf({theme:'relief',lighting:{...lightingPreset('day'),azimuth:45,altitude:25}});
+assert.equal(relief.azimuth,45);assert.equal(relief.altitude,25);
+const fills=[],ctx=new Proxy({fillRect(...r){fills.push(r);}},{get:(o,k)=>k in o?o[k]:()=>{}});
+applySceneLighting(ctx,800,600,DEFAULT_LIGHTING);assert.equal(fills.length,0);
+applySceneLighting(ctx,800,600,lightingPreset('night'));assert.deepEqual(fills[0],[0,0,800,600],'lighting covers the entire rendered frame');
+for(const [shape,styles,property]of[['road',ROAD_STYLES,'roadStyle'],['railway',RAIL_STYLES,'railStyle']])for(const key of Object.keys(styles)){
+  const p=newMapProject();p.actions=[makeAction('shape',0,{shape,path:[{lon:0,lat:0},{lon:1,lat:1}],width:80,[property]:key})];
+  validateMapProject(JSON.parse(JSON.stringify(p)));
+}
+for(const patch of [{width:NaN},{width:0},{width:121},{roadStyle:'x'},{railStyle:'x'},{roadLanes:'4'},{roadLanes:5},{roadMarkings:'x'},{sleeperSpacing:0},{railBallast:1},{railElectrified:'yes'}])assert.throws(()=>validateNetworkStyle({shape:'road',...patch}));
+assert.deepEqual(offsetPolyline([{x:0,y:0},{x:10,y:0},null,{x:20,y:0},{x:30,y:0}],2),[{x:0,y:2},{x:10,y:2},null,{x:20,y:2},{x:30,y:2}],'parallel rails never join across a clipped path gap');
+assert.ok(networkMargin({width:100,railStyle:'double'})>130,'wide double tracks remain visible at the viewport boundary');
+console.log('Scene lighting: global grading, validation, cache context, model shading, sun shadows and relief; road/rail designs, widths and project persistence passed');

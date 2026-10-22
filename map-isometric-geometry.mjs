@@ -1,5 +1,6 @@
 import { drawPlaqueText } from './map-plaque-text.mjs';
 import { drawModelShadow, shadowGeometry, ISOMETRIC_LIGHT, projectIso } from './map-isometric-shadow.mjs';
+import { currentSceneLighting } from './map-lighting.mjs';
 export { projectIso } from './map-isometric-shadow.mjs';
 // World-space miniature geometry. X/Y lie on the ground; Z is height.
 // Faces are constructed independently of the normal-view icon artwork.
@@ -16,11 +17,15 @@ function materialFor(color){
   if(color==='#d5a176')return 'skin';if(color==='#d3a64d')return 'metal';
   if(['#b4b0a1','#b1a184'].includes(color))return 'stone';return null;
 }
-function lighting(points){
+function illumination(n,settings){
+  const vector=settings?.vector||ISOMETRIC_LIGHT,diffuse=Math.max(0,n.reduce((s,v,i)=>s+v*vector[i],0)/Math.hypot(...vector));
+  return settings?.enabled ? .52+settings.ambient*.3+diffuse*Math.min(1.5,settings.sun)*.45 : .67+.48*diffuse;
+}
+function lighting(points,settings){
   const a=points[0],b=points[1],d=points.at(-1),u=b.map((v,i)=>v-a[i]),v=d.map((q,i)=>q-a[i]);
   let n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],l=Math.hypot(...n)||1;
   if(n[0]+n[1]+n[2]<0)n=n.map(q=>-q);n=n.map(q=>q/l);
-  return .67+.48*Math.max(0,n.reduce((s,v,i)=>s+v*ISOMETRIC_LIGHT[i],0)/Math.hypot(...ISOMETRIC_LIGHT));
+  return illumination(n,settings);
 }
 function finishFace(c,f,p,size){
   const material=f.material;if(f.smooth||!material||['smooth','skin','cloth'].includes(material)||p.length<3)return;
@@ -103,9 +108,9 @@ function paintOrder(faces){
   return ordered.map(({face,p})=>({face,p}));
 }
 export class IsoScene{
-  constructor(){this.faces=[];this.material='matte';this._ordered=null;this._bounds=null;}
+  constructor(){this.faces=[];this.material='matte';this.lighting=currentSceneLighting();this._ordered=null;this._bounds=null;}
   withMaterial(material,draw){const previous=this.material;this.material=material;try{draw();}finally{this.material=previous;}}
-  face(points,color,shade=1,edge=true,material=materialFor(color)||this.material){this._ordered=null;this._bounds=null;this.faces.push({points,color:tint(color,lighting(points)*Math.sqrt(shade)),material,edge,depth:points.reduce((s,[x,y,z])=>s+x+y+z,0)/points.length});}
+  face(points,color,shade=1,edge=true,material=materialFor(color)||this.material){this._ordered=null;this._bounds=null;const base=material==='glass'&&this.lighting.enabled&&this.lighting.night>.4?'#f1ca78':color;this.faces.push({points,color:tint(base,lighting(points,this.lighting)*Math.sqrt(shade)),material,edge,depth:points.reduce((s,[x,y,z])=>s+x+y+z,0)/points.length});}
   box(x,y,z,w,d,h,color){
     this.face([[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]],color,1.18);
     this.face([[x+w,y,z],[x+w,y+d,z],[x+w,y+d,z+h],[x+w,y,z+h]],color,.72);
@@ -132,7 +137,7 @@ export class IsoScene{
   }
   ball(x,y,z,rx,ry,rz,color,n=12,rings=8){
     const p=(i,j)=>{const a=i*TAU/n,b=-Math.PI/2+j*Math.PI/rings;return[x+rx*Math.cos(a)*Math.cos(b),y+ry*Math.sin(a)*Math.cos(b),z+rz*Math.sin(b)];};
-    const light=(i,j)=>{const a=i*TAU/n,b=-Math.PI/2+j*Math.PI/rings,N=[Math.cos(a)*Math.cos(b)/rx,Math.sin(a)*Math.cos(b)/ry,Math.sin(b)/rz],l=Math.hypot(...N)||1;return .67+.48*Math.max(0,N.reduce((s,v,k)=>s+v*ISOMETRIC_LIGHT[k],0)/(l*Math.hypot(...ISOMETRIC_LIGHT)));};
+    const light=(i,j)=>{const a=i*TAU/n,b=-Math.PI/2+j*Math.PI/rings,N=[Math.cos(a)*Math.cos(b)/rx,Math.sin(a)*Math.cos(b)/ry,Math.sin(b)/rz],l=Math.hypot(...N)||1;return illumination(N.map(v=>v/l),this.lighting);};
     for(let j=0;j<rings;j++)for(let i=0;i<n;i++){
       this.face([p(i,j),p(i+1,j),p(i+1,j+1),p(i,j+1)],color,1,false,['skin','glass','metal'].includes(materialFor(color))?materialFor(color):'smooth');
       this.faces.at(-1).smooth={color,values:[light(i,j),light(i+1,j),light(i+1,j+1),light(i,j+1)]};

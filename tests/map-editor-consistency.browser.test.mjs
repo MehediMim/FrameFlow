@@ -298,7 +298,7 @@ try {
   await writeFile(join(tmpdir(),'frameflow-interface-editor.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await evaluate(`document.querySelector('#mSettingsButton').click()`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#mSettingsPanel .ff-settings-body')).display`),'grid','desktop categories and settings use a two-column layout');
-  assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tab]').length`),4,'settings have four categories without Starting view');
+  assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tab]').length`),5,'settings include the project-wide Sunlight category');
   assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tabpanel]:not([hidden])').length`),1,'only one settings category is shown');
   assert.ok(await evaluate(`document.querySelector('#mSize').closest('[role=tabpanel]').hidden===false`),'document settings open first');
   await change('#mDuration',130);

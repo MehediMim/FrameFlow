@@ -102,8 +102,11 @@ try {
   console.log('Road/rail/river paths and both drawn-area selection modes passed');
   const objects=[];
   for(const [glyph,place]of [['soldier','Paris'],['tank','Berlin']]){await click('[data-madd="object"]');await change('[data-mf="glyph"]',glyph);await change('[data-mf="place"]',place);objects.push((await stored()).actions.at(-1).id);}
-  for(const id of objects)await click('[data-group-check="'+id+'"]');await click('[data-group-create]');
+  // Group through the current layer selection workflow; grouping checkboxes
+  // were replaced by Shift-selection and the Group shortcut.
+  await evaluate(`document.activeElement?.blur();document.querySelector('[data-mid="${objects[0]}"]').click();document.querySelector('[data-mid="${objects[1]}"]').dispatchEvent(new MouseEvent('click',{shiftKey:true,bubbles:true}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'g',ctrlKey:true,bubbles:true}));`);
   p=await stored();let group=p.actions.find(a=>a.type==='group');assert.ok(group);assert.deepEqual(group.memberIds,objects);
+  await evaluate(`(()=>{const toggle=document.querySelector('[data-group-collapse="${group.id}"]');if(toggle.getAttribute('aria-expanded')==='true')toggle.click();})()`);
   assert.equal(await evaluate(`document.querySelector('[data-mtl="${objects[0]}"]').hidden`),true,'group collapses child rows');
   await click('[data-group-key]');await seek(2);
   await change('[data-group-field="lon"]',String(group.origin.lon+5));await change('[data-group-field="scale"]','1.5');await change('[data-group-field="rotation"]','20');await change('[data-group-field="opacity"]','0.8');
@@ -126,7 +129,9 @@ try {
     E.drawMap(x,1280,720,p,60,geo);const blob=await new Promise(r=>c.toBlob(r));return{stable,moved,flow,hidesChildren,png:blob.size};
   })()`);
   assert.equal(geometry.stable,true);assert.equal(geometry.moved,true);assert.equal(geometry.flow,true);assert.equal(geometry.hidesChildren,true);assert.ok(geometry.png>10000);
-  p=await stored();await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);assert.deepEqual(await stored(),p,'all campaign edits survive reload');
+  // Loading normalizes legacy group defaults, including an omitted animDur.
+  p=await evaluate(`(async()=>{const E=await import('./map-engine.mjs');return E.validateMapProject(JSON.parse(localStorage.getItem('frameflow-map-v1')));})()`);
+  await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);assert.deepEqual(await stored(),p,'all campaign edits survive reload');
   await select(group.id);await seek(2);await writeFile(join(tmpdir(),'frameflow-campaign-workspace.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   assert.deepEqual(errors,[],'no campaign browser runtime errors');
   console.log('Groups animate, collapse, duplicate, split and ungroup; deterministic export, flow, visibility, undo and reload passed');

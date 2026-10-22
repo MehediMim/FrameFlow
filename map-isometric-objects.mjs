@@ -1,5 +1,6 @@
 import { IsoScene } from './map-isometric-geometry.mjs';
 import { drawModelShadow } from './map-isometric-shadow.mjs';
+import { currentSceneLighting } from './map-lighting.mjs';
 
 // Explicit recipes for the complete catalog. No normal-view drawing function is
 // used here: these miniatures are built from world-space volumes and surfaces.
@@ -571,7 +572,7 @@ function modelFor(glyph,color,t,action,image){
   // Keep immutable static geometry and its face ordering between animation
   // frames. Size, movement, damage and canvas rotation remain outside the model.
   let imageId=0;if(image){if(!imageIds.has(image))imageIds.set(image,++imageSerial);imageId=imageIds.get(image);}
-  const key=JSON.stringify([glyph,color,imageId,...imageSettings.map(k=>action[k])]);
+  const key=JSON.stringify([glyph,color,imageId,currentSceneLighting().key,...imageSettings.map(k=>action[k])]);
   if(animated(recipe)){
     let previous=animatedModels.get(key);
     if(!previous||previous.time!==t){previous={scene:createIsometricModel(glyph,color,t,action,image),time:t};animatedModels.set(key,previous);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}

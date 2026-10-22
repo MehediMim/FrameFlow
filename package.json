@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Browser map animation studio with keyframes, terrain, routes, objects, audio, and video export",
   "scripts": {
+    "test:map-lighting-network": "node tests/map-lighting-network.test.mjs",
+    "test:map-lighting-network:browser": "node tests/map-lighting-network.browser.test.mjs",
     "test:map-isometric": "node tests/map-isometric.test.mjs",
     "test:map-strategy": "node tests/map-strategy.test.mjs",
     "test:map-strategy:browser": "node tests/map-strategy.browser.test.mjs",

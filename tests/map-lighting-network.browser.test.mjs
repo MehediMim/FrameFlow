@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {existsSync} from 'node:fs';
+import {spawn} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import {resolve,join,extname,sep} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const browser=process.env.CHROME_PATH||['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
+assert.ok(browser,'Set CHROME_PATH to Chrome or Edge');
+const profile=await mkdtemp(join(tmpdir(),'frameflow-lighting-'));
+const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));assert.ok(path.startsWith(resolve(root)+sep));res.setHeader('Content-Type',({'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.json':'application/json'})[extname(path)]||'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
+const chrome=spawn(browser,['--headless=new','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--disable-background-networking','--disable-gpu','--window-size=1600,1100','about:blank'],{windowsHide:true,stdio:'ignore'});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));let ws;
+try{
+  let debugPort;for(let i=0;i<100;i++){try{debugPort=(await readFile(join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0];break;}catch{await sleep(100);}}
+  assert.ok(debugPort);const pages=await fetch(`http://127.0.0.1:${debugPort}/json/list`).then(r=>r.json());ws=new WebSocket(pages.find(p=>p.type==='page').webSocketDebuggerUrl);
+  await new Promise((r,j)=>{ws.addEventListener('open',r);ws.addEventListener('error',j);});
+  let serial=0;const pending=new Map(),errors=[];
+  ws.addEventListener('message',event=>{const msg=JSON.parse(event.data);if(msg.method==='Runtime.exceptionThrown')errors.push(msg.params.exceptionDetails.exception?.description||msg.params.exceptionDetails.text);if(msg.id){const p=pending.get(msg.id);pending.delete(msg.id);msg.error?p.reject(Error(msg.error.message)):p.resolve(msg.result);}});
+  const cdp=(method,params={})=>new Promise((resolve,reject)=>{const id=++serial,timer=setTimeout(()=>reject(Error(method+' timed out')),45000);pending.set(id,{resolve:v=>{clearTimeout(timer);resolve(v);},reject:e=>{clearTimeout(timer);reject(e);}});ws.send(JSON.stringify({id,method,params}));});
+  const evaluate=async expression=>{const r=await cdp('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;};
+  const waitFor=async expression=>{for(let i=0;i<180;i++){if(await evaluate(expression))return;await sleep(100);}throw Error('Timed out: '+expression+'\n'+errors.join('\n'));};
+  await cdp('Runtime.enable');await cdp('Page.enable');await cdp('Page.navigate',{url:`http://127.0.0.1:${port}/index.html#map`});
+  await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  const result=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),L=await import('./map-lighting.mjs'),N=await import('./map-network-style.mjs'),P=await import('./map-path-animation.mjs');
+    const strip=document.createElement('canvas');strip.width=600;strip.height=100;const sc=strip.getContext('2d'),points=[{x:30,y:60},{x:150,y:60},{x:220,y:35},{x:340,y:35},{x:430,y:60},{x:570,y:60}];
+    const network=(shape,options={},seconds=2)=>{sc.clearRect(0,0,600,100);P.drawNetwork(sc,points,{shape,width:18,networkAnimation:'static',...options},1,seconds);return strip.toDataURL();};
+    const designs=document.createElement('canvas');designs.width=820;designs.height=1000;const dc=designs.getContext('2d');dc.fillStyle='#e6e1d2';dc.fillRect(0,0,820,1000);
+    const road=[],rail=[];let row=0;
+    for(const [shape,styles,key,out]of[['road',N.ROAD_STYLES,'roadStyle',road],['railway',N.RAIL_STYLES,'railStyle',rail]])for(const [style,meta]of Object.entries(styles)){
+      out.push(network(shape,{[key]:style}));dc.fillStyle='#28372d';dc.font='14px Arial';dc.fillText(meta.label,15,row*100+55);dc.drawImage(strip,205,row*100);row++;
+    }
+    const narrow=network('road',{width:8}),wide=network('road',{width:44});
+    const controls=narrow!==wide&&network('road',{roadLanes:2})!==network('road',{roadLanes:4})&&network('road',{roadMarkings:'none'})!==network('road',{roadMarkings:'double'})&&network('railway',{sleeperSpacing:.5})!==network('railway',{sleeperSpacing:2})&&network('railway',{railBallast:true})!==network('railway',{railBallast:false})&&network('railway',{railElectrified:false})!==network('railway',{railElectrified:true});
+    const moving=network('road',{networkAnimation:'flow'},1)!==network('road',{networkAnimation:'flow'},2)&&network('railway',{networkAnimation:'flow'},1)!==network('railway',{networkAnimation:'flow'},2);
+    window.networkDesignReview=designs.toDataURL();
+    const geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),p=E.newMapProject();p.width=960;p.height=640;p.frames=240;p.theme='kingdom';p.graticule=false;p.atlasLabels={countries:false,oceans:false};p.camera.init={lon:2,lat:47,zoom:5.2,pitch:0,bearing:0};
+    p.actions=[E.makeAction('shape',0,{id:'road',shape:'road',path:[{lon:-3,lat:46.7},{lon:1,lat:47.3},{lon:4.5,lat:46.6},{lon:7,lat:47}],width:24,roadStyle:'highway',networkAnimation:'static',dur:240}),E.makeAction('shape',0,{id:'rail',shape:'railway',path:[{lon:-3,lat:48},{lon:2,lat:48.2},{lon:7,lat:48}],width:12,railStyle:'double',networkAnimation:'static',dur:240})];
+    for(const [glyph,lon,lat]of[['kingdomHouse',0,47.7],['kingdomTownCenter',2,47.7],['kingdomWindmill',4,47.4],['tank',3,46.5],['kingdomJungle',-1,47.8],['soldier',1,46.8]])p.actions.push(E.makeAction('object',0,{glyph,objectView:'isometric',color:E.OBJECT_ICONS[glyph].color,place:{kind:'point',name:glyph,lon,lat},size:1.5,enter:'none',dur:240}));
+    const canvas=document.createElement('canvas');canvas.width=960;canvas.height=640;const c=canvas.getContext('2d');
+    const render=()=>{E.drawMap(c,960,640,p,90,geo);return canvas.toDataURL();};
+    const base=render(),sheet=document.createElement('canvas');sheet.width=1920;sheet.height=1340;const review=sheet.getContext('2d'),frames=[],means=[];
+    for(const [i,preset]of['day','golden','dusk','night'].entries()){
+      p.lighting=L.lightingPreset(preset);frames.push(render());review.drawImage(canvas,i%2*960,Math.floor(i/2)*670);review.fillStyle='#e7e2d5';review.fillRect(i%2*960,Math.floor(i/2)*670+640,960,30);review.fillStyle='#25362c';review.font='18px Arial';review.fillText(preset,i%2*960+20,Math.floor(i/2)*670+662);
+      const pixels=c.getImageData(0,0,960,640).data,sum=[0,0,0,0],count=[0,0,0,0];
+      for(let y=0;y<640;y+=4)for(let x=0;x<960;x+=4){const i=(y*960+x)*4,q=(x>=480?1:0)+(y>=320?2:0);sum[q]+=(pixels[i]+pixels[i+1]+pixels[i+2])/3;count[q]++;}means.push(sum.map((v,i)=>v/count[i]));
+    }
+    p.lighting=L.lightingPreset('day');const restored=render()===frames[0];p.lighting={...p.lighting,azimuth:45};const sunDirection=render()!==frames[0];
+    p.lighting={...L.lightingPreset('day'),enabled:false};const disabled=render()===base;
+    p.lighting=L.lightingPreset('night');const dim=render();p.lighting.ambient=.8;const ambient=render()!==dim;
+    window.globalLightingReview=sheet.toDataURL();p.lighting=L.lightingPreset('day');E.validateMapProject(p);localStorage.setItem('frameflow-map-v1',JSON.stringify(p));window.lightProject=p;window.lightGeo=geo;
+    return {roads:new Set(road).size,rails:new Set(rail).size,controls,moving,looks:new Set(frames).size,means,restored,sunDirection,disabled,ambient};
+  })()`);
+  assert.equal(result.roads,5);assert.equal(result.rails,5);assert.equal(result.looks,4);assert.ok(result.controls&&result.moving&&result.restored&&result.sunDirection&&result.disabled&&result.ambient,JSON.stringify(result));
+  for(let i=0;i<4;i++)assert.ok(result.means[3][i]<result.means[0][i]*.7,'night affects the entire frame, quadrant '+i);
+  for(const [name,key]of[['networks','networkDesignReview'],['lighting','globalLightingReview']])await writeFile(join(tmpdir(),'frameflow-'+name+'.png'),Buffer.from((await evaluate('window.'+key)).split(',')[1],'base64'));
+  await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100&&!!document.querySelector('#mItems [data-mid="road"]')`);
+  const change=(selector,value,checked=false)=>evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)throw Error('Missing control '+${JSON.stringify(selector)});${checked?'el.checked':'el.value'}=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  const saved=expression=>evaluate(`(()=>{const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));return ${expression};})()`);
+  await evaluate(`document.querySelector('#mItems [data-mid="road"]').click()`);await waitFor(`!!document.querySelector('[data-mf="roadStyle"]')`);
+  await change('[data-mf="width"]','48');await change('[data-mf="roadLanes"]','6');await change('[data-mf="roadStyle"]','cobblestone');await change('[data-mf="roadMarkings"]','none');
+  assert.equal(await saved(`p.actions.find(a=>a.id==='road').width`),48);assert.equal(await saved(`p.actions.find(a=>a.id==='road').roadLanes`),6);assert.equal(await saved(`p.actions.find(a=>a.id==='road').roadStyle`),'cobblestone');
+  await evaluate(`document.querySelector('#mItems [data-mid="rail"]').click()`);await waitFor(`!!document.querySelector('[data-mf="railStyle"]')`);
+  await change('[data-mf="width"]','44');await change('[data-mf="railStyle"]','double');await change('[data-mf="railElectrified"]',true,true);await change('[data-mf="sleeperSpacing"]','1.7');
+  assert.equal(await saved(`p.actions.find(a=>a.id==='rail').railElectrified`),true);
+  await evaluate(`document.querySelector('#mSettingsButton').click()`);await waitFor(`document.querySelector('#mSettingsPanel').open`);
+  await evaluate(`document.querySelector('#mSettingsTab4').click()`);assert.ok(await evaluate(`document.querySelector('#mLightingEnabled').offsetParent!==null`),'sunlight controls are visible in their settings category');
+  await change('#mLightingEnabled',true,true);await change('#mLightPreset','night');assert.equal(await saved('p.lighting.altitude'),-15);
+  await change('#mLightAzimuth','75');await change('#mLightAmbient','.4');assert.equal(await saved('p.lighting.preset'),'custom');assert.equal(await saved('p.lighting.azimuth'),75);
+  await change('#mFrame','0');
+  await evaluate(`document.querySelector('#mAddSunlightEffect').click()`);await waitFor(`!!document.querySelector('[data-sun-preset]')`);
+  assert.equal(await evaluate(`document.querySelector('#mSettingsPanel').open`),false);
+  await change('[data-sun-preset]','day');
+  await change('#mFrame','1');await change('[data-sun-preset]','night');
+  assert.equal(await saved(`p.actions.find(a=>a.fx==='sunlight').lightingKeys.length`),2);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-map-key^="lighting:"]').length`),2);
+  await change('#mFrame','.5');
+  assert.ok(await evaluate(`+document.querySelector('[data-sun-field="altitude"]').value>0&&+document.querySelector('[data-sun-field="altitude"]').value<55`),'inspector follows interpolated sunlight while scrubbing');
+  const keyed=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),T=await import('./map-timing.mjs');const p=JSON.parse(localStorage.getItem('frameflow-map-v1')),geo=window.lightGeo||E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),c=document.createElement('canvas');c.width=960;c.height=640;const ctx=c.getContext('2d'),render=f=>{E.drawMap(ctx,960,640,p,f,geo);return c.toDataURL();};const frames=[0,15,30].map(render);const a=p.actions.find(a=>a.fx==='sunlight');p.actions.push(T.splitMapItem(a,15,'light-split'));E.validateMapProject(p);return {distinct:new Set(frames).size,split:[0,15,30].every((f,i)=>render(f)===frames[i]),scrub:render(0)===frames[0]};})()`);
+  assert.equal(keyed.distinct,3);assert.ok(keyed.split&&keyed.scrub,'animated whole-frame PNG render remains deterministic after splitting and scrubbing');
+  await evaluate(`document.querySelector('[data-map-key="lighting:30"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`);
+  assert.equal(await saved(`p.actions.find(a=>a.fx==='sunlight').lightingKeys.at(-1).frame`),31);
+  await evaluate(`document.querySelector('[data-map-key="lighting:31"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Delete',bubbles:true}))`);
+  assert.equal(await saved(`p.actions.find(a=>a.fx==='sunlight').lightingKeys.length`),1);
+  assert.ok(await saved(`p.actions.some(a=>a.fx==='sunlight')`),'deleting a lighting key preserves its effect layer');
+  await change('#mFrame','1');await change('[data-sun-preset]','night');
+  const video=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),V=await import('./map-video-export.mjs');const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));E.validateMapProject(p);const geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),c=document.createElement('canvas');c.width=960;c.height=640;const blob=await V.exportMapVideo({canvas:c,fps:30,frames:6,draw:f=>E.drawMap(c.getContext('2d'),960,640,p,f*6,geo)});return {size:blob.size,type:blob.type};})()`);
+  assert.ok(video.size>1000&&video.type==='video/webm');
+  await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  assert.equal(await saved('p.lighting.azimuth'),75);assert.equal(await saved(`p.actions.find(a=>a.id==='road').roadLanes`),6);assert.equal(await saved(`p.actions.find(a=>a.id==='rail').width`),44);
+  assert.equal(await saved(`p.actions.find(a=>a.fx==='sunlight').lightingKeys.length`),2);
+  assert.deepEqual(errors,[]);console.log('Road/rail designs and widths; Sunlight effect creation, automatic keys, interpolated inspector, timeline retiming/deletion, split continuity, full-frame animated PNG, video and reload passed');
+}finally{
+  ws?.close();chrome.kill();server.closeAllConnections();server.close();await new Promise(r=>chrome.exitCode!==null?r():chrome.once('exit',r));
+  assert.ok(resolve(profile).startsWith(resolve(tmpdir())+sep));await rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+}

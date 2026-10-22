@@ -14,6 +14,8 @@ import { MEDIEVAL_OBJECTS, drawPortrait } from './map-medieval-objects.mjs';
 import { TRADE_OBJECTS } from './map-trade-objects.mjs';
 import { STRATEGY_OBJECTS } from './map-strategy-objects.mjs';
 import { drawZoneLandscape } from './map-strategy-terrain.mjs';
+import { networkMargin } from './map-network-style.mjs';
+import { currentSceneLighting } from './map-lighting.mjs';
 import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
@@ -53,6 +55,7 @@ export const OBJECT_IDLE = [['none', 'Still'], ['pulse', 'Pulse'], ['shake', 'Sh
 export const OBJECT_EXIT = [['none', 'Stay until the bar ends'], ['fade', 'Fade out'], ['shrink', 'Shrink'], ['explode', 'Explode']];
 export const EFFECTS = {
   ...BATTLE_EFFECTS,
+  sunlight: {label:'Sunlight / day & night',color:'#e9c46a',global:true},
   explosion: { label: 'Explosion', color: '#ff7a1a' }, fire: { label: 'Fire', color: '#ff5a1f' }, smoke: { label: 'Smoke', color: '#6b7278' },
   shockwave: { label: 'Shockwave', color: '#ffffff' }, quake: { label: 'Earthquake rings', color: '#ff4d4d' }, blast: { label: 'Blast / danger radius', color: '#ff3b30' },
   strike: { label: 'Missile strike (launch → target)', color: '#ff7a1a' },
@@ -107,7 +110,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   c.save();c.translate(g0.x+s*.08*sc,g0.y+s*.06*sc);c.scale(s*.85*sc,s*.24*sc);
   const shadow=c.createRadialGradient(0,0,0,0,0,1);
   shadow.addColorStop(0,'rgba(0,0,0,.24)');shadow.addColorStop(.55,'rgba(0,0,0,.12)');shadow.addColorStop(1,'rgba(0,0,0,0)');
-  c.globalAlpha=alpha;c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
+  const light=currentSceneLighting();c.globalAlpha=alpha*(light.enabled?light.shadowStrength*(.3+.7*light.ambient):1);c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
   }
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (isometric || ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && !['banner','portrait'].includes(a.glyph)) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
@@ -154,6 +157,7 @@ function rings(H, c, v, X, Y, s, p, col, n, spread, w) {
   for (let i = 0; i < n; i++) { const q = (p * n * .6 + i / n) % 1; c.beginPath(); H.groundCircle(c, v, X, Y, s * (.2 + q * spread)); c.globalAlpha = (1 - q) * .85; c.strokeStyle = col; c.lineWidth = w * v.unit; c.stroke(); }
 }
 export function drawEffect(H, c, v, geo, a, frame, labels) {
+  if(a.fx==='sunlight')return;
   if (!H.actAlpha(a, frame)) return;
   const targetObject=a.attackTargeted&&v.objects?.get(a.attackTargetId);
   const r = targetObject ? H.objectLocationAt(v,geo,targetObject,frame) : H.resolveLoc(geo, a.place, v.cx); if (!r) return;
@@ -228,7 +232,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
   if(Object.hasOwn(NETWORK_SHAPES,a.shape)){
     const visible=['static','flow'].includes(animation)?P:revealPolyline(P,p);
-    drawNetwork(c,clipPolyline(visible,v.W,v.H,40*u),{...a,networkAnimation:animation},u,seconds);
+    drawNetwork(c,clipPolyline(visible,v.W,v.H,networkMargin(a,u)),{...a,networkAnimation:animation},u,seconds);
     const end=visible.filter(Boolean).at(-1);c.restore();
     const label=shapeLabel(a,r);
     if(!a.showMeasurement&&label&&end)labels.push({x:end.x,y:end.y-16*u,text:label,alpha:1,scale:1});

@@ -33,6 +33,7 @@ function arrangeSettings(panel, prefix) {
       pages.push(section('Appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSlot'), document.getElementById('mTerrainBox')]));
       pages.push(section('Labels', [document.getElementById('mAtlasLabels'), document.getElementById('mLabelStyle')]));
       pages.push(section('Country details', [document.getElementById('mAreaBox')]));
+      pages.push(section('Sunlight', [document.getElementById('mLightingBox')]));
       panel.classList.add('ff-organized');
       const nav=document.createElement('div');nav.className='ff-settings-nav';nav.setAttribute('role','tablist');nav.setAttribute('aria-label','Settings categories');nav.setAttribute('aria-orientation','vertical');
       const activate=index=>pages.forEach((page,i)=>{

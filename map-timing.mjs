@@ -5,11 +5,11 @@ export function retimeMapItem(item, start, duration, moveKeys = true) {
   if (item.sourceStart !== undefined) {
     item.sourceStart += shift;
     for (const field of ['animStart', 'animEnd', 'moveStart', 'moveEnd']) if (item[field] !== undefined) item[field] += shift;
-    for (const field of ['cameraKeys', 'objectKeys', 'pathKeys', 'groupKeys']) for (const key of item[field] || []) key.frame += shift;
+    for (const field of ['cameraKeys', 'objectKeys', 'pathKeys', 'groupKeys', 'lightingKeys']) for (const key of item[field] || []) key.frame += shift;
     item.start = start; item.dur = duration;
     return;
   }
-  for (const keyName of ['cameraKeys','objectKeys','groupKeys','pathKeys']) if (item[keyName]) {
+  for (const keyName of ['cameraKeys','objectKeys','groupKeys', 'lightingKeys','pathKeys']) if (item[keyName]) {
     const merged = new Map();
     for (const key of item[keyName]) {
       const frame = Math.max(start, Math.min(start + duration, key.frame + shift));

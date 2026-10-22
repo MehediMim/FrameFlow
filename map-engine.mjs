@@ -1771,7 +1771,7 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
     else if (a.type === 'object') tag(a, () => {
       if (!actAlpha(a, frame)) return;
       const pose=objectPoseAt(a,frame);
-      const followsHeading=a.mode==='wallPath'||(['path','move'].includes(a.mode)&&OBJECT_ICONS[a.glyph]?.rot);
+      const followsHeading=a.mode==='wallPath'||(!isIsometricView(pose)&&['path','move'].includes(a.mode)&&OBJECT_ICONS[a.glyph]?.rot);
       const item = {...a,...pose,size:objectSizeAt(a,frame,v.cam.zoom)*(a._groupScale??1),objectAngle:pose.objectAngle+(followsHeading?0:(a._groupRotation??0)),formationAngle:(a.formationAngle||0)+(a._groupRotation||0)};
       if(item.mode==='wallPath'){drawWallPath(ctx,v,geo,item,frame,labels);return;}
       const troops = item.glyph==='army' ? armyCopies(item) : null;

@@ -1,9 +1,10 @@
 import { easings } from './easings.mjs';
-import { validateObjectView } from './map-object-view.mjs';
+import { validateObjectView, objectViewOf, OBJECT_VIEWS } from './map-object-view.mjs';
+import { validateObjectAnimation } from './map-object-animation.mjs';
 export const OBJECT_KEY_FIELDS={size:[.2,8],objectAngle:[-3600,3600]};
 export const DAMAGE_STATES={intact:'Intact',damaged:'Damaged',burning:'Burning',destroyed:'Destroyed'};
 export function objectPoseAt(a,frame){
-  const pose={size:a.size??1,objectAngle:a.objectAngle??0,damageState:a.damageState||'intact'};
+  const pose={size:a.size??1,objectAngle:a.objectAngle??0,damageState:a.damageState||'intact',objectView:objectViewOf(a)};
   for(const field of Object.keys(pose)){
     const track=(a.objectKeys||[]).filter(k=>k.values[field]!==undefined).sort((a,b)=>a.frame-b.frame);
     if(!track.length)continue;
@@ -11,7 +12,7 @@ export function objectPoseAt(a,frame){
     if(next===0){pose[field]=track[0].values[field];continue;}
     if(next<0){pose[field]=track.at(-1).values[field];continue;}
     const left=track[next-1],right=track[next];
-    if(field==='damageState'){pose[field]=left.values[field];continue;}
+    if(field==='damageState'||field==='objectView'){pose[field]=left.values[field];continue;}
     const t=(easings[a.easing]||easings.easeInOut)((frame-left.frame)/(right.frame-left.frame));
     const [lo,hi]=OBJECT_KEY_FIELDS[field];pose[field]=Math.max(lo,Math.min(hi,left.values[field]+(right.values[field]-left.values[field])*t));
   }
@@ -38,6 +39,7 @@ export function moveObjectKey(a,from,to,fields){
 }
 export function validateObjectKeys(a){
   validateObjectView(a);
+  validateObjectAnimation(a);
   const bad=()=>{throw Error('Invalid object animation keyframes.');};
   if(a.damageState!==undefined&&!Object.hasOwn(DAMAGE_STATES,a.damageState))bad();
   if(a.autoObjectKey!==undefined&&typeof a.autoObjectKey!=='boolean')bad();
@@ -47,6 +49,7 @@ export function validateObjectKeys(a){
     if(!key||!Number.isSafeInteger(key.frame)||key.frame<a.start||key.frame>a.start+a.dur||seen.has(key.frame)||!key.values||typeof key.values!=='object'||Array.isArray(key.values)||!Object.keys(key.values).length)bad();
     seen.add(key.frame);for(const [field,value]of Object.entries(key.values)){
       if(field==='damageState'){if(!Object.hasOwn(DAMAGE_STATES,value))bad();}
+      else if(field==='objectView'){if(!Object.hasOwn(OBJECT_VIEWS,value))bad();}
       else{const range=OBJECT_KEY_FIELDS[field];if(!range||!Number.isFinite(value)||value<range[0]||value>range[1])bad();}
     }
   }

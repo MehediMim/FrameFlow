@@ -6,6 +6,8 @@ import { ARMY_PRESETS,armyCopies } from '../map-armies.mjs';
 import { wallPlacements } from '../map-wall-path.mjs';
 import { targetedAttack } from '../map-battle-effects.mjs';
 import { destructionProgress } from '../map-damage.mjs';
+import { splitMapItem,mapSourceItem } from '../map-timing.mjs';
+import { drawObject } from '../map-objects.mjs';
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} ~ ${b}`);
 const a=makeAction('object',10,{glyph:'stoneFort',easing:'linear',size:1,dur:120});
 putObjectKey(a,70,{size:3,objectAngle:180,damageState:'burning'});
@@ -39,3 +41,29 @@ const p=newMapProject();p.actions=[makeAction('object',0,{glyph:'army',armyUnits
 p.armyPresets=[{id:'saved',name:'Siege',units:ARMY_PRESETS.siege.units}];validateMapProject(JSON.parse(JSON.stringify(p)));
 for(const bad of [{objectKeys:[{frame:999,values:{size:2}}]},{objectKeys:[{frame:0,values:{size:NaN}}]},{objectKeys:[{frame:0,values:{damageState:'broken'}}]},{armyUnits:[{glyph:'army',count:1}]},{wallTowerEvery:1.5}]){const copy=structuredClone(p);Object.assign(copy.actions[0],bad);assert.throws(()=>validateMapProject(copy));}
 console.log('Object sparse keys, retiming, damage steps, wall placement, army composition and targeted attacks passed');
+
+const facing=makeAction('object',10,{glyph:'car',mode:'path',objectView:'isometric',dur:120});
+putObjectKey(facing,50,{objectView:'isometricBack'});putObjectKey(facing,90,{objectView:'isometric'});
+assert.equal(objectPoseAt(facing,49).objectView,'isometric');
+assert.equal(objectPoseAt(facing,50).objectView,'isometricBack');
+assert.equal(objectPoseAt(facing,89).objectView,'isometricBack');
+assert.equal(objectPoseAt(facing,90).objectView,'isometric');
+assert.equal(objectPoseAt(facing,60).objectView,'isometricBack','seeking backward restores the held view');
+moveObjectKey(facing,50,55,['objectView']);assert.equal(objectPoseAt(facing,54).objectView,'isometric');
+assert.equal(objectPoseAt(facing,55).objectView,'isometricBack');
+const copied=structuredClone(facing),right=splitMapItem(copied,70,'right');
+assert.equal(objectPoseAt(mapSourceItem(right),80).objectView,'isometricBack','splitting retains view history');
+retimeMapItem(facing,30,120,true);assert.equal(objectPoseAt(facing,75).objectView,'isometricBack','view switches move with their clip');
+removeObjectKey(facing,75,['objectView']);assert.equal(objectPoseAt(facing,80).objectView,'isometric');
+const viewProject=newMapProject();viewProject.actions=[makeAction('object',0,{glyph:'car',objectKeys:[{frame:30,values:{objectView:'isometricBack'}}]})];
+validateMapProject(JSON.parse(JSON.stringify(viewProject)));
+viewProject.actions[0].objectKeys[0].values.objectView='unknown';assert.throws(()=>validateMapProject(viewProject),/keyframes/);
+const rotationsFor=view=>{
+  const rotations=[],gradient={addColorStop(){}},c=new Proxy({rotate:a=>rotations.push(a),getTransform:null,createRadialGradient:()=>gradient,createLinearGradient:()=>gradient},{get:(o,k)=>k in o?o[k]:()=>{}});
+  const H={actAlpha:()=>1,clamp01:x=>Math.max(0,Math.min(1,x)),project:(_v,X,Y)=>({x:X*100,y:Y*100,z:1}),planeRoute:()=>({}),ease:(_e,x)=>x,actionProgress:()=>.5,routeAt:(_r,p)=>({X:0,Y:p,i:0})};
+  drawObject(H,c,{unit:1,fps:30,near:0,cx:0},null,{glyph:'airliner',mode:'path',size:1,start:0,dur:120,enter:'none',idle:'none',exit:'none',trail:false,objectAnimation:'none',objectView:view},30,[]);
+  return rotations;
+};
+for(const view of ['isometric','isometricBack'])assert.ok(rotationsFor(view).every(angle=>angle===0),'manual '+view+' stays upright on a vertical path');
+assert.ok(rotationsFor('side').some(angle=>Math.abs(angle)>1),'side view retains path heading');
+console.log('Manual view keys: step switching, seeking, moving, deleting, splitting, validation and upright isometric path orientation passed');

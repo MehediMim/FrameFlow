@@ -99,7 +99,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if (g.z < v.near) return;
   c.save();
   const isometric=isIsometricView(a),angle=rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180;
-  const movingAngle=ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;
+  const movingAngle=!isometric&&ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;
   if(isometric){
     const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
     c.save();c.globalAlpha=alpha;c.translate(g0.x+dx,g0.y);c.scale(sc,sc);
@@ -113,7 +113,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   const light=currentSceneLighting();c.globalAlpha=alpha*(light.enabled?light.shadowStrength*(.3+.7*light.ambient):1);c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
   }
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y + dy);
-  if (ang !== null && !['banner','portrait'].includes(a.glyph)) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
+  if (movingAngle !== null) { if (ic.rot) c.rotate(movingAngle); else if (Math.cos(movingAngle) < 0) c.scale(-1, 1); }
   c.rotate(angle); c.scale(sc, sc);
   let isometricBounds;
   const drawIntact = (c) => {

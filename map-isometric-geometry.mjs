@@ -176,7 +176,7 @@ export class IsoScene{
     for(let i=0;i<n;i++){const a=points[i],b=points[(i+1)%n];this.face([a,b,[b[0],b[1]+width,b[2]],[a[0],a[1]+width,a[2]]],color,i%2?.85:1,false,'rubber');}
     const hubStart=this.faces.length,metal=color==='#30383c',R=r*(metal?.56:.78),Y=y+width+.003;
     this.face(Array.from({length:n},(_,i)=>[x+Math.cos(i*TAU/n)*R,Y,z+Math.sin(i*TAU/n)*R]),metal?'#9da5a0':'#544b3a',1,false,'metal');
-    for(let i=0;i<6;i++){const a=i*TAU/6,b=a+.16;this.face([[x,Y+.003,z],[x+Math.cos(a)*R*.9,Y+.003,z+Math.sin(a)*R*.9],[x+Math.cos(b)*R*.9,Y+.003,z+Math.sin(b)*R*.9]],metal?'#485050':'#b89962',1,false);}
+    for(let i=0;i<6;i++){const a=i*TAU/6+(this.wheelPhase||0),b=a+.16;this.face([[x,Y+.003,z],[x+Math.cos(a)*R*.9,Y+.003,z+Math.sin(a)*R*.9],[x+Math.cos(b)*R*.9,Y+.003,z+Math.sin(b)*R*.9]],metal?'#485050':'#b89962',1,false);}
     this.beam([x,Y,z],[x,Y+.012,z],r*.17,metal?'#c4c8bf':'#88734f');
     if(backHub&&this.view==='isometricBack')for(const face of this.faces.slice(hubStart)){
       const points=face.points.map(([X,Y,Z])=>[X,2*y+width-Y,Z]);

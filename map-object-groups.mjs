@@ -1,6 +1,8 @@
 import { easings } from './easings.mjs';
 import { retimeMapItem } from './map-timing.mjs?v=full-timeline-1';
 import { OBJECT_ICONS } from './map-objects.mjs';
+import { objectPoseAt } from './map-object-keys.mjs';
+import { isIsometricView } from './map-object-view.mjs';
 export const GROUP_FIELDS={lon:[-540,540],lat:[-85,85],scale:[.1,8],rotation:[-3600,3600],opacity:[0,1]};
 const toX=lon=>(lon+180)/360,toY=lat=>(1-Math.log(Math.tan(Math.PI/4+Math.max(-85,Math.min(85,lat))*Math.PI/360))/Math.PI)/2;
 const toLat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y)))*180/Math.PI;
@@ -54,7 +56,7 @@ export function ungroupObjects(project,group,frame,resolve){
     let child=structuredClone(original);
     for(const key of ['place','from','to'])if(child[key]&&!Number.isFinite(child[key].lon)&&resolve){const p=resolve(child[key]);if(p)child[key]={kind:'point',name:child[key].name,lon:p.X*360-180,lat:toLat(p.Y)};}
     child=transformGroupObject(child,group,frame);child.size=(child.size||1)*pose.scale;
-    const followsHeading=child.mode==='wallPath'||(['path','move'].includes(child.mode)&&OBJECT_ICONS[child.glyph]?.rot),rotation=followsHeading?0:pose.rotation;
+    const followsHeading=child.mode==='wallPath'||(!isIsometricView(objectPoseAt(child,frame))&&['path','move'].includes(child.mode)&&OBJECT_ICONS[child.glyph]?.rot),rotation=followsHeading?0:pose.rotation;
     child.objectAngle=(child.objectAngle||0)+rotation;child.opacity=(child.opacity??1)*pose.opacity;
     child.formationAngle=(((child.formationAngle||0)+pose.rotation+180)%360+360)%360-180;
     for(const key of child.objectKeys||[]){if(key.values.size!==undefined)key.values.size*=pose.scale;if(key.values.objectAngle!==undefined)key.values.objectAngle+=rotation;}

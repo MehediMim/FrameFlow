@@ -2,6 +2,7 @@ import { IsoScene } from './map-isometric-geometry.mjs';
 import { drawModelShadow } from './map-isometric-shadow.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
 import { objectViewOf } from './map-object-view.mjs';
+import { OBJECT_ANIMATIONS, objectAnimationTime } from './map-object-animation.mjs';
 
 // Explicit recipes for the complete catalog. No normal-view drawing function is
 // used here: these miniatures are built from world-space volumes and surfaces.
@@ -96,13 +97,15 @@ function tree(m,x,y,kind='leaf',scale=1){
 }
 function person(m,o,col,t,x=0,y=0,z=0,scale=1){
   // Tapered limbs, an oval ribcage and a smaller head replace the block figure.
-  const q=(X,Y,Z)=>o.seated?[x+Y*scale,y-X*scale,z+(Z-.64)*scale]:[x+X*scale,y+Y*scale,z+Z*scale],b=(X,Y,Z,w,d,h,c)=>m.box(...q(X,Y,Z),w*scale,d*scale,h*scale,c);
+  const walking=!o.seated&&['walk','run'].includes(o.animation),running=o.animation==='run',phase=t*(running?10:6),stride=walking?Math.sin(phase)*(running?.32:.22):0,bob=walking?(1-Math.cos(phase*2))*(running?.035:.018):0;
+  const q=(X,Y,Z)=>o.seated?[x+Y*scale,y-X*scale,z+(Z-.64)*scale]:[x+X*scale,y+(Y-(walking?Math.sign(X)*stride*.6*Math.max(0,Math.min(1,(Math.abs(X)-.17)/.14)):0))*scale,z+(Z+bob*Math.min(1,Z/.7))*scale],b=(X,Y,Z,w,d,h,c)=>m.box(...q(X,Y,Z),w*scale,d*scale,h*scale,c);
   const beam=(a,b,r,c)=>m.beam(q(...a),q(...b),r*scale,c);
   const limb=(a,b,r,R,c)=>m.tube(q(...a),q(...b),r*scale,R*scale,c,8);
   for(const X of[-.12,.12]){
     if(o.seated){const side=Math.sign(X);limb([X,0,.7],[side*.28,.15,.43],.08,.065,o.dress?col:'#505a60');limb([side*.28,.15,.43],[side*.29,.24,.05],.065,.045,o.dress?col:'#505a60');m.bevelBox(...q(side*.29,.22,.01),.13*scale,.2*scale,.1*scale,'#3d3832',.025);continue;}
-    m.bevelBox(...q(X-.065,-.08,0),.13*scale,.24*scale,.12*scale,'#3d3832',.035*scale);
-    limb([X,0,.12],[X-.015,.005,.38],.055,.073,o.dress?col:'#505a60');limb([X-.015,.005,.38],[X*.85,0,.7],.073,.085,o.dress?col:'#505a60');
+    const step=Math.sign(X)*stride,lift=walking?Math.max(0,Math.sin(phase+(X<0?Math.PI:0)))*(running?.2:.12):0;
+    m.bevelBox(...q(X-.065,-.08+step,lift),.13*scale,.24*scale,.12*scale,'#3d3832',.035*scale);
+    limb([X,step,.12+lift],[X-.015,step*.55+.005,.38+lift*.5],.055,.073,o.dress?col:'#505a60');limb([X-.015,step*.55+.005,.38+lift*.5],[X*.85,0,.7],.073,.085,o.dress?col:'#505a60');
   }
   m.ball(...q(0,0,.86),.19*scale,.115*scale,.28*scale,o.coat||col);
   m.frustum(...q(0,0,.64),.16*scale,.19*scale,.43*scale,o.coat||col,10);
@@ -320,7 +323,7 @@ register('fort',{
 function building(m,o,col,t){
   slab(m);const k=o.kind;
   if(k==='city'){for(const [x,y,h]of[[-.8,-.5,1.1],[0,-.5,1.9],[.55,-.2,1.4],[-.5,.25,.75]]){m.box(x,y,0,.45,.45,h,col);for(let z=.25;z<h;z+=.3)windows(m,x,y+.455,z,.45,.12,2);}return;}
-  if(k==='factory'){house(m,{h:.65,roof:IRON,wall:col});m.cylinder(-.65,-.4,0,.13,1.65,'#8f7461');for(let i=0;i<3;i++)m.ball(-.65+i*.14,-.4,1.8+i*.17,.17+i*.03,.14,.14,'#b2b3a7');return;}
+  if(k==='factory'){house(m,{h:.65,roof:IRON,wall:col});m.cylinder(-.65,-.4,0,.13,1.65,'#8f7461');for(let i=0;i<3;i++){const p=o.animation==='operate'?(t*.35+i/3)%1:0;m.ball(-.65+i*.14+p*.2,-.4,1.8+i*.17+p*.4,.17+i*.03+p*.05,.14,.14,'#b2b3a7');}return;}
   if(k==='airport'){m.box(-1,-.65,.01,2, .45,.04,IRON);for(let x=-.9;x<1;x+=.3)m.box(x,-.44,.06,.14,.025,.005,WHITE);house(m,{x:-.7,y:.05,w:1.15,d:.55,h:.5,roof:IRON,wall:col});tower(m,.8,.4,1.35,false,col,.13);m.box(.56,.16,1.2,.48,.48,.3,GLASS);return;}
   if(k==='solar'){for(const x of[-.75,.2])for(const y of[-.5,.25]){m.beam([x+.25,y+.2,0],[x+.25,y+.2,.38],.035,IRON);m.face([[x,y,.5],[x+.7,y,.5],[x+.7,y+.5,.25],[x,y+.5,.25]],'#365a76');for(let i=1;i<4;i++)m.beam([x+i*.175,y,.502],[x+i*.175,y+.5,.252],.008,'#91b0bb');}return;}
   if(k==='windTurbine'||k==='windmill'){
@@ -557,22 +560,52 @@ const families={
   person:(m,o,c,t)=>person(m,o,c,t),ship,aircraft,fort,building,bridge,landmark,goods,nature,image:imageModel,time:timepiece,accessory,
   mounted:(m,o,c,t)=>{animal(m,o.animal||'horse',o.animal?'#8b8d82':'#8c6244');person(m,{...o,seated:true},c,t,-.2,0,o.animal?1.72:1.04,.8);},
   animal:(m,o)=>{animal(m,o.animal,'#b99865');crates(m,-.55,-.15);},
-  formation:(m,o,c,t)=>{for(const [x,y]of[[-.6,-.3],[.45,-.3],[0,.5]])person(m,{hat:'helmet',tool:'rifle'},c,t,x,y,0,.65);},
+  formation:(m,o,c,t)=>{for(const [x,y]of[[-.6,-.3],[.45,-.3],[0,.5]])person(m,{hat:'helmet',tool:'rifle',animation:o.animation},c,t,x,y,0,.65);},
   vehicle:(m,o,c,t)=>{vehicle(m,o,c,t);if(o.animal)animal(m,'horse','#b19b7a',1.8,0);},
   gun:(m,o,c)=>{
     if(!o.battery){gun(m,o,c);return;}
     slab(m);
     for(const y of[-.5,.45]){
-      const sub=new IsoScene(m.view);gun(sub,o,c);
+      const sub=new IsoScene(m.view);sub.wheelPhase=m.wheelPhase;gun(sub,o,c);
       for(const f of sub.faces){f.points=f.points.map(([x,Y,z])=>[x*.75,Y*.75+y,z*.75]);f.depth=f.points.reduce((s,[x,Y,z])=>s+x+Y+z,0)/f.points.length;m.faces.push(f);}
     }
   },
 };
 export const ISOMETRIC_MODELS=Object.freeze(models);
+function animationChoices(recipe){
+  if(!recipe)return [];
+  const {family,options:o}=recipe;
+  if(['person','formation'].includes(family))return ['walk','run'];
+  if(['vehicle','gun'].includes(family)||o.kind==='bicycle')return ['drive'];
+  if(family==='ship')return ['sail'];
+  if(family==='nature'&&['tree','pine','palm'].includes(o.kind))return ['sway'];
+  if(animated(recipe)||family==='building'&&o.kind==='factory')return ['operate'];
+  return [];
+}
+export const objectAnimationOptions=glyph=>['auto','none',...animationChoices(models[glyph])].map(key=>[key,OBJECT_ANIMATIONS[key]]);
+export function objectAnimationOf(glyph,action={}){
+  const recipe=models[glyph],choice=action.objectAnimation||'auto';
+  if(choice==='none')return 'none';
+  if(animationChoices(recipe).includes(choice))return choice;
+  if(['move','path'].includes(action.mode)){
+    if(['person','formation'].includes(recipe?.family))return 'walk';
+    if(recipe?.family==='vehicle')return 'drive';
+  }
+  return 'auto';
+}
 export function createIsometricModel(glyph,color,t=0,action={},image,view='isometric'){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
   const scene=new IsoScene(view);scene.material=({person:'cloth',mounted:'cloth',formation:'cloth',vehicle:'paint',ship:'paint',aircraft:'paint',fort:'stone',building:'plaster',landmark:'stone',bridge:'metal',nature:'earth',goods:'wood',image:'wood',time:'metal',accessory:'metal'})[recipe.family]||'matte';
-  families[recipe.family](scene,recipe.options,color||'#919c72',t,action,image);
+  const animation=objectAnimationOf(glyph,action);t=objectAnimationTime(action,t);
+  if(animation==='drive')scene.wheelPhase=t*6;
+  families[recipe.family](scene,{...recipe.options,animation},color||'#919c72',t,action,image);
+  if(animation==='sway'||animation==='sail')for(const face of scene.faces){
+    face.points=face.points.map(([x,y,z])=>{
+      if(animation==='sway')return [x+Math.sin(t*2)*.045*Math.max(0,z)**1.5,y,z];
+      const angle=Math.sin(t*1.8)*.035,c=Math.cos(angle),s=Math.sin(angle);
+      return [x,y*c-(z-.3)*s,.3+y*s+(z-.3)*c+.025*(1-Math.cos(t*1.8))];
+    });
+  }
   if(view==='isometricBack'){
     // Turn the model around its vertical axis before projection and occlusion.
     // Shadows use these turned vertices with the same world-space sun.
@@ -588,8 +621,8 @@ function modelFor(glyph,color,t,action,image,view='isometric'){
   // Keep immutable static geometry and its face ordering between animation
   // frames. Size, movement, damage and canvas rotation remain outside the model.
   let imageId=0;if(image){if(!imageIds.has(image))imageIds.set(image,++imageSerial);imageId=imageIds.get(image);}
-  const key=JSON.stringify([glyph,color,view,imageId,currentSceneLighting().key,...imageSettings.map(k=>action[k])]);
-  if(animated(recipe)){
+  const animation=objectAnimationOf(glyph,action),key=JSON.stringify([glyph,color,view,imageId,currentSceneLighting().key,animation,action.objectAnimationSpeed??1,...imageSettings.map(k=>action[k])]);
+  if(animation!=='none'&&(animation!=='auto'||animated(recipe))){
     let previous=animatedModels.get(key);
     if(!previous||previous.time!==t){previous={scene:createIsometricModel(glyph,color,t,action,image,view),time:t};animatedModels.set(key,previous);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
     return {scene:previous.scene,key,animated:true};

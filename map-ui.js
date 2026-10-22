@@ -43,6 +43,7 @@ import { measureShape, measurementText } from './map-shape-measurements.mjs';
 import { ZONE_TERRAINS } from './map-strategy-terrain.mjs';
 import { OBJECT_CATEGORIES, objectEntries } from './map-object-catalog.mjs';
 import { objectViewOf, OBJECT_VIEWS } from './map-object-view.mjs';
+import { objectAnimationOptions } from './map-isometric-objects.mjs';
 import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs';
 import { lightingAt, LIGHTING_FIELDS as SUN_FIELDS, putLightingKey, removeLightingKey, moveLightingKey } from './map-lighting-keys.mjs';
 import { lightingOf, lightingPreset } from './map-lighting.mjs';
@@ -408,7 +409,7 @@ function captureCamera() {
 function renderItems() {
   const its = displayItems();
   $('#mItemCount').textContent = its.length;
-  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(objectViewOf(it))}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
+  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(objectPoseAt(it,frame).objectView)}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
   paintObjectPreviews($('#mItems'));
   $$('[data-mid]').forEach(el => el.onclick = e => selectFromList(el.dataset.mid,e));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current() || !!current().fullTimelineCamera;
@@ -504,7 +505,7 @@ function renderInspector() {
     box.innerHTML=h;bindInspector(it);campaign?.bind(it);return;
   }
   if (shot) h += F.sel('preset', 'Camera move', it.preset, Object.entries(PRESETS).map(([k, p]) => [k, p.label]));
-  h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : it.type === 'object' ? F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
+  h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : it.type === 'object' ? F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['objectView','Object view'],['damageState','Damage state']]) : F.sel('__keyProperty', 'Keyframe property', 'animation', [['animation', 'Animation']]);
   h += '<p class="mini-label">' + (shot && it.preset === 'keyframed' ? 'Edit the camera at the playhead. Changes create keyframes automatically. Choose a property to see and retime its diamonds.' : 'The timeline bar controls when this layer appears and disappears. Drag the two centered diamonds to set when its animation starts and finishes.') + '</p>' + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
   if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
@@ -591,10 +592,12 @@ function artworkFields(a) {
 function objectFields(a) {
   const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
   const imageObject=['portrait','image','artwork','banner'].includes(a.glyph);
+  const animations=objectAnimationOptions(a.glyph),animation=animations.some(([key])=>key===a.objectAnimation)?a.objectAnimation:'auto';
   const artwork=()=>a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):bannerFields(a);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
-  return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph,a.objectView)
-    +F.sel('objectView','Object view',objectViewOf(a),Object.entries(OBJECT_VIEWS))
+  return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph,pose.objectView)
+    +F.sel('objectView','Object view',pose.objectView,Object.entries(OBJECT_VIEWS))
+    +(['path','move'].includes(a.mode)?'<p class="mini-label">Move the playhead to a turn, then choose the view. Each change records a view keyframe at that point.</p>':'')
     +(imageObject?'<div class="section-title">YOUR IMAGE &amp; STYLE</div>'+artwork():'')
     +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
@@ -605,9 +608,10 @@ function objectFields(a) {
     +F.range('opacity','Opacity',a.opacity??1,0,1,.05,x=>Math.round(x*100)+'%')
     +(a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
     +'<div class="section-title">ANIMATION</div>'
+    +(animations.length>2?F.sel('objectAnimation','Object animation',animation,animations)+(animation==='none'?'':F.range('objectAnimationSpeed','Animation speed',a.objectAnimationSpeed??1,.25,4,.25,x=>x+'x')):'')
     +(a.glyph==='image'?'':'<div class="two">'+F.sel('enter','Appears',a.enter,OBJECT_ENTER)+F.sel('exit','Disappears',a.exit,OBJECT_EXIT.map(([key,label])=>[key,key==='none'?'Stay to end':label]))+'</div>'+F.sel('idle','While visible',a.idle,OBJECT_IDLE))
     +F.sel('easing','Motion',a.easing,EASE_OPTS)
-    +F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']])
+    +F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['objectView','Object view'],['damageState','Damage state']])
     +objectKeyFields(a)
     +'<div class="section-title">LAYOUT &amp; SIZE</div>'
     +(a.sizeMode==='map'?F.num('sizeZoom','Anchor zoom',a.sizeZoom??3,0,14,.1):'')
@@ -622,9 +626,9 @@ function objectFields(a) {
 }
 
 function objectKeyFields(a) {
-  const labels={size:'Size',objectAngle:'Rotation',damageState:'Damage'};
+  const labels={size:'Size',objectAngle:'Rotation',objectView:'view',damageState:'Damage'};
   return F.chk('autoObjectKey','Auto-key edits at the playhead',!!a.autoObjectKey)
-    + `<div class="m-object-key-buttons">${Object.entries(labels).filter(([field])=>a.glyph!=='image'||field!=='damageState').map(([field,title])=>`<button type="button" data-object-key="${field}">Key ${title}</button>`).join('')}</div><p class="mini-label">Size and rotation interpolate. Damage changes at its keyframe. Move the playhead inside this bar, then enable Auto-key or press a Key button.</p>`;
+    + `<div class="m-object-key-buttons">${Object.entries(labels).filter(([field])=>a.glyph!=='image'||field!=='damageState').map(([field,title])=>`<button type="button" data-object-key="${field}">Key ${title}</button>`).join('')}</div><p class="mini-label">Size and rotation interpolate. View and damage switch at their keyframes. Move the playhead inside this bar, then enable Auto-key or press a Key button.</p>`;
 }
 function bindObjectKeys(a) {
   $$('#mInspector [data-object-key]').forEach(el=>el.onclick=()=>{
@@ -635,15 +639,21 @@ function bindObjectKeys(a) {
 }
 function updateObjectInspector(a) {
   const pose=objectPoseAt(a,frame),outside=frame<a.start||frame>a.start+a.dur;
-  for(const field of ['size','objectAngle','damageState']){
+  for(const field of ['size','objectAngle','objectView','damageState']){
     const el=$(`#mInspector [data-mf="${field}"]`);if(!el)continue;
     if(document.activeElement!==el){el.value=pose[field];const out=el.parentElement.querySelector('.m-val');if(out)out.textContent=field==='size'?pose.size.toFixed(2)+'x':pose[field];}
-    el.disabled=outside&&(a.autoObjectKey||a.objectKeys?.some(k=>k.values[field]!==undefined));
+    el.disabled=outside&&(field==='objectView'&&['move','path'].includes(a.mode)||a.autoObjectKey||a.objectKeys?.some(k=>k.values[field]!==undefined));
   }
-  $$('#mInspector [data-object-key]').forEach(el=>{const field=el.dataset.objectKey,has=a.objectKeys?.some(k=>k.frame===frame&&k.values[field]!==undefined);el.disabled=outside;el.classList.toggle('current',!!has);el.textContent=(has?'Remove ':'Key ')+({size:'size',objectAngle:'rotation',damageState:'damage'}[field]);});
+  const previewRoots=[$('#mInspector'),document.querySelector('#mMapContext'),document.querySelector('body > .m-object-cascade'),...$$('#mItems [data-mid]').filter(el=>el.dataset.mid===a.id)];
+  for(const root of previewRoots.filter(Boolean)){
+    let changedView=false;
+    for(const img of root.querySelectorAll('img[data-object-view]'))if(img.dataset.objectView!==pose.objectView){img.dataset.objectView=pose.objectView;changedView=true;}
+    if(changedView)paintObjectPreviews(root);
+  }
+  $$('#mInspector [data-object-key]').forEach(el=>{const field=el.dataset.objectKey,has=a.objectKeys?.some(k=>k.frame===frame&&k.values[field]!==undefined);el.disabled=outside;el.classList.toggle('current',!!has);el.textContent=(has?'Remove ':'Key ')+({size:'size',objectAngle:'rotation',objectView:'view',damageState:'damage'}[field]);});
 }
 function writeObjectValue(a,field,value) {
-  if(a.type==='object'&&['size','objectAngle','damageState'].includes(field)&&(a.autoObjectKey||a.objectKeys?.some(k=>k.values[field]!==undefined))){
+  if(a.type==='object'&&['size','objectAngle','objectView','damageState'].includes(field)&&(a.autoObjectKey||a.objectKeys?.some(k=>k.values[field]!==undefined))){
     const at=clamp(frame,a.start,a.start+a.dur);putObjectKey(a,at,{[field]:value});
   }else a[field]=value;
 }
@@ -997,7 +1007,12 @@ function bindInspector(it) {
       }
       if(key==='railStyle'){it.railStyle=v;changed();renderInspector();return;}
       if(key==='roadLanes'){it.roadLanes=Number(v);changed();return;}
-      if (key === 'objectView') { it.objectView=v;changed();renderInspector();return; }
+      if (key === 'objectView') {
+        if(['move','path'].includes(it.mode))putObjectKey(it,clamp(frame,it.start,it.start+it.dur),{objectView:v});
+        else writeObjectValue(it,'objectView',v);
+        changed();renderInspector();return;
+      }
+      if (key === 'objectAnimation') { it.objectAnimation=v;changed();renderInspector();return; }
       if (key.includes('.')) { const [endpoint, property] = key.split('.'); if (!Number.isFinite(v)) { renderInspector(); return; } it[endpoint][property] = clamp(v, +el.min, +el.max); previewCamera = null; changed(); renderInspector(); return; }
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }
       if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; if (v === 'keyframed' && !it.cameraFrom) { it.cameraFrom = captureCamera(); it.cameraTo = { ...it.cameraFrom }; } if (v === 'keyframed') it.cameraKeys ??= []; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
@@ -1017,7 +1032,7 @@ function bindInspector(it) {
         if(k==='glyph'&&v==='portrait'){it.showLabel=true;if(!it.label)it.label='Commander';}
         if(k==='shape'&&['distance','area'].includes(v)&&it.pathKeys?.length){it.path=pathAt(it,frame);delete it.pathKeys;}
         if(k==='fx'&&v==='sunlight'){cancelPick();it.lighting||=lightingPreset('day');}
-        it[k] = v; if(k==='shape'&&['distance','area'].includes(v)){it.curve='straight';if(v==='distance'&&it.path?.length>2)it.path=[it.path[0],it.path.at(-1)];} if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
+        it[k] = v; if(k==='glyph'&&it.objectAnimation&&!objectAnimationOptions(v).some(([key])=>key===it.objectAnimation))it.objectAnimation='auto'; if(k==='shape'&&['distance','area'].includes(v)){it.curve='straight';if(v==='distance'&&it.path?.length>2)it.path=[it.path[0],it.path.at(-1)];} if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
       }
       if (key === '__lscustom') { if (v) it.labelStyle = { ...labelStyleOf(proj) }; else delete it.labelStyle; changed(); renderInspector(); return; }
       if (key === '__pinMove') {
@@ -1490,7 +1505,7 @@ function timelineKeys(it, last) {
     const shared=cameraKeysOf(it).filter(p=>p.frame===k.frame),index=shared.indexOf(k),columns=Math.ceil(shared.length/2),offset=shared.length>1?(Math.floor(index/2)-(columns-1)/2)*20:0,vertical=shared.length>1?(index%2?8:-8):0,padding=11+(columns-1)*10;
     return `<button type="button" class="m-key m-camera-key ${k.pairId?'m-camera-paired ':''}${k.frame===frame&&it.id===sel&&(!selectedCameraKeyId||k.id===selectedCameraKeyId)?'current':''}" data-map-key="camera:${k.frame}" data-camera-key-id="${esc(k.id||'')}" data-key-item="${esc(it.id)}" style="left:clamp(${padding}px,${Math.min(last,k.frame)/last*100}%,calc(100% - ${padding}px));margin-left:${offset}px;top:calc(50% + ${vertical}px)" title="${esc(label)} - frame ${k.frame}. Drag to retime; right-click or Delete to remove." aria-label="${esc(label)}, frame ${k.frame}"></button>`;
   }).join('');
-  const fields=objectProperty==='all'?['size','objectAngle','damageState']:[objectProperty];
+  const fields=objectProperty==='all'?['size','objectAngle','objectView','damageState']:[objectProperty];
   const objectMarkers=it.type==='object'&&objectProperty!=='animation'?(it.objectKeys||[]).filter(k=>k.frame>=it.start&&k.frame<=it.start+it.dur).filter(k=>fields.some(field=>k.values[field]!==undefined)).map(k=>`<button type="button" class="m-key m-object-key" data-map-key="object:${objectProperty}:${k.frame}" data-key-item="${esc(it.id)}" style="left:clamp(11px, ${Math.min(last,k.frame)/last*100}%, calc(100% - 11px))" title="Object ${esc(objectProperty)} keyframe at frame ${k.frame}" aria-label="Object keyframe at frame ${k.frame}"></button>`).join(''):'';
   if(it.type==='object'&&!['all','animation'].includes(objectProperty))return objectMarkers;
   const keys = animationKeysOf(it);
@@ -1533,7 +1548,7 @@ function bindTimelineKeys(root = document) {
       checkpoint();
       let focusKey = key;
       if (key.startsWith('camera:')) { const from = +key.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur); moveCameraKey(it, from, to, cameraTrackFields(),el.dataset.cameraKeyId||null); setFrame(to); focusKey = `camera:${to}`; }
-      else if(key.startsWith('object:')){const [,field,time]=key.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);focusKey=`object:${field}:${to}`;}
+      else if(key.startsWith('object:')){const [,field,time]=key.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','objectView','damageState']:[field]);setFrame(to);focusKey=`object:${field}:${to}`;}
       else if(key.startsWith('path:')||key.startsWith('group:')||key.startsWith('lighting:')){const[kind,time]=key.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);(kind==='lighting'?moveLightingKey:kind==='path'?movePathKey:moveGroupKey)(it,from,to);setFrame(to);focusKey=`${kind}:${to}`;}
       else setAnimationKey(it, key, animationKeysOf(it)[key === 'animationStart' ? 'start' : 'end'] + d);
       ensureLength(it.start + it.dur); changed(); renderInspector();
@@ -1582,7 +1597,7 @@ window.addEventListener('pointermove', e => {
     const field=kind==='lighting'?'lightingKeys':kind==='path'?'pathKeys':'groupKeys';it[field]=clone(drag[field]||[]);(kind==='lighting'?moveLightingKey:kind==='path'?movePathKey:moveGroupKey)(it,from,to);drag.moved=true;setFrame(to);updateTimelineItem(it);return;
   }
   const rawDelta = frameFromEvent(e) - drag.x0; const d = ['move','l','r'].includes(drag.mode) ? snapTimelineDelta($('#mTracks'),rawDelta,drag.start,drag.start+drag.dur,drag.mode,drag.id,proj.frames-1,proj.fps,e) : rawDelta; if (d !== 0) drag.moved = true;
-  if(drag.mode.startsWith('object:')){const [,field,time]=drag.mode.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);if(drag.lastTo===to)return;drag.lastTo=to;it.objectKeys=clone(drag.objectKeys||[]);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','damageState']:[field]);setFrame(to);updateTimelineItem(it);return;}
+  if(drag.mode.startsWith('object:')){const [,field,time]=drag.mode.split(':'),from=+time,to=clamp(from+d,it.start,it.start+it.dur);if(drag.lastTo===to)return;drag.lastTo=to;it.objectKeys=clone(drag.objectKeys||[]);moveObjectKey(it,from,to,field==='all'?['size','objectAngle','objectView','damageState']:[field]);setFrame(to);updateTimelineItem(it);return;}
   if (drag.mode.startsWith('camera:')) {
     const from = +drag.mode.split(':')[1], to = clamp(from + d, it.start, it.start + it.dur);
     if (drag.lastTo === to) return; drag.lastTo = to;

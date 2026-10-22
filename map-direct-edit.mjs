@@ -8,6 +8,8 @@ import { armyCopies } from './map-armies.mjs';
 import { pathAt } from './map-path-animation.mjs';
 import { objectOffsets } from './map-formations.mjs';
 import { networkHalfWidth } from './map-network-style.mjs';
+import { isIsometricView } from './map-object-view.mjs';
+import { objectAnimationOptions } from './map-isometric-objects.mjs';
 
 const wrap=lon=>((lon+180)%360+360)%360-180;
 const spatial=a=>!(a?.type==='effect'&&a.fx==='sunlight')&&['object','group','pin','label','effect','plane','shape'].includes(a?.type);
@@ -124,7 +126,7 @@ export function installDirectMapEditing(api){
     return project(v,X+Math.round(v.cx-X),Y);
   }
   function heading(a,v){
-    if(!OBJECT_ICONS[a.glyph]?.rot||!['move','path'].includes(a.mode))return 0;
+    if(isIsometricView(objectPoseAt(a,api.frame()))||!OBJECT_ICONS[a.glyph]?.rot||!['move','path'].includes(a.mode))return 0;
     const rendered=v.objects?.get(a.id)||a,A=objectLocationAt(v,api.geo(),rendered,Math.max(a.start,api.frame()-1)),B=objectLocationAt(v,api.geo(),rendered,Math.min(a.start+a.dur,api.frame()+1));
     if(!A||!B)return 0;const first=project(v,A.X,A.Y),last=project(v,B.X,B.Y);
     return Math.atan2(last.y-first.y,last.x-first.x)*180/Math.PI;
@@ -213,6 +215,7 @@ export function installDirectMapEditing(api){
         const old=OBJECT_ICONS[object.glyph],next=OBJECT_ICONS[value];if(!next)continue;
         if(object.color===old?.color)object.color=next.color;
         if(!object.name||object.name==='Object'||object.name===old?.label)object.name=next.label;
+        if(object.objectAnimation&&!objectAnimationOptions(value).some(([key])=>key===object.objectAnimation))object.objectAnimation='auto';
       }
       const common=['color','label','showLabel','size','opacity'];
       const byType={pin:['__pinDisplay','labelPlacement'],label:['text','labelPlacement'],effect:['fx','repeat'],shape:['shape','width'],plane:['icon','planeColor'],object:['glyph','sizeMode']};

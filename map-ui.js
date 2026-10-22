@@ -24,6 +24,7 @@ import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { applyDocumentaryLook, DOCUMENTARY_LABEL } from './map-documentary.mjs';
 import { terrainSettingsOf } from './map-engine.mjs?v=path-flow-1';
+import { plaqueStyle } from './map-plaque-text.mjs';
 import { FORMATIONS, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
@@ -42,6 +43,7 @@ import { planeRoute } from './map-engine.mjs?v=path-flow-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const OBJECT_CATEGORIES = [
+  ['images', 'Images, portraits & flags'], ['trade', 'Trade & cargo'],
   ['transport', 'Travel & civilian transport'], ['places', 'Cities & everyday places'],
   ['landmarks', 'Famous landmarks & infrastructure'], ['people', 'People & occupations'],
   ['infrastructure', 'Infrastructure & clean energy'], ['nature', 'Nature & outdoors'],
@@ -483,7 +485,7 @@ function renderInspector() {
     box.innerHTML=h;bindInspector(it);campaign.bind(it);return;
   }
   if(it.type==='object'){
-    h+=objectFields(it)+labelFields(it);
+    h+=objectFields(it)+(it.glyph==='portrait'?'':labelFields(it));
     box.innerHTML=h;bindInspector(it);campaign?.bind(it);bindObjectKeys(it);bindArmyFields(it);updateObjectInspector(it);return;
   }
   if(['highlight','border'].includes(it.type)){
@@ -512,7 +514,18 @@ function bannerFields(a) {
     + F.chk('bannerPole', 'Show wooden pole', a.bannerPole !== false)
     + F.color('bannerPoleColor', 'Wood color', a.bannerPoleColor || '#65503a')
     + F.chk('bannerPlaque', 'Show title plaque', a.bannerPlaque !== false)
-    + F.text('bannerTitle', 'Plaque title', a.bannerTitle || '', 100, 'e.g. Richard Hakluyt') + '</div>';
+    + F.text('bannerTitle', 'Plaque title', a.bannerTitle || '', 100, 'e.g. Richard Hakluyt') + (a.bannerPlaque!==false?plaqueTextFields(a):'') + '</div>';
+}
+function plaqueTextFields(a) {
+  const st=plaqueStyle(a);
+  return '<div class="section-title">'+(a.glyph==='portrait'?'RIBBON TEXT STYLE':'PLAQUE TEXT STYLE')+'</div>'
+    +fontPickerHtml('mPlaqueFont','Font family',st.font)
+    +F.range('plaqueSize','Text size',st.size,4,48,.5,x=>x+' px')
+    +F.num('plaqueWeight','Font weight',st.weight,400,900,100)
+    +F.chk('plaqueItalic','Italic',st.italic)
+    +F.color('plaqueColor','Text color',st.color)
+    +F.chk('plaqueFit','Auto-fit text inside plaque / ribbon',st.fit)
+    +'<p class="mini-label">Text size follows the object scale. Turn off auto-fit to keep the chosen size; extra text is clipped.</p>';
 }
 function badgeFields(a) {
   const b = badgeOf(a);
@@ -529,13 +542,24 @@ function badgeFields(a) {
     + '</div>';
 }
 const shrinkImage = importObjectImage;
+function portraitFields(a) {
+  return `<div class="m-badge"><span class="mini-label">Portrait picture</span><div class="two"><button type="button" data-badgeimg>${a.image?'Change portrait':'Upload portrait'}</button><button type="button" data-badgeclear ${a.image?'':'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden></div>`
+    + '<p class="mini-label">Upload a ruler or commander portrait. The picture and name ribbon move together.</p>'
+    + F.color('color','Backdrop & ribbon',a.color)
+    + F.color('badgeBorder','Frame color',a.badgeBorder||'#c7a469')
+    + F.range('badgeZoom','Zoom portrait',a.badgeZoom??1,1,4,.05)
+    + F.range('badgeX','Move portrait left / right',a.badgeX??0,-100,100,1)
+    + F.range('badgeY','Move portrait up / down',a.badgeY??0,-100,100,1)
+    + plaqueTextFields(a);
+}
 function artworkFields(a) {
   return `<div class="m-badge"><span class="mini-label">SVG / PNG artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden><p class="mini-label">Transparent artwork keeps its proportions, without a badge or frame. SVG is embedded as a high-resolution image for saving and export.</p></div>`;
 }
 function objectFields(a) {
   const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
-  return '<div class="section-title">MOVEMENT</div>'
+  return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph)
+    +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
     +(a.mode==='move'?F.loc('to','Destination',a.to,'place'):'')
     +(['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'Start position':'Location',a.place,'place'))
@@ -554,10 +578,10 @@ function objectFields(a) {
     +(wall?'':F.num('count',a.glyph==='army'?'Army copies':'Count',a.count??1,1,a.glyph==='army'?Math.max(1,Math.floor(100/total)):100,1)+formationFields(a)+`<div class="two">${F.num('gapX','Horizontal gap',a.gapX??defaultObjectGap(a),0,1000)}${F.num('gapY','Vertical gap',a.gapY??defaultObjectGap(a),0,1000)}</div>`)
     +(wall?F.range('wallSpacing','Segment spacing',a.wallSpacing??52,12,120,1,x=>x+' px')+F.num('wallTowerEvery','Tower every N segments',a.wallTowerEvery??8,0,50)+F.chk('wallGate','Gate in the middle',!!a.wallGate):'')
     +(a.glyph==='army'?armyFields(a):'')
-    +'<div class="section-title">TYPE &amp; COLOR</div>'+objectPicker(a.glyph)
-    +(a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
+    +'<div class="section-title">ARTWORK &amp; COLOR</div>'
+    +(a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
     +F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
-    +'<div class="section-title">LABEL</div>'+F.chk('showLabel','Show label',a.showLabel)+(a.showLabel?F.text('label','Label text',a.label,60,'Uses the default name'):'');
+    +'<div class="section-title">LABEL</div>'+F.chk('showLabel',a.glyph==='portrait'?'Show ribbon name':'Show label',a.showLabel)+(a.showLabel?F.text('label',a.glyph==='portrait'?'Ribbon name':'Label text',a.label,60,'Uses the default name'):'');
 }
 
 function objectKeyFields(a) {
@@ -635,7 +659,7 @@ function battleFields(a) {
     + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees'));
 }
 function objectPicker(glyph) {
-  const entries=group=>Object.entries(OBJECT_ICONS).filter(([,icon])=>(icon.group||'general')===group);
+  const entries=group=>Object.entries(OBJECT_ICONS).filter(([,icon])=>(icon.group||'general')===group).sort((a,b)=>a[1].label.localeCompare(b[1].label));
   return `<div class="m-object-picker"><span class="mini-label">Object</span>
     <select data-object-type hidden aria-label="Object type">${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label])=>`<option value="${key}" ${key===(objectTypeFilters.get(sel)||'all')?'selected':''}>${esc(label)}</option>`).join('')}</select>
     <select data-mf="glyph" data-t="sel" aria-label="Object" hidden>${OBJECT_CATEGORIES.map(([group,label])=>`<optgroup label="${esc(label)}">${entries(group).map(([key,icon])=>`<option value="${key}" ${key===glyph?'selected':''}>${esc(icon.label)}</option>`).join('')}</optgroup>`).join('')}</select>
@@ -858,6 +882,7 @@ function shotFields(s) {
 
 function bindInspector(it) {
   bindCameraInspector(it);
+  if($('#mPlaqueFont'))bindFontPicker('mPlaqueFont',font=>{pause();checkpoint();it.plaqueFont=font;changed();loadFont(font).then(()=>draw());});
   paintObjectPreviews($('#mInspector'));
   const objectMenu=$('#mInspector [data-object-menu]');
   if(objectMenu){
@@ -942,6 +967,7 @@ function bindInspector(it) {
       for (const [k, cat, base] of [['glyph', OBJECT_ICONS, 'Object'], ['fx', EFFECTS, 'Effect'], ['shape', SHAPES, 'Arrow / zone']]) if (key === k) { // new look: follow its default color and name unless the user changed them
         const old = cat[it[k]], nu = cat[v]; if (!nu) return;
         if (it.color === old?.color) it.color = nu.color; if (!it.name || it.name === base || it.name === old?.label) it.name = nu.label;
+        if(k==='glyph'&&v==='portrait'){it.showLabel=true;if(!it.label)it.label='Commander';}
         if(k==='shape'&&['distance','area'].includes(v)&&it.pathKeys?.length){it.path=pathAt(it,frame);delete it.pathKeys;}
         it[k] = v; if(k==='shape'&&['distance','area'].includes(v)){it.curve='straight';if(v==='distance'&&it.path?.length>2)it.path=[it.path[0],it.path.at(-1)];} if(k==='glyph'&&it.mode==='wallPath'&&!WALL_GLYPHS.includes(v))it.mode='stay'; if(k==='fx'&&!['cannonShot','musketVolley','arrowVolley'].includes(v))it.attackTargeted=false; changed(); renderInspector(); return;
       }

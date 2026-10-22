@@ -85,14 +85,17 @@ try {
   const result=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),I=await import('./map-object-images.mjs');
     const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));
-    const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));E.validateMapProject(p);
+    const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));E.validateMapProject(p);p.shots=[];
     const a=p.actions[0];a.enter='none';a.exit='none';a.showLabel=false;a.place={kind:'point',name:'Art',lon:2,lat:48};a.dur=200;
     p.theme='paper';p.graticule=false;p.texture={type:'none',strength:0,scale:1};await E.preloadBadges(p);
     const c=document.createElement('canvas');c.width=1280;c.height=720;const x=c.getContext('2d');
     const img=new Image();img.src=a.image;await img.decode();const ic=document.createElement('canvas');ic.width=img.width;ic.height=img.height;const ix=ic.getContext('2d');ix.drawImage(img,0,0);
     const transparency=[ix.getImageData(0,0,1,1).data[3],ix.getImageData(img.width/2,img.height/2,1,1).data[3]];
-    const original=x.drawImage.bind(x);let sizes=[];x.drawImage=(im,...args)=>{if(im.src===a.image&&args.length===4)sizes.push(args.slice(2));original(im,...args);};
+    // Use DOM foreground canvases so draw calls on every layer can be observed.
+    window.OffscreenCanvas=undefined;
+    const original=CanvasRenderingContext2D.prototype.drawImage;let sizes=[];CanvasRenderingContext2D.prototype.drawImage=function(im,...args){if(im.src===a.image&&args.length===4)sizes.push(args.slice(2));original.call(this,im,...args);};
     E.drawMap(x,1280,720,p,30,geo);p.camera.init.zoom=5;E.drawMap(x,1280,720,p,30,geo);a.sizeMode='screen';E.drawMap(x,1280,720,p,30,geo);p.camera.init.zoom=4;E.drawMap(x,1280,720,p,30,geo);
+    CanvasRenderingContext2D.prototype.drawImage=original;
     const capture=actions=>{p.actions=actions;E.drawMap(x,1280,720,p,60,geo);return new Uint8ClampedArray(x.getImageData(0,0,1280,720).data);};
     const base={dur:200,animDur:10,showLabel:false,dim:0,pulse:false,easing:'linear'};
     const old=E.makeAction('highlight',0,{...base,target:{kind:'country',name:'France'},color:'#ff0000'}),newer=E.makeAction('highlight',20,{...base,target:{kind:'country',name:'France'},color:'#0000ff'});
@@ -114,6 +117,47 @@ try {
   assert.equal(result.sizes.length,4);assert.equal(result.sizes[1][0],result.sizes[0][0]*2);assert.equal(result.sizes[2][0],result.sizes[3][0]);assert.equal(result.sizes[0][0]/result.sizes[0][1],2);
   for(const key of ['precedence','overlap','unaffected','resumes','rejected'])assert.equal(result[key],true,key);
   assert.ok(result.png>1000);
+  // Grouped image/trade objects, portrait uploads and plaque text controls.
+  await evaluate(`document.querySelector('[data-madd="object"]').click()`);
+  await change('#mInspector [data-mf="glyph"]','portrait');
+  await change('#mInspector [data-mf="label"]','Manuel');
+  await upload(pngPath);
+  await waitFor(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1).image?.startsWith('data:image/png')`);
+  const categories=await evaluate(`(()=>{const s=document.querySelector('[data-mf="glyph"]');return [...s.querySelectorAll('optgroup')].map(g=>({label:g.label,values:[...g.children].map(o=>o.value)}))})()`);
+  assert.deepEqual(categories.find(g=>g.label==='Images, portraits & flags').values.slice().sort(),['artwork','banner','image','portrait']);
+  assert.ok(categories.find(g=>g.label==='Trade & cargo').values.includes('importGoods'));
+  assert.ok(categories.find(g=>g.label==='Trade & cargo').values.includes('exportGoods'));
+  await change('#mPlaqueFont','Georgia');
+  await change('[data-mf="plaqueSize"]','11');
+  await change('[data-mf="plaqueWeight"]','400');
+  await change('[data-mf="plaqueColor"]','#ffd166');
+  await evaluate(`document.querySelector('[data-mf="plaqueItalic"]').click();document.querySelector('[data-mf="plaqueFit"]').click()`);
+  const styled=await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1)`);
+  assert.equal(styled.plaqueSize,11);assert.equal(styled.plaqueWeight,400);assert.equal(styled.plaqueItalic,true);assert.equal(styled.plaqueFit,false);assert.equal(styled.plaqueColor,'#ffd166');
+  await change('#mInspector [data-mf="glyph"]','banner');
+  assert.ok(await evaluate(`!!document.querySelector('#mPlaqueFont')&&!!document.querySelector('[data-mf="plaqueSize"]')`),'banner exposes plaque style controls too');
+  await change('#mInspector [data-mf="glyph"]','portrait');
+  const medieval=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),M=await import('./map-medieval-objects.mjs'),T=await import('./map-trade-objects.mjs');
+    const p=E.newMapProject();p.theme='paper';p.graticule=false;p.camera.init={lon:2,lat:48,zoom:4,pitch:0,bearing:0};
+    const saved=JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1);
+    p.actions=Object.keys(M.MEDIEVAL_OBJECTS).map((glyph,i)=>E.makeAction('object',0,{glyph,color:E.OBJECT_ICONS[glyph].color,image:glyph==='portrait'?saved.image:undefined,label:glyph==='portrait'?'Manuel':'',showLabel:true,enter:'none',exit:'none',size:2,dur:240,place:{kind:'point',name:glyph,lon:-4+i*4,lat:48}}));
+    const roundtrip=JSON.parse(JSON.stringify(p));E.validateMapProject(roundtrip);await E.preloadBadges(roundtrip);
+    Object.assign(roundtrip.actions[0],{plaqueFont:saved.plaqueFont,plaqueSize:saved.plaqueSize,plaqueWeight:saved.plaqueWeight,plaqueColor:saved.plaqueColor,plaqueItalic:saved.plaqueItalic,plaqueFit:saved.plaqueFit});
+    const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));
+    const c=document.createElement('canvas');c.width=1280;c.height=720;const ctx=c.getContext('2d');let portraits=0;const draw=CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage=function(im,...args){if(im.src===saved.image)portraits++;draw.call(this,im,...args)};
+    E.drawMap(ctx,1280,720,roundtrip,40,geo);const first=ctx.getImageData(0,0,1280,720).data.slice();E.drawMap(ctx,1280,720,roundtrip,40,geo);
+    CanvasRenderingContext2D.prototype.drawImage=draw;
+    window.reviewProject=roundtrip;
+    const second=ctx.getImageData(0,0,1280,720).data;
+    const sheet=document.createElement('canvas');sheet.width=1200;sheet.height=800;const g=sheet.getContext('2d');g.fillStyle='#e8dfcd';g.fillRect(0,0,1200,800);
+    Object.entries(T.TRADE_OBJECTS).forEach(([key,icon],i)=>{const x=200+(i%3)*400,y=130+Math.floor(i/3)*260;g.save();g.translate(x,y);icon.draw(g,65,icon.color,0);g.restore();g.fillStyle='#303d36';g.font='18px Arial';g.textAlign='center';g.fillText(icon.label,x,y+105)});
+    return{portraits,stable:first.every((v,i)=>v===second[i]),png:c.toDataURL(),tradeSheet:sheet.toDataURL()};
+  })()`);
+  assert.equal(medieval.portraits,2,'uploaded portrait is drawn after preload');assert.equal(medieval.stable,true);
+  await writeFile(join(tmpdir(),'frameflow-medieval-objects.png'),Buffer.from(medieval.png.split(',')[1],'base64'));
+  await writeFile(join(tmpdir(),'frameflow-trade-objects.png'),Buffer.from(medieval.tradeSheet.split(',')[1],'base64'));
   const video=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),V=await import('./map-video-export.mjs');const p=window.reviewProject;p.width=640;p.height=360;p.frames=2;p.fps=30;p.audioTracks=[];const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));await E.preloadBadges(p);const canvas=document.createElement('canvas');canvas.width=p.width;canvas.height=p.height;const b=await V.exportMapVideo({canvas,fps:p.fps,frames:p.frames,draw:f=>E.drawMap(canvas.getContext('2d'),p.width,p.height,p,f,geo)});return{size:b.size,type:b.type};})()`);
   assert.ok(video.size>1000&&video.type==='video/webm');
   assert.deepEqual(errors,[]);console.log('Object map/screen sizing, SVG/PNG uploads, transparency, reload, newest highlight/partial overlap/expiry, PNG and WebM passed');

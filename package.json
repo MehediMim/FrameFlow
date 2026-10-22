@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Browser map animation studio with keyframes, terrain, routes, objects, audio, and video export",
   "scripts": {
+    "test:map-trade": "node tests/map-trade.test.mjs",
+    "test:map-medieval": "node tests/map-medieval-objects.test.mjs",
     "test:landing:browser": "node tests/landing-map.browser.test.mjs",
     "test:map-direct-edit:browser": "node tests/map-direct-edit.browser.test.mjs",
     "test:map-highlight-exclusions:browser": "node tests/map-highlight-exclusions.browser.test.mjs",

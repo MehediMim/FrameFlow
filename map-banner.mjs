@@ -1,3 +1,4 @@
+import { drawPlaqueText } from './map-plaque-text.mjs';
 // A hanging image standard: the crossbar is fixed, the cloth flexes below it.
 export function bannerPoint(u, v, width, height, seconds, strength = .45, speed = 1) {
   const phase = seconds * speed * 3.2, bend = strength * v * v;
@@ -36,13 +37,7 @@ export function drawBanner(c, s, color, a, seconds, img = null) {
     c.fillStyle='#e8e3d6';c.strokeStyle='#706c63';c.lineWidth=s*.025;
     c.beginPath();c.moveTo(-w/2,y);c.lineTo(w/2,y);c.lineTo(w/2-s*.05,y+s*.78);c.lineTo(-w/2+s*.05,y+s*.78);c.closePath();c.fill();c.stroke();
     if(a.bannerTitle){
-      c.fillStyle='#242323';c.textAlign='center';c.textBaseline='middle';
-      let fs=s*.25;c.font=`700 ${fs}px Georgia, serif`;
-      const words=a.bannerTitle.trim().split(/\s+/),lines=[''];
-      for(const word of words){const i=lines.length-1,test=(lines[i]+' '+word).trim();if(c.measureText(test).width>w*.85&&i===0&&lines[i])lines.push(word);else lines[i]=test;}
-      const measured=Math.max(...lines.map(line=>c.measureText(line).width),1);
-      fs*=Math.min(1,w*.87/measured);c.font=`700 ${fs}px Georgia, serif`;
-      lines.forEach((line,i)=>c.fillText(line,0,y+s*.39+(i-(lines.length-1)/2)*fs*1.15));
+      drawPlaqueText(c,s,{...a,glyph:'banner'},a.bannerTitle,0,y+s*.39,w*.87,s*.64,true);
     }
     bar(-w/2-s*.09,y-s*.08,w+s*.18,s*.12);
   }

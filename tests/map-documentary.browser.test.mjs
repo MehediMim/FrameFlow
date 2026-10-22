@@ -69,7 +69,7 @@ try {
   let project=await stored();
   assert.equal(project.theme,'documentary');assert.equal(project.texture.type,'paper');assert.equal(project.atlasLabels.caps,true);
   assert.equal(await evaluate(`document.querySelector('#mTerrainBox').hidden`),false);
-  assert.equal(await evaluate(`document.querySelector('#mTerrainLow').value`),'#aaa783');
+  assert.equal(await evaluate(`document.querySelector('#mTerrainLow').value`),'#829888');
   assert.deepEqual(project.actions,before.actions,'applying look preserves existing clips');
   await evaluate(`document.querySelector('#mUndo').click()`);
   assert.equal((await stored()).theme,before.theme,'look is undoable');
@@ -78,14 +78,14 @@ try {
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);
   await change('[data-mf="glyph"]','radioOperator');
   assert.equal((await stored()).actions.at(-1).glyph,'radioOperator');
-  await evaluate(`document.querySelector('[data-madd="label"]').click()`);
-  assert.equal((await stored()).actions.at(-1).labelStyle.font,'Oswald');
-  assert.equal((await stored()).actions.at(-1).labelStyle.caps,true);
+  assert.equal((await stored()).labelStyle.font,'Oswald');
+  assert.equal((await stored()).labelStyle.caps,true);
   project=await stored();await evaluate('location.reload()');
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
-  assert.deepEqual(await stored(),project,'documentary look, new troop and label survive reload');
+  await waitFor(`document.querySelector('#mTheme').value==='documentary' && document.querySelector('#mTerrainLow').value==='#829888'`);
+  assert.deepEqual(await stored(),project,'documentary look, new troop and label style survive reload');
   await evaluate(`document.querySelector('#mTerrainReset').click()`);
-  assert.equal(await evaluate(`document.querySelector('#mTerrainLow').value`),'#aaa783','terrain reset keeps documentary defaults');
+  assert.equal(await evaluate(`document.querySelector('#mTerrainLow').value`),'#829888','terrain reset keeps documentary defaults');
   // Draw the complete export path with deterministic DEM fixture tiles, without
   // depending on an external terrain server for visual regression checks.
   const result=await evaluate(`(async()=>{

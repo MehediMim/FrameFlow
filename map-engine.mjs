@@ -13,6 +13,7 @@ import { armyCopies, validateArmyUnits } from './map-armies.mjs';
 import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { DOCUMENTARY_TERRAIN, DOCUMENTARY_LABEL } from './map-documentary.mjs';
+import { validatePlaqueStyle } from './map-plaque-text.mjs';
 import { validatePathAnimation } from './map-path-animation.mjs';
 import { validPolygon } from './map-area-selection.mjs';
 import { transformGroupObject, validateObjectGroups } from './map-object-groups.mjs';
@@ -43,7 +44,7 @@ export const yToLat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / RAD;
 
 // ---------------------------------------------------------------- Themes
 export const THEMES = {
-  documentary: { label: 'War documentary · archival terrain', relief: true, terrain: DOCUMENTARY_TERRAIN, void: '#b6ab8e', ocean: '#859795', land: ['#aaa783', '#b0ac89', '#b8b18f', '#a5a180', '#c0b596'], border: '#4b4c3b', borderA: .62, bw: .9, grat: '#494e42', gratA: .2, dim: '#2b2b20', vignette: .2, pill: 'rgba(233,223,197,.94)', pillText: '#34392e' },
+  documentary: { label: 'War documentary · colored terrain', relief: true, terrain: DOCUMENTARY_TERRAIN, territoryTint: .72, void: '#263d4a', ocean: '#345772', land: ['#4a9c91', '#866083', '#bf643c', '#b39a4d', '#537d94'], border: '#303d36', borderA: .42, bw: .75, grat: '#c8d4ca', gratA: .12, dim: '#192c30', vignette: .24, pill: 'rgba(38,49,43,.94)', pillText: '#eee6cf' },
   relief: { label: 'Cartographic Relief', relief: true, void: '#263f4b', ocean: '#246c93', land: ['#596653', '#596653', '#596653', '#596653', '#596653'], border: '#45534a', borderA: .42, bw: .65, grat: '#dce5da', gratA: .12, dim: '#14242a', vignette: .12, pill: 'rgba(31,43,42,.9)', pillText: '#f5f0dc' },
   earth: { label: 'Earth vector', void: '#0b1620', ocean: '#a8d5ee', land: ['#e3ebc6', '#dbe7bc', '#e8e8c8', '#d8e5c3', '#e5e1c1'], border: '#ffffff', borderA: .9, bw: 1.1, grat: '#ffffff', gratA: .28, dim: '#06121c', vignette: .16, pill: 'rgba(12,28,40,.9)', pillText: '#ffffff' },
   dark: { label: 'Night', void: '#03060a', ocean: '#0c1a28', land: ['#1a2a3a', '#1d2e3f', '#182736', '#1b2c3b', '#203243'], border: '#3d5b75', borderA: .95, bw: 1, grat: '#6f9bbd', gratA: .12, dim: '#000000', vignette: .35, pill: 'rgba(235,242,248,.92)', pillText: '#0b1620' },
@@ -673,7 +674,10 @@ export function mapFontsUsed(proj) {
   const out = new Set([cleanFont(labelStyleOf(proj).font)]);
   const atlas = atlasLabelSettings(proj.atlasLabels);
   if (atlas.countries || atlas.oceans) out.add(cleanFont(atlas.font));
-  for (const a of proj.actions) if (a.labelStyle?.font) out.add(cleanFont(a.labelStyle.font));
+  for (const a of proj.actions) {
+    if (a.labelStyle?.font) out.add(cleanFont(a.labelStyle.font));
+    if(a.type==='object'&&['banner','portrait'].includes(a.glyph))out.add(cleanFont(a.plaqueFont||'Georgia'));
+  }
   return [...out];
 }
 function drawLabel(ctx, v, th, l, st) {
@@ -950,7 +954,14 @@ function drawBase(ctx, v, geo, th, proj) {
     ctx.beginPath();
     for (const r of f.rings) { loadXY(v, r.xy, r.n, k); emit(ctx, v, r.n, true); }
     ctx.fillStyle = fill || '#000';
-    if (!fill) { /* imagery: outline only */ } else if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
+    if (!fill) {
+      // Color territories over the DEM while preserving its ridges and valleys.
+      if (v.img && th.territoryTint) {
+        ctx.save(); ctx.globalCompositeOperation = 'hard-light';
+        ctx.globalAlpha = th.territoryTint; ctx.fillStyle = th.land[f.tint];
+        ctx.fill('evenodd'); ctx.restore();
+      }
+    } else if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
     ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;
   };
   const fillOf = (f, k) => (v.img ? null : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
@@ -1511,7 +1522,7 @@ function badgeEntry(src) {
 }
 /** Resolves once every badge picture in the project has loaded, so exports never miss one. */
 export function preloadBadges(proj) {
-  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'highlight' && a.highlightFill === 'flag') || (a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork'].includes(a.glyph))) && a.image).map(a => a.image))];
+  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'highlight' && a.highlightFill === 'flag') || (a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait'].includes(a.glyph))) && a.image).map(a => a.image))];
   return Promise.all(srcs.map(src => new Promise(done => {
     const e = badgeEntry(src); if (!e || e.ok || e.failed) { done(); return; }
     e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
@@ -1949,7 +1960,7 @@ export function validateMapProject(p) {
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
-    if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner', 'artwork'].includes(a.glyph))) {
+    if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait'].includes(a.glyph))) {
       if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
       if (a.mode !== undefined && !Object.hasOwn(PIN_MODES, a.mode)) throw Error('Invalid pin movement.');
       if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid pin destination.');
@@ -1972,6 +1983,7 @@ export function validateMapProject(p) {
     if (a.type === 'plane' && ((a.showRouteLabels !== undefined && typeof a.showRouteLabels !== 'boolean') || (a.routeLabelMode !== undefined && !['auto', 'country', 'region'].includes(a.routeLabelMode)) || (a.routeLabelTiming !== undefined && !['all', 'visited'].includes(a.routeLabelTiming)))) throw Error('Invalid route label settings.');
     const inList = (list, x) => list.some(([k]) => k === x);
     if (a.type === 'object') {
+      validatePlaqueStyle(a);
       validateObjectKeys(a);
       if(a.sizeMode!==undefined&&!['screen','map'].includes(a.sizeMode))throw Error('Invalid object sizing mode.');
       if(a.sizeZoom!==undefined&&!num(a.sizeZoom,0,14))throw Error('Invalid object reference zoom.');

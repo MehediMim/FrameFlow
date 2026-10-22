@@ -10,6 +10,8 @@ import { MODERN_OBJECTS, CIVILIAN_OBJECTS } from './map-modern-objects.mjs';
 import { TIME_OBJECTS } from './map-time-objects.mjs';
 import { LANDMARK_OBJECTS } from './map-landmark-objects.mjs';
 import { PEOPLE_OBJECTS } from './map-people-objects.mjs';
+import { MEDIEVAL_OBJECTS, drawPortrait } from './map-medieval-objects.mjs';
+import { TRADE_OBJECTS } from './map-trade-objects.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
@@ -23,9 +25,9 @@ const circ = (c, x, y, r, fill, s) => { c.beginPath(); c.arc(x * s, y * s, r * s
 // Each icon is drawn in a box of about -1..1 (s = half size in px), facing right.
 // rot: turns fully to its heading when it moves; otherwise it just mirrors. air: floats above the ground.
 export const OBJECT_ICONS = {
-  image: { label: 'Image badge', color: '#ffffff' },
-  artwork: { label: 'SVG / PNG image', color: '#ffffff' },
-  banner: { label: 'Hanging image flag', color: '#b89963' },
+  image: { label: 'Image badge', color: '#ffffff', group:'images' },
+  artwork: { label: 'SVG / PNG image', color: '#ffffff', group:'images' },
+  banner: { label: 'Hanging image flag', color: '#b89963', group:'images' },
   army: { label: 'Mixed army formation', color: '#9d4d40', group:'armies', historic:true, draw:(c,s,col,t)=>{for(const x of[-.55,.05,.65]){c.save();c.translate(x*s,0);OBJECT_ICONS.musketeer.draw(c,s*.55,col,t);c.restore();}} },
   ...HISTORIC_OBJECTS,
   ...SUBCONTINENT_OBJECTS,
@@ -35,6 +37,8 @@ export const OBJECT_ICONS = {
   ...TIME_OBJECTS,
   ...LANDMARK_OBJECTS,
   ...PEOPLE_OBJECTS,
+  ...MEDIEVAL_OBJECTS,
+  ...TRADE_OBJECTS,
   flag: { label: 'Flag', color: '#e63946', draw: (c, s, col, t) => { const top = [], bot = []; for (let i = 0; i <= 10; i++) { const x = .03 + i / 10 * .9, w = Math.sin(t * .2 + i * .6) * .05 * (i / 10 + .3); top.push([x, -.98 + w]); bot.push([x, -.45 + w]); } poly(c, [...top, ...bot.reverse()], col, s); rect(c, -.05, -1, .08, 1.4, light, s, .03); } },
   checkpoint: { label: 'Checkpoint', color: '#c9a227', draw: (c, s, col) => { rect(c, -.9, -.1, .5, .5, metal, s); rect(c, -.4, .08, 1.3, .12, '#e63946', s, .02); rect(c, -.05, .08, .2, .12, light, s, .01); rect(c, .4, .08, .2, .12, light, s, .01); rect(c, .85, -.1, .12, .5, dark, s, .02); } },
   storm: { label: 'Storm', color: '#7aa0c4', draw: (c, s, col) => { rect(c, -.75, -.2, 1.5, .35, col, s, .15); circ(c, -.4, -.2, .35, col, s); circ(c, 0, -.4, .45, col, s); circ(c, .4, -.2, .35, col, s); poly(c, [[0, .05], [-.25, .55], [0, .5], [-.1, 1], [.3, .35], [.05, .4]], '#ffd166', s); } },
@@ -93,11 +97,12 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   shadow.addColorStop(0,'rgba(0,0,0,.24)');shadow.addColorStop(.55,'rgba(0,0,0,.12)');shadow.addColorStop(1,'rgba(0,0,0,0)');
   c.globalAlpha=alpha;c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
-  if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
+  if (ang !== null && !['banner','portrait'].includes(a.glyph)) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
   if(a.damageState==='destroyed')drawRubble(c,s,['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph));
   else{
-    if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
+    if(a.glyph==='portrait')drawPortrait(c,s,a.color,a,H.objectImage?.(a.image));
+    else if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
     else if(a.glyph==='artwork') {
       const img=H.objectImage?.(a.image);
       if(img){const factor=3.5*s/Math.max(img.naturalWidth,img.naturalHeight),w=img.naturalWidth*factor,h=img.naturalHeight*factor;c.drawImage(img,-w/2,-h/2,w,h);}
@@ -107,7 +112,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
     drawDamage(c,s,a.damageState,t/(v.fps||30));
   }
   c.restore();
-  if (a.showLabel) { const off = -s * (ic.labelOffset ?? (a.glyph==='banner'?6:ic.historic?2.8:1.5)) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
+  if (a.showLabel && a.glyph!=='portrait') { const off = -s * (ic.labelOffset ?? (a.glyph==='banner'?6:ic.historic?2.8:1.5)) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
 }
 
 // ---------------------------------------------------------------- effects

@@ -8,6 +8,7 @@
     "test:map-lighting-network": "node tests/map-lighting-network.test.mjs",
     "test:map-lighting-network:browser": "node tests/map-lighting-network.browser.test.mjs",
     "test:map-object-animation": "node tests/map-object-animation.test.mjs",
+    "test:map-isometric:performance": "node tests/map-isometric-performance.browser.test.mjs",
     "test:map-isometric": "node tests/map-isometric.test.mjs",
     "test:map-strategy": "node tests/map-strategy.test.mjs",
     "test:map-strategy:browser": "node tests/map-strategy.browser.test.mjs",

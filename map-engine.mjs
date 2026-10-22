@@ -24,7 +24,7 @@ import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, bor
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=path-flow-1';
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
-import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
+import { drawIsometricObject, drawIsometricShadow, withObjectPreview } from './map-isometric-objects.mjs';
 import { isIsometricView } from './map-object-view.mjs';
 import { sceneLightingAt, validateLightingEffect } from './map-lighting-keys.mjs';
 import { lightingPreset } from './map-lighting.mjs';
@@ -1711,7 +1711,7 @@ const OBJ_H = { drawBadge, objectLocationAt, objectImage: src => { const e = bad
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
   proj={...proj,lighting:sceneLightingAt(proj,frame)};
-  return withSceneLighting(proj.lighting,()=>drawMapScene(ctx,W,H,proj,frame,geo,previewCamera,{cacheBase}));
+  return withObjectPreview(cacheBase,()=>withSceneLighting(proj.lighting,()=>drawMapScene(ctx,W,H,proj,frame,geo,previewCamera,{cacheBase})));
 }
 function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
   proj={...proj,actions:mapStackOrder(proj.actions)};
@@ -1760,7 +1760,8 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   drawTexture(ctx, W, H, proj.texture);
   // Collect labels while painting foreground geometry onto one reusable surface.
   // Composite that geometry after text so labels never cover objects or paths.
-  const background=ctx,foreground=mapForeground(ctx,W,H);
+  const hasForeground=proj.actions.some(a=>['shape','plane','pin','object','effect'].includes(a.type)&&!(a.type==='effect'&&a.fx==='sunlight')&&actAlpha(a,frame));
+  const background=ctx,foreground=hasForeground?mapForeground(ctx,W,H):null;
   if(foreground){ctx=foreground.context;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';}
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
   v.objectFacings=new Map();

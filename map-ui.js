@@ -50,6 +50,7 @@ import { lightingOf, lightingPreset } from './map-lighting.mjs';
 import { planeRoute } from './map-engine.mjs?v=path-flow-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
+const objectPreviewStates=new WeakMap();
 const WALL_GLYPHS = ['stoneWall','palisade','earthwork','gatehouse','stoneFort','watchtower','bastion'];
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -646,9 +647,12 @@ function updateObjectInspector(a) {
   }
   const previewRoots=[$('#mInspector'),document.querySelector('#mMapContext'),document.querySelector('body > .m-object-cascade'),...$$('#mItems [data-mid]').filter(el=>el.dataset.mid===a.id)];
   for(const root of previewRoots.filter(Boolean)){
+    const stamp=pose.objectView+':'+!!pose.mirror,previous=objectPreviewStates.get(root);
+    if(previous?.stamp===stamp&&previous.first===root.firstElementChild)continue;
     let changedView=false;
-    for(const img of root.querySelectorAll('img[data-object-view]')){img.style.transform=pose.mirror?'scaleX(-1)':'';if(img.dataset.objectView!==pose.objectView){img.dataset.objectView=pose.objectView;changedView=true;}}
+    for(const img of root.querySelectorAll('img[data-object-view]')){const transform=pose.mirror?'scaleX(-1)':'';if(img.style.transform!==transform)img.style.transform=transform;if(img.dataset.objectView!==pose.objectView){img.dataset.objectView=pose.objectView;changedView=true;}}
     if(changedView)paintObjectPreviews(root);
+    objectPreviewStates.set(root,{stamp,first:root.firstElementChild});
   }
   $$('#mInspector [data-object-key]').forEach(el=>{const field=el.dataset.objectKey,has=a.objectKeys?.some(k=>k.frame===frame&&k.values[field]!==undefined);el.disabled=outside;el.classList.toggle('current',!!has);el.textContent=(has?'Remove ':'Key ')+({size:'size',objectAngle:'rotation',objectView:'view',damageState:'damage'}[field]);});
 }

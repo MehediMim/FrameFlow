@@ -106,6 +106,8 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if (alpha <= 0 || sc <= 0) return;
   const lift = ic.air ? 38 * size * u : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
   if (g.z < v.near) return;
+  const margin=Math.max(s*sc*10,256*u)+Math.abs(dx)+Math.abs(dy);
+  if(Number.isFinite(v.W)&&Number.isFinite(v.H)&&(g.x < -margin||g.x > v.W+margin||g.y < -margin||g.y > v.H+margin))return;
   c.save();
   const isometric=isIsometricView(a),angle=rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180;
   const movingAngle=!isometric&&ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;

@@ -95,8 +95,11 @@ function projectedFace(face,index,view){
 function paintOrder(faces,view){
   const nodes=faces.map((face,index)=>projectedFace(face,index,view)).filter(n=>n.plane);
   nodes.sort((a,b)=>a.face.depth-b.face.depth||a.index-b.index);
-  for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
-    const a=nodes[i],b=nodes[j];
+  // Sweep screen X so separated parts never enter polygon intersection tests.
+  const spatial=nodes.toSorted((a,b)=>a.x0-b.x0||a.index-b.index);
+  for(let i=0;i<spatial.length;i++)for(let j=i+1;j<spatial.length;j++){
+    const a=spatial[i],b=spatial[j];
+    if(b.x0>=a.x1-1e-7)break;
     if(Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)<1e-7||Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0)<1e-7)continue;
     const overlap=intersection(a.p,b.p);if(overlap.length<3)continue;
     const area=Math.abs(overlap.reduce((sum,p,k)=>{const q=overlap[(k+1)%overlap.length];return sum+p[0]*q[1]-p[1]*q[0];},0));if(area<1e-8)continue;
@@ -104,8 +107,23 @@ function paintOrder(faces,view){
     const delta=(a.plane[0]-b.plane[0])*x+(a.plane[1]-b.plane[1])*y+a.plane[2]-b.plane[2];
     const aFirst=Math.abs(delta)<1e-7?a.index<b.index:delta<0,back=aFirst?a:b,front=aFirst?b:a;back.after.push(front);front.incoming++;
   }
-  const ordered=[];
-  while(ordered.length<nodes.length){const next=nodes.find(n=>!n.done&&n.incoming===0)||nodes.find(n=>!n.done);next.done=true;ordered.push(next);for(const n of next.after)n.incoming--;}
+  // Pick the earliest ready face with a heap rather than rescanning every face.
+  // Original depth order remains the tie-breaker, including overlap cycles.
+  const ordered=[],ready=[];
+  const enqueue=node=>{let i=ready.length;ready.push(node);while(i){const p=(i-1)>>1;if(ready[p].rank<=node.rank)break;ready[i]=ready[p];i=p;}ready[i]=node;};
+  const dequeue=()=>{
+    const first=ready[0],last=ready.pop();
+    if(ready.length){let i=0;while(i*2+1<ready.length){let child=i*2+1;if(child+1<ready.length&&ready[child+1].rank<ready[child].rank)child++;if(last.rank<=ready[child].rank)break;ready[i]=ready[child];i=child;}ready[i]=last;}
+    return first;
+  };
+  nodes.forEach((node,rank)=>{node.rank=rank;if(!node.incoming)enqueue(node);});
+  let fallback=0;
+  while(ordered.length<nodes.length){
+    while(ready.length&&ready[0].done)dequeue();
+    while(nodes[fallback]?.done)fallback++;
+    const next=ready.length?dequeue():nodes[fallback];next.done=true;ordered.push(next);
+    for(const n of next.after)if(--n.incoming===0&&!n.done)enqueue(n);
+  }
   return ordered.map(({face,p})=>({face,p}));
 }
 export class IsoScene{
@@ -134,14 +152,17 @@ export class IsoScene{
     for(let i=0;i<n;i++){const a=i*TAU/n,b=(i+1)*TAU/n;this.face([[x+Math.cos(a)*r,y+Math.sin(a)*r,z],[x+Math.cos(b)*r,y+Math.sin(b)*r,z],[x,y,z+h]],color,.8+.25*Math.cos(a-2));}
   }
   cylinder(x,y,z,r,h,color,n=12){
+    if(this.lowDetail)n=Math.min(n,10);
     const points=Array.from({length:n},(_,i)=>[x+Math.cos(i*TAU/n)*r,y+Math.sin(i*TAU/n)*r]);this.prism(points,z,h,color);
   }
   frustum(x,y,z,r0,r1,h,color,n=12){
+    if(this.lowDetail)n=Math.min(n,8);
     const lower=Array.from({length:n},(_,i)=>[x+Math.cos(i*TAU/n)*r0,y+Math.sin(i*TAU/n)*r0,z]);
     const upper=Array.from({length:n},(_,i)=>[x+Math.cos(i*TAU/n)*r1,y+Math.sin(i*TAU/n)*r1,z+h]);
     this.face(upper,color,1.15);for(let i=0;i<n;i++)this.face([lower[i],lower[(i+1)%n],upper[(i+1)%n],upper[i]],color,.82+.2*Math.cos(i*TAU/n-2));
   }
   ball(x,y,z,rx,ry,rz,color,n=12,rings=8){
+    if(this.lowDetail){n=Math.min(n,8);rings=Math.min(rings,4);}
     const p=(i,j)=>{const a=i*TAU/n,b=-Math.PI/2+j*Math.PI/rings;return[x+rx*Math.cos(a)*Math.cos(b),y+ry*Math.sin(a)*Math.cos(b),z+rz*Math.sin(b)];};
     const light=(i,j)=>{const a=i*TAU/n,b=-Math.PI/2+j*Math.PI/rings,N=[Math.cos(a)*Math.cos(b)/rx,Math.sin(a)*Math.cos(b)/ry,Math.sin(b)/rz],l=Math.hypot(...N)||1;return illumination(N.map(v=>v/l),this.lighting);};
     for(let j=0;j<rings;j++)for(let i=0;i<n;i++){
@@ -150,6 +171,7 @@ export class IsoScene{
     }
   }
   tube(a,b,r0,r1,color,n=10){
+    if(this.lowDetail)n=Math.min(n,6);
     const v=b.map((q,i)=>q-a[i]),l=Math.hypot(...v)||1,u=Math.abs(v[2])/l<.9?[-v[1],v[0],0]:[1,0,0],ul=Math.hypot(...u);for(let i=0;i<3;i++)u[i]/=ul;
     const w=[v[1]*u[2]-v[2]*u[1],v[2]*u[0]-v[0]*u[2],v[0]*u[1]-v[1]*u[0]].map(q=>q/l);
     const ring=(p,r)=>Array.from({length:n},(_,j)=>p.map((q,i)=>q+r*(u[i]*Math.cos(j*TAU/n)+w[i]*Math.sin(j*TAU/n))));

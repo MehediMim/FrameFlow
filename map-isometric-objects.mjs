@@ -8,6 +8,13 @@ import { OBJECT_ANIMATIONS, objectAnimationTime } from './map-object-animation.m
 // used here: these miniatures are built from world-space volumes and surfaces.
 const STONE='#b4b0a1',WOOD='#95643e',IRON='#56646b',GLASS='#7cb2bf',SKIN='#d5a176',GOLD='#d3a64d',WHITE='#eee6d1';
 const models={};
+let previewRendering=false;
+export function withObjectPreview(enabled,draw){const previous=previewRendering;previewRendering=enabled;try{return draw();}finally{previewRendering=previous;}}
+function previewDetail(c,size){
+  if(!previewRendering)return false;
+  const m=c.getTransform?.(),scale=m?Math.max(Math.hypot(m.a,m.b),Math.hypot(m.c,m.d)):1;
+  return size*scale<64;
+}
 const register=(family,recipes)=>{for(const [key,options]of Object.entries(recipes))models[key]={family,forward:['mounted','animal','vehicle','gun','ship','aircraft','bridge'].includes(family)||['bicycle','palanquin'].includes(key)?'x':'y',options:{...options,rustic:key.startsWith('kingdom')}};};
 function slab(m,color='#8c9869',w=2.25,d=1.7){
   m.face([[-w*.6,-d*.6,-.012],[w*.6,-d*.6,-.012],[w*.6,d*.6,-.012],[-w*.6,d*.6,-.012]],color,1,false,'ground');m.faces.at(-1).groundColor=color;
@@ -566,7 +573,7 @@ const families={
     if(!o.battery){gun(m,o,c);return;}
     slab(m);
     for(const y of[-.5,.45]){
-      const sub=new IsoScene(m.view);sub.wheelPhase=m.wheelPhase;gun(sub,o,c);
+      const sub=new IsoScene(m.view);sub.lowDetail=m.lowDetail;sub.wheelPhase=m.wheelPhase;gun(sub,o,c);
       for(const f of sub.faces){f.points=f.points.map(([x,Y,z])=>[x*.75,Y*.75+y,z*.75]);f.depth=f.points.reduce((s,[x,Y,z])=>s+x+Y+z,0)/f.points.length;m.faces.push(f);}
     }
   },
@@ -593,9 +600,10 @@ export function objectAnimationOf(glyph,action={}){
   }
   return 'auto';
 }
-export function createIsometricModel(glyph,color,t=0,action={},image,view='isometric'){
+export function createIsometricModel(glyph,color,t=0,action={},image,view='isometric',lowDetail=false){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
   const scene=new IsoScene(view);scene.material=({person:'cloth',mounted:'cloth',formation:'cloth',vehicle:'paint',ship:'paint',aircraft:'paint',fort:'stone',building:'plaster',landmark:'stone',bridge:'metal',nature:'earth',goods:'wood',image:'wood',time:'metal',accessory:'metal'})[recipe.family]||'matte';
+  scene.lowDetail=lowDetail;
   // Each recipe declares its native forward axis. Both isometric views face
   // right: +X projects down-right, while -Y projects up-right from behind.
   const turns=view==='side'?0:(recipe.forward==='y'?1:0)+(view==='isometricBack'?1:0);
@@ -619,49 +627,53 @@ export function createIsometricModel(glyph,color,t=0,action={},image,view='isome
   }
   return scene;
 }
-function modelFor(glyph,color,t,action,image,view='isometric'){
+function modelFor(glyph,color,t,action,image,view='isometric',lowDetail=false){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
   // Keep immutable static geometry and its face ordering between animation
   // frames. Size, movement, damage and canvas rotation remain outside the model.
   let imageId=0;if(image){if(!imageIds.has(image))imageIds.set(image,++imageSerial);imageId=imageIds.get(image);}
-  const animation=objectAnimationOf(glyph,action),key=JSON.stringify([glyph,color,view,imageId,currentSceneLighting().key,animation,action.objectAnimationSpeed??1,...imageSettings.map(k=>action[k])]);
+  const animation=objectAnimationOf(glyph,action),key=JSON.stringify([glyph,color,view,lowDetail,imageId,currentSceneLighting().key,animation,action.objectAnimationSpeed??1,...imageSettings.map(k=>action[k])]);
   if(animation!=='none'&&(animation!=='auto'||animated(recipe))){
-    let previous=animatedModels.get(key);
-    if(!previous||previous.time!==t){previous={scene:createIsometricModel(glyph,color,t,action,image,view),time:t};animatedModels.set(key,previous);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
-    return {scene:previous.scene,key,animated:true};
+    const frameKey=key+':frame:'+t;
+    let scene=animatedModels.get(frameKey);
+    if(!scene){scene=createIsometricModel(glyph,color,t,action,image,view,lowDetail);animatedModels.set(frameKey,scene);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
+    return {scene,key:frameKey,animated:true};
   }
   let scene=modelCache.get(key);
-  if(!scene){scene=createIsometricModel(glyph,color,t,action,image,view);modelCache.set(key,scene);if(modelCache.size>256)modelCache.delete(modelCache.keys().next().value);}
+  if(!scene){scene=createIsometricModel(glyph,color,t,action,image,view,lowDetail);modelCache.set(key,scene);if(modelCache.size>256)modelCache.delete(modelCache.keys().next().value);}
   return {scene,key,animated:false};
 }
 export function drawIsometricObject(c,glyph,size,color,t=0,action={},image,{shadows=true}={}){
-  const model=modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric');
-  return model.animated?model.scene.draw(c,size,{shadows}):drawStaticModel(c,model.scene,size,model.key,shadows);
+  const model=modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric',previewDetail(c,size));
+  return drawStaticModel(c,model.scene,size,model.key,shadows);
 }
 export function drawSideObject(c,glyph,size,color,t=0,action={},image){
-  const model=modelFor(glyph,color,t,action,image,'side');
-  return model.animated?model.scene.draw(c,size,{shadows:false}):drawStaticModel(c,model.scene,size,model.key,false);
+  const model=modelFor(glyph,color,t,action,image,'side',previewDetail(c,size));
+  return drawStaticModel(c,model.scene,size,model.key,false);
 }
 export function drawIsometricShadow(c,glyph,size,color,t=0,action={},image,pose={}){
-  return drawModelShadow(c,modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric').scene,size,pose);
+  return drawModelShadow(c,modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric',previewDetail(c,size)).scene,size,pose);
 }
 const modelCache=new Map(),animatedModels=new Map(),imageIds=new WeakMap();let imageSerial=0;
 // Rasterize completed static geometry at the actual output scale. This avoids
 // repainting hundreds of material surfaces for every tree or infantry copy.
-// Animated models still render their changing geometry on every frame.
+// Animated copies share the raster for their exact timeline time as well.
 const rasterCache=new Map();let rasterPixels=0;
 if(typeof document!=='undefined')document.fonts?.addEventListener('loadingdone',()=>{rasterCache.clear();rasterPixels=0;});
 function drawStaticModel(c,scene,size,key,shadows){
   const matrix=c.getTransform?.();
   if(!matrix||(typeof OffscreenCanvas==='undefined'&&typeof document==='undefined'))return scene.draw(c,size,{shadows});
-  const ratio=Math.max(1,Math.ceil(Math.max(Math.hypot(matrix.a,matrix.b),Math.hypot(matrix.c,matrix.d))*2)/2),bounds=scene.bounds(shadows),padding=3;
+  const ratio=Math.max(1,Math.ceil(Math.max(Math.hypot(matrix.a,matrix.b),Math.hypot(matrix.c,matrix.d))*2)/2),cacheKey=key+':'+size+':'+ratio+':'+shadows;
+  const cached=rasterCache.get(cacheKey);
+  if(cached){c.drawImage(cached.canvas,cached.x/cached.ratio,cached.y/cached.ratio,cached.w/cached.ratio,cached.h/cached.ratio);return cached.bounds;}
+  const bounds=scene.bounds(shadows),padding=3;
   const x=Math.floor(bounds.left*size*ratio)-padding,y=Math.floor(bounds.top*size*ratio)-padding,w=Math.ceil(bounds.right*size*ratio)-x+padding,h=Math.ceil(bounds.bottom*size*ratio)-y+padding;
   if(w*h>4e6||w<=0||h<=0)return scene.draw(c,size,{shadows});
-  const cacheKey=key+':'+size+':'+ratio+':'+shadows;let entry=rasterCache.get(cacheKey);
+  let entry;
   if(!entry){
     const canvas=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(w,h):document.createElement('canvas');canvas.width=w;canvas.height=h;
     const target=canvas.getContext('2d');if(!target)return scene.draw(c,size,{shadows});
-    target.setTransform(ratio,0,0,ratio,-x,-y);scene.draw(target,size,{shadows});entry={canvas,x,y,w,h,ratio};
+    target.setTransform(ratio,0,0,ratio,-x,-y);scene.draw(target,size,{shadows});entry={canvas,x,y,w,h,ratio,bounds};
     while(rasterPixels+w*h>8e6&&rasterCache.size){const oldest=rasterCache.keys().next().value,previous=rasterCache.get(oldest);rasterPixels-=previous.w*previous.h;rasterCache.delete(oldest);}
     rasterCache.set(cacheKey,entry);rasterPixels+=w*h;
   }

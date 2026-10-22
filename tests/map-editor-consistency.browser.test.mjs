@@ -220,7 +220,8 @@ try {
   await rightClick(await point(-12,47));
   assert.ok(await evaluate(`document.querySelector('[data-direct-add-menu]').hidden&&!document.querySelector('#mMapAddContext > [data-direct-add-object]')`),'creation commands are nested inside Add');
   await evaluate(`document.querySelector('[data-direct-add]').click()`);
-  assert.ok(await evaluate(`!document.querySelector('[data-direct-add-menu]').hidden&&['object','pin','shape','effect','highlight','border','scene','audio'].every(key=>document.querySelector('[data-direct-add-'+key+']')?.closest('[data-direct-add-menu]'))`),'Add includes all eight map tools');
+  assert.ok(await evaluate(`!document.querySelector('[data-direct-add-menu]').hidden&&['object','pin','shape','effect','scene','audio'].every(key=>document.querySelector('[data-direct-add-'+key+']')?.closest('[data-direct-add-menu]'))`),'Add includes tools that do not require a region selection');
+  assert.equal(await evaluate(`document.querySelectorAll('#mMapAddContext [data-direct-add-highlight],#mMapAddContext [data-direct-add-border],#mMapAddContext [data-direct-highlight],#mMapAddContext [data-direct-border]').length`),0,'Add omits Border and Highlight without a selected region');
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));`);
   assert.ok(await evaluate(`!!document.activeElement.closest('[data-direct-add-menu]')`),'Add supports keyboard submenu navigation');
   await evaluate(`document.querySelector('input[type=file][accept^="audio/"]').addEventListener('click',e=>{window.__contextAudioRequested=true;e.preventDefault();},{once:true});document.querySelector('[data-direct-add-audio]').click()`);

@@ -199,7 +199,16 @@ try {
 
   const rightPoint=await point(-6,44);
   await rightClick(rightPoint);await waitFor(`!document.querySelector('#mMapAddContext').hidden`);
-  await evaluate(`document.querySelector('[data-direct-add]').click();document.querySelector('[data-direct-add-object]').click()`);
+  const clickMenu=async selector=>{
+    const p=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...p,buttons:0});
+    await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...p,button:'left',buttons:1,clickCount:1});
+    await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...p,button:'left',buttons:0,clickCount:1});
+  };
+  const beforePlace=(await stored()).actions.length;
+  await clickMenu('[data-direct-add]');
+  await clickMenu('[data-direct-add-object]');
+  assert.equal((await stored()).actions.length,beforePlace+1,'a real pointer click adds an object on the first attempt');
   const placed=(await stored()).actions.at(-1);
   assert.equal(placed.type,'object');assert.equal(placed.enter,'none');
   assert.ok(Math.abs(placed.place.lon+6)<.01&&Math.abs(placed.place.lat-44)<.01,'right-click adds the object at that position: '+JSON.stringify(placed.place)+' frame='+await evaluate(`document.querySelector('#mFrame').value`));

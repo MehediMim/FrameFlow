@@ -51,7 +51,7 @@ export function installDirectMapEditing(api){
     const hide=()=>{sub.hidden=true;trigger.setAttribute('aria-expanded','false');};
     const show=()=>{for(const other of menu.querySelectorAll('[data-direct-submenu-panel]'))if(other!==sub){other.hidden=true;other.parentElement.querySelector('[data-direct-submenu]').setAttribute('aria-expanded','false');}sub.hidden=false;const r=trigger.getBoundingClientRect(),s=sub.getBoundingClientRect();trigger.setAttribute('aria-expanded','true');sub.style.left=Math.max(8,r.right+s.width+8<=innerWidth?r.right:r.left-s.width)+'px';sub.style.top=Math.max(8,Math.min(innerHeight-s.height-8,r.top))+'px';};
     trigger.onclick=show;holder.onpointerenter=show;holder.onpointerleave=hide;
-    holder.addEventListener('focusout',()=>queueMicrotask(()=>{if(!holder.contains(document.activeElement))hide();}));
+    holder.addEventListener('focusout',e=>{if(!holder.contains(e.relatedTarget))hide();});
     holder.append(trigger,sub);menu.append(holder);
   }
   function arrangeMenu(ids){
@@ -62,15 +62,10 @@ export function installDirectMapEditing(api){
   function addMenu(regions=false){
     contextSubmenu('Add','directAdd',sub=>{
       const place=contextPoint&&{kind:'point',name:'Map position',lon:contextPoint.lon,lat:contextPoint.lat};
-      const region=place&&regionAt(api.project(),api.geo(),place.lon,place.lat),country=place&&countryAt(api.geo(),place.lon,place.lat);
-      const target=region?{kind:'region',name:region,country:api.geo().byName.get(region)?.country}:country?{kind:'country',name:country}:place;
       const add=(type,extra)=>{contextPoint=null;lands.clear();selected.clear();api.add(type,extra);toolbar(true);api.draw();};
       for(const [type,title] of [['object','Object'],['pin','Pin / label'],['shape','Arrow / zone'],['effect','Effect']])menuButton(title,'directAdd'+type[0].toUpperCase()+type.slice(1),()=>add(type,type==='shape'?{path:[{lon:place.lon,lat:place.lat}]}:{place}),sub);
       if(regions){
         for(const type of ['highlight','border','label'])menuButton(type[0].toUpperCase()+type.slice(1)+' region'+(lands.size>1?'s':''),'direct'+type[0].toUpperCase()+type.slice(1),()=>applyLand(type),sub);
-      }else{
-        menuButton('Highlight','directAddHighlight',()=>add('highlight',{target}),sub);
-        const border=menuButton('Border','directAddBorder',()=>add('border',{target}),sub);border.disabled=!country&&!region;
       }
       menuButton('Scene panel','directAddScene',()=>add('scene',{}),sub);
       menuButton('Audio\u2026','directAddAudio',()=>api.addAudio?.(),sub);

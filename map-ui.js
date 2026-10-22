@@ -41,25 +41,14 @@ import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-anim
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
 import { ZONE_TERRAINS } from './map-strategy-terrain.mjs';
-import { OBJECT_VIEWS } from './map-object-view.mjs';
+import { OBJECT_CATEGORIES, objectEntries } from './map-object-catalog.mjs';
+import { objectViewOf, OBJECT_VIEWS } from './map-object-view.mjs';
 import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs';
 import { lightingAt, LIGHTING_FIELDS as SUN_FIELDS, putLightingKey, removeLightingKey, moveLightingKey } from './map-lighting-keys.mjs';
 import { lightingOf, lightingPreset } from './map-lighting.mjs';
 import { planeRoute } from './map-engine.mjs?v=path-flow-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
-const OBJECT_CATEGORIES = [
-  ['kingdom', 'Kingdom strategy · settlements & resources'],
-  ['images', 'Images, portraits & flags'], ['trade', 'Trade & cargo'],
-  ['transport', 'Travel & civilian transport'], ['places', 'Cities & everyday places'],
-  ['landmarks', 'Famous landmarks & infrastructure'], ['people', 'People & occupations'],
-  ['infrastructure', 'Infrastructure & clean energy'], ['nature', 'Nature & outdoors'],
-  ['subcontinent', 'India & subcontinent'], ['mughal', 'Mughal era'], ['company', 'East India Company'],
-  ['modern', 'Modern military'], ['documentary', 'Documentary · field troops'],
-  ['leaders', 'Leaders & characters'], ['time', 'Time & planning'],
-  ['general', 'Markers & other objects'], ['exploration', 'Exploration · Age of Sail'],
-  ['warfare', 'Warfare · 1500s–1600s'], ['defense', 'Defenses & walls'], ['armies', 'Army groups'],
-];
 const WALL_GLYPHS = ['stoneWall','palisade','earthwork','gatehouse','stoneFort','watchtower','bastion'];
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -419,7 +408,7 @@ function captureCamera() {
 function renderItems() {
   const its = displayItems();
   $('#mItemCount').textContent = its.length;
-  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(it.objectView||'normal')}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
+  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(objectViewOf(it))}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
   paintObjectPreviews($('#mItems'));
   $$('[data-mid]').forEach(el => el.onclick = e => selectFromList(el.dataset.mid,e));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current() || !!current().fullTimelineCamera;
@@ -605,7 +594,7 @@ function objectFields(a) {
   const artwork=()=>a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):bannerFields(a);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
   return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph,a.objectView)
-    +F.sel('objectView','Object view',a.objectView||'normal',Object.entries(OBJECT_VIEWS))
+    +F.sel('objectView','Object view',objectViewOf(a),Object.entries(OBJECT_VIEWS))
     +(imageObject?'<div class="section-title">YOUR IMAGE &amp; STYLE</div>'+artwork():'')
     +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
@@ -706,8 +695,9 @@ function battleFields(a) {
     + F.range('battleRange','Reach / spread area',a.battleRange??180,40,800,10,x=>x+' px')
     + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees'));
 }
-function objectPicker(glyph,view='normal') {
-  const entries=group=>Object.entries(OBJECT_ICONS).filter(([,icon])=>(icon.group||'general')===group).sort((a,b)=>a[1].label.localeCompare(b[1].label));
+function objectPicker(glyph,view='side') {
+  view=objectViewOf({objectView:view});
+  const entries=objectEntries;
   return `<div class="m-object-picker"><span class="mini-label">Object</span>
     <select data-object-type hidden aria-label="Object type">${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label])=>`<option value="${key}" ${key===(objectTypeFilters.get(sel)||'all')?'selected':''}>${esc(label)}</option>`).join('')}</select>
     <select data-mf="glyph" data-t="sel" aria-label="Object" hidden>${OBJECT_CATEGORIES.map(([group,label])=>`<optgroup label="${esc(label)}">${entries(group).map(([key,icon])=>`<option value="${key}" ${key===glyph?'selected':''}>${esc(icon.label)}</option>`).join('')}</optgroup>`).join('')}</select>

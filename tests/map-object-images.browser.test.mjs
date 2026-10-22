@@ -133,7 +133,7 @@ try {
   await waitFor(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1).image?.startsWith('data:image/png')`);
   assert.equal(await evaluate(`document.querySelector('.m-portrait-image-preview')?.src===JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1).image`),true,'uploaded image is previewed in the portrait inspector');
   const categories=await evaluate(`(()=>{const s=document.querySelector('[data-mf="glyph"]');return [...s.querySelectorAll('optgroup')].map(g=>({label:g.label,values:[...g.children].map(o=>o.value)}))})()`);
-  assert.deepEqual(categories.find(g=>g.label==='Images, portraits & flags').values.slice().sort(),['artwork','banner','image','portrait']);
+  assert.deepEqual(categories.find(g=>g.label==='Images, portraits & flags').values.slice().sort(),['artwork','banner','flag','image','portrait']);
   assert.ok(categories.find(g=>g.label==='Trade & cargo').values.includes('importGoods'));
   assert.ok(categories.find(g=>g.label==='Trade & cargo').values.includes('exportGoods'));
   await change('#mPlaqueFont','Georgia');
@@ -164,7 +164,7 @@ try {
     Object.entries(T.TRADE_OBJECTS).forEach(([key,icon],i)=>{const x=200+(i%3)*400,y=130+Math.floor(i/3)*260;g.save();g.translate(x,y);icon.draw(g,65,icon.color,0);g.restore();g.fillStyle='#303d36';g.font='18px Arial';g.textAlign='center';g.fillText(icon.label,x,y+105)});
     return{portraits,stable:first.every((v,i)=>v===second[i]),png:c.toDataURL(),tradeSheet:sheet.toDataURL()};
   })()`);
-  assert.equal(medieval.portraits,2,'uploaded portrait is drawn after preload');assert.equal(medieval.stable,true);
+  assert.equal(medieval.portraits,1,'uploaded portrait texture is cached after preload');assert.equal(medieval.stable,true);
   await writeFile(join(tmpdir(),'frameflow-medieval-objects.png'),Buffer.from(medieval.png.split(',')[1],'base64'));
   await writeFile(join(tmpdir(),'frameflow-trade-objects.png'),Buffer.from(medieval.tradeSheet.split(',')[1],'base64'));
   const video=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),V=await import('./map-video-export.mjs');const p=window.reviewProject;p.width=640;p.height=360;p.frames=2;p.fps=30;p.audioTracks=[];const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));await E.preloadBadges(p);const canvas=document.createElement('canvas');canvas.width=p.width;canvas.height=p.height;const b=await V.exportMapVideo({canvas,fps:p.fps,frames:p.frames,draw:f=>E.drawMap(canvas.getContext('2d'),p.width,p.height,p,f,geo)});return{size:b.size,type:b.type};})()`);

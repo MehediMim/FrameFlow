@@ -86,11 +86,48 @@ try {
   await evaluate(`document.querySelector('#mItems [data-mid]').click();document.querySelector('[data-mpick="place"]').click()`);
   await placeObjectAt(-3,49);
   assert.notDeepEqual((await saved()).actions[0].place,firstPosition,'the existing Position button allows repositioning');
+  assert.deepEqual(await evaluate(`[...document.querySelector('[data-mf="objectView"]').options].map(o=>[o.value,o.textContent])`),[['side','Side view'],['isometric','Isometric view']]);
+  await change('#mInspector [data-mf="objectView"]','isometric');
+  assert.equal((await saved()).actions[0].objectView,'isometric');
+  await change('#mInspector [data-mf="objectView"]','side');
+  assert.equal((await saved()).actions[0].objectView,'side');
+  const previews=await evaluate(`(async()=>{
+    const {OBJECT_ICONS}=await import('./map-objects.mjs');
+    const {objectPreview}=await import('./map-object-preview.mjs');
+    const failures=[];
+    for(const glyph of Object.keys(OBJECT_ICONS)){
+      const urls=['side','isometric'].map(view=>objectPreview(glyph,view));
+      if(urls[0]===urls[1])failures.push(glyph+': identical views');
+      for(const url of urls){
+        const img=new Image();img.src=url;await img.decode();
+        const c=document.createElement('canvas');c.width=c.height=112;const x=c.getContext('2d');x.drawImage(img,0,0);
+        if(!x.getImageData(0,0,112,112).data.some((v,i)=>i%4===3&&v>8))failures.push(glyph+': empty preview');
+      }
+    }
+    return failures;
+  })()`);
+  assert.deepEqual(previews,[],'every object has distinct, visible side and isometric previews');
+  const review=await evaluate(`(async()=>{
+    const {OBJECT_ICONS}=await import('./map-objects.mjs'),{objectPreview}=await import('./map-object-preview.mjs');
+    const c=document.createElement('canvas');c.width=1200;c.height=660;const x=c.getContext('2d');x.fillStyle='#eee9df';x.fillRect(0,0,c.width,c.height);
+    const samples=['doctor','kingdomVillager','house','kingdomHouse','medievalCastle','eiffelTower','car','tank','galleon','airliner','tree','clock'];
+    for(let i=0;i<samples.length;i++){
+      const glyph=samples[i],left=(i%4)*300,top=Math.floor(i/4)*220;
+      x.fillStyle='#263a3d';x.font='14px sans-serif';x.fillText(OBJECT_ICONS[glyph].label,left+12,top+22);
+      for(const [j,view]of ['side','isometric'].entries()){
+        const image=new Image();image.src=objectPreview(glyph,view);await image.decode();x.drawImage(image,left+12+j*145,top+35,128,128);
+        x.fillText(view==='side'?'Side view':'Isometric view',left+18+j*145,top+188);
+      }
+    }
+    return c.toDataURL().split(',')[1];
+  })()`);
+  await writeFile(join(tmpdir(),'frameflow-object-view-pairs.png'),Buffer.from(review,'base64'));
+
   await change('#mInspector [data-mf="glyph"]','stoneFort');
   assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], .m-object-library').length`),0,'object selection uses a compact nested picker');
   await evaluate(`document.querySelector('[data-object-menu]').open=true`);
   await waitFor(`!!document.querySelector('body > .m-object-cascade')`);
-  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="modern"]').dispatchEvent(new PointerEvent('pointerenter'))`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="vehicles"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   await waitFor(`document.querySelector('[data-object-choice="tank"] img').complete&&document.querySelector('[data-object-choice="tank"] img').naturalWidth>0`);
   await evaluate(`document.querySelector('[data-object-choice="tank"]').click()`);
   assert.equal((await saved()).actions[0].glyph,'tank','icon dropdown selects an object');
@@ -136,7 +173,7 @@ try {
     assert.equal(project.actions.at(-1).color,icon.color,'new objects use their default palette');
   }
   const categories=await evaluate(`Array.from(document.querySelectorAll('#mInspector [data-mf="glyph"] optgroup')).map(group=>group.label)`);
-  for(const category of ['Travel & civilian transport','Cities & everyday places','Infrastructure & clean energy','Nature & outdoors','Modern military'])assert.ok(categories.includes(category),'picker exposes '+category);
+  for(const category of ['People & occupations','Buildings & settlements','Vehicles & transport','Ships & boats','Bridges & infrastructure','Nature & weather'])assert.ok(categories.includes(category),'picker exposes '+category);
   await change('#mInspector [data-mf="glyph"]','ferry');await change('#mInspector [data-mf="__pinMove"]','move');
   await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   p=await saved();E.validateMapProject(p);assert.equal(p.actions.at(-1).glyph,'ferry');assert.equal(p.actions.at(-1).mode,'move','civilian movement survives project reload');
@@ -153,7 +190,7 @@ try {
   await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="time"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   await waitFor(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] img')].every(img=>img.complete&&img.naturalWidth>0)`);
   assert.deepEqual(await evaluate(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="time"] [data-object-choice]')].map(row=>row.dataset.objectChoice).sort()`),['calendar','clock','hourglass','stopwatch'],'hover reveals all objects in the chosen category');
-  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="transport"]').dispatchEvent(new PointerEvent('pointerenter'))`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="ships"]').dispatchEvent(new PointerEvent('pointerenter'))`);
   assert.deepEqual(await saved(),beforeFilter,'browsing types leaves the project unchanged');
   assert.equal(await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="time"]').hidden`),true,'the previous category closes');
   await evaluate(`document.querySelector('body > .m-object-cascade [data-object-choice="ferry"]').click()`);

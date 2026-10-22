@@ -77,8 +77,9 @@ function intersection(subject,clip){
     }
   }return points;
 }
-function projectedFace(face,index){
-  const p=face.points.map(projectIso),depth=face.points.map(([x,y,z])=>x+y+z);
+export const projectSide=([x,y,z])=>[x,-z];
+function projectedFace(face,index,view){
+  const side=view==='side',p=face.points.map(side?projectSide:projectIso),depth=face.points.map(([x,y,z])=>side?y:x+y+z);
   const a=p[0];let plane=null;
   for(let i=1;i<p.length-1&&!plane;i++){
     const b=p[i],d=p[i+1],det=cross2(a,b,d);if(Math.abs(det)<1e-8)continue;
@@ -91,8 +92,8 @@ function projectedFace(face,index){
 // Average-depth sorting alone hides decals behind the wall or tabletop that
 // carries them. Compare depth at the actual projected overlap, then order the
 // faces by those occlusion dependencies. Unrelated faces retain stable ordering.
-function paintOrder(faces){
-  const nodes=faces.map(projectedFace).filter(n=>n.plane);
+function paintOrder(faces,view){
+  const nodes=faces.map((face,index)=>projectedFace(face,index,view)).filter(n=>n.plane);
   nodes.sort((a,b)=>a.face.depth-b.face.depth||a.index-b.index);
   for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
     const a=nodes[i],b=nodes[j];
@@ -108,7 +109,7 @@ function paintOrder(faces){
   return ordered.map(({face,p})=>({face,p}));
 }
 export class IsoScene{
-  constructor(){this.faces=[];this.material='matte';this.lighting=currentSceneLighting();this._ordered=null;this._bounds=null;}
+  constructor(view='isometric'){this.view=view;this.faces=[];this.material='matte';this.lighting=currentSceneLighting();this._ordered=null;this._bounds=null;}
   withMaterial(material,draw){const previous=this.material;this.material=material;try{draw();}finally{this.material=previous;}}
   face(points,color,shade=1,edge=true,material=materialFor(color)||this.material){this._ordered=null;this._bounds=null;const base=material==='glass'&&this.lighting.enabled&&this.lighting.night>.4?'#f1ca78':color;this.faces.push({points,color:tint(base,lighting(points,this.lighting)*Math.sqrt(shade)),material,edge,depth:points.reduce((s,[x,y,z])=>s+x+y+z,0)/points.length});}
   box(x,y,z,w,d,h,color){
@@ -178,7 +179,7 @@ export class IsoScene{
     if(text){this._ordered=null;this._bounds=null;this.faces.push({points,text,style:{...style},depth:points.reduce((s,[x,y,z])=>s+x+y+z,0)/points.length+.0002});}
   }
   bounds(shadows=true){
-    const ordered=this._ordered||(this._ordered=paintOrder(this.faces));
+    const ordered=this._ordered||(this._ordered=paintOrder(this.faces,this.view));
     if(!this._bounds){const points=ordered.flatMap(n=>n.p);this._bounds={top:Math.min(...points.map(p=>p[1])),bottom:Math.max(...points.map(p=>p[1])),left:Math.min(...points.map(p=>p[0])),right:Math.max(...points.map(p=>p[0]))};}
     if(!shadows)return this._bounds;
     const b=shadowGeometry(this).bounds;return {left:Math.min(b.left,this._bounds.left),right:Math.max(b.right,this._bounds.right),top:Math.min(b.top,this._bounds.top),bottom:Math.max(b.bottom,this._bounds.bottom)};
@@ -186,7 +187,7 @@ export class IsoScene{
   draw(c,size,{shadows=true}={}){
     if(shadows)drawModelShadow(c,this,size);
     c.save();c.lineJoin='round';c.lineWidth=Math.max(.22,size*.007);c.strokeStyle='#292b2580';
-    const ordered=this._ordered||(this._ordered=paintOrder(this.faces));
+    const ordered=this._ordered||(this._ordered=paintOrder(this.faces,this.view));
     for(const {face:f,p} of ordered){if(f.material==='shadow')continue;c.beginPath();p.forEach(([x,y],i)=>i?c.lineTo(x*size,y*size):c.moveTo(x*size,y*size));c.closePath();
       if(f.material==='ground'){
         const [a,b,,d]=p;c.save();c.clip();c.transform((b[0]-a[0])*size,(b[1]-a[1])*size,(d[0]-a[0])*size,(d[1]-a[1])*size,a[0]*size,a[1]*size);const g=c.createRadialGradient?.(.5,.5,0,.5,.5,.5);if(g?.addColorStop){g.addColorStop(0,f.groundColor+'66');g.addColorStop(1,f.groundColor+'00');c.fillStyle=g;c.fillRect(0,0,1,1);}c.restore();

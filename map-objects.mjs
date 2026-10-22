@@ -2,7 +2,6 @@ import { surface, polygonSurface } from './map-object-materials.mjs';
 // Map objects, effects and shapes: units, places and hazards you can place, move and animate
 // (war maps, disasters, logistics...). Everything is drawn as vector shapes in code, so it looks the
 // same on every device and in exported video. The engine passes its helpers in as `H`.
-import { drawBanner } from './map-banner.mjs';
 import { SUBCONTINENT_OBJECTS } from './map-subcontinent-objects.mjs';
 import { HISTORIC_OBJECTS } from './map-historic-objects.mjs';
 import { DOCUMENTARY_OBJECTS } from './map-documentary-objects.mjs';
@@ -10,13 +9,13 @@ import { MODERN_OBJECTS, CIVILIAN_OBJECTS } from './map-modern-objects.mjs';
 import { TIME_OBJECTS } from './map-time-objects.mjs';
 import { LANDMARK_OBJECTS } from './map-landmark-objects.mjs';
 import { PEOPLE_OBJECTS } from './map-people-objects.mjs';
-import { MEDIEVAL_OBJECTS, drawPortrait } from './map-medieval-objects.mjs';
+import { MEDIEVAL_OBJECTS } from './map-medieval-objects.mjs';
 import { TRADE_OBJECTS } from './map-trade-objects.mjs';
 import { STRATEGY_OBJECTS } from './map-strategy-objects.mjs';
 import { drawZoneLandscape } from './map-strategy-terrain.mjs';
 import { networkMargin } from './map-network-style.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
-import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
+import { drawIsometricObject, drawIsometricShadow, drawSideObject } from './map-isometric-objects.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
@@ -112,20 +111,18 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   shadow.addColorStop(0,'rgba(0,0,0,.24)');shadow.addColorStop(.55,'rgba(0,0,0,.12)');shadow.addColorStop(1,'rgba(0,0,0,0)');
   const light=currentSceneLighting();c.globalAlpha=alpha*(light.enabled?light.shadowStrength*(.3+.7*light.ambient):1);c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
   }
-  c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (isometric || ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
+  c.globalAlpha = alpha; c.translate(g.x + dx, g.y + dy);
   if (ang !== null && !['banner','portrait'].includes(a.glyph)) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(angle); c.scale(sc, sc);
   let isometricBounds;
   const drawIntact = (c) => {
     if(isometric)isometricBounds=drawIsometricObject(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{shadows:false});
-    else if(a.glyph==='portrait')drawPortrait(c,s,a.color,a,H.objectImage?.(a.image));
-    else if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
-    else if(a.glyph==='artwork') {
-      const img=H.objectImage?.(a.image);
-      if(img){const factor=3.5*s/Math.max(img.naturalWidth,img.naturalHeight),w=img.naturalWidth*factor,h=img.naturalHeight*factor;c.drawImage(img,-w/2,-h/2,w,h);}
-      else {c.strokeStyle='#ffffff';c.lineWidth=2*u;c.strokeRect(-s,-s,2*s,2*s);}
+    else if(a.glyph==='artwork'&&H.objectImage?.(a.image)){
+      // Free artwork retains its uploaded aspect ratio and transparent canvas.
+      const image=H.objectImage(a.image),factor=3.5*s/Math.max(image.naturalWidth,image.naturalHeight),w=image.naturalWidth*factor,h=image.naturalHeight*factor;
+      c.drawImage(image,-w/2,-h,w,h);isometricBounds={top:-h/s};
     }
-    else ic.draw(c, s, a.color, ic.historic || ic.timeUnit==='seconds' ? t/(v.fps||30) : t);
+    else isometricBounds=drawSideObject(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image));
   };
   if(a.damageState==='destroyed'){
     const ship=['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph);

@@ -84,7 +84,7 @@ try{
   await change('zoneTerrain','jungle');
   await evaluate(`document.querySelector('#mItems [data-mid]').closest('#mItems');document.querySelector('[data-madd="object"]').click()`);
   await waitFor(`!!document.querySelector('#mInspector [data-mf="glyph"]')`);
-  assert.equal(await evaluate(`!![...document.querySelectorAll('#mInspector optgroup')].find(el=>el.label.includes('Kingdom strategy'))`),true,'strategy objects appear in the type picker');
+  assert.equal(await evaluate(`!![...document.querySelectorAll('#mInspector optgroup')].find(el=>el.label==='Buildings & settlements'&&[...el.children].some(option=>option.value==='kingdomWindmill'))`),true,'strategy objects appear in the type picker');
   await change('glyph','kingdomWindmill');
   assert.equal(await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1).glyph`),'kingdomWindmill');
   await change('objectView','isometric');
@@ -155,14 +155,14 @@ try{
       const render=()=>{E.drawMap(c,400,300,p,90,geo);return canvas.toDataURL();};
       const normal=render();context.drawImage(canvas,(index%3)*400,Math.floor(index/3)*375,200,150);
       a.objectView='isometric';const iso=render();context.drawImage(canvas,(index%3)*400+200,Math.floor(index/3)*375,200,150);
-      if(normal!==iso)distinct++;deterministic&&=iso===render();a.objectView='normal';restored&&=normal===render();
-      context.fillStyle='#edf0df';context.fillRect((index%3)*400,Math.floor(index/3)*375+150,400,35);context.fillStyle='#243629';context.font='15px Arial';context.fillText(glyph+' · normal / isometric',(index%3)*400+10,Math.floor(index/3)*375+172);
+      if(normal!==iso)distinct++;deterministic&&=iso===render();a.objectView='side';restored&&=normal===render();
+      context.fillStyle='#edf0df';context.fillRect((index%3)*400,Math.floor(index/3)*375+150,400,35);context.fillStyle='#243629';context.font='15px Arial';context.fillText(glyph+' · side / isometric',(index%3)*400+10,Math.floor(index/3)*375+172);
       if(!['image','artwork','portrait','banner'].includes(glyph)){a.objectView='isometric';for(const state of ['damaged','burning','destroyed']){a.damageState=state;damage&&=render()!==iso;}}
     }
     window.strategyObjectViewsReview=sheet.toDataURL();
     return {catalog:catalog.length,same,empty,normalCalls,missing:catalog.filter(glyph=>!I.ISOMETRIC_MODELS[glyph]),distinct,deterministic,restored,damage,crop,plaque,stillCloth,clothWidth,title,maxAlpha,cacheCoverage,shadowDistinct,shadowStable,shadowLift,shadowRotation,shadowCollapse,unionError,normalEllipse,isoEllipse};
   })()`);
-  assert.deepEqual(views.same,[],'every catalog object has distinct Normal and Isometric previews');
+  assert.deepEqual(views.same,[],'every catalog object has distinct Side and Isometric previews');
   assert.deepEqual(views.missing,[],'every catalog object has an explicit isometric recipe');
   assert.deepEqual(views.empty,[],'every isometric model draws a visible miniature');
   assert.deepEqual(views.normalCalls,[],'isometric models never call normal-view renderers');
@@ -172,7 +172,7 @@ try{
   assert.ok(views.maxAlpha<=128&&views.maxAlpha>100&&views.cacheCoverage>300,'cached detailed models respect scale, rotation and opacity: '+JSON.stringify(views));
   assert.ok(views.shadowDistinct&&views.shadowStable&&views.shadowLift&&views.shadowRotation&&views.shadowCollapse,'cast shadows follow geometry, height, rotation and collapse: '+JSON.stringify(views));
   assert.ok(views.unionError<=1,'overlapping faces do not accumulate shadow opacity');
-  assert.ok(views.normalEllipse>0&&views.isoEllipse===0,'only Normal view receives the generic oval shadow');
+  assert.ok(views.normalEllipse>0&&views.isoEllipse===0,'only Side view receives the generic oval shadow');
   await writeFile(join(tmpdir(),'frameflow-object-views.png'),Buffer.from((await evaluate('window.strategyObjectViewsReview')).split(',')[1],'base64'));
   await writeFile(join(tmpdir(),'frameflow-isometric-catalog.png'),Buffer.from((await evaluate('window.strategyIsometricCatalogReview')).split(',')[1],'base64'));
   await writeFile(join(tmpdir(),'frameflow-isometric-details.png'),Buffer.from((await evaluate('window.strategyIsometricDetailsReview')).split(',')[1],'base64'));

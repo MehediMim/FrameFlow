@@ -503,6 +503,11 @@ function imageModel(m,o,col,t,a,image){
   }
   // Uploaded pixels are a texture on a modeled frame, rather than a shaded
   // extrusion of their silhouette. The picture itself remains user-supplied.
+  if(k==='artwork'&&image){
+    const factor=3.5/Math.max(image.naturalWidth||image.width,image.naturalHeight||image.height),w=(image.naturalWidth||image.width)*factor,h=(image.naturalHeight||image.height)*factor;
+    // A free uploaded image has no frame or opaque backing in either view.
+    m.texture([[-w/2,0,h],[w/2,0,h],[w/2,0,0],[-w/2,0,0]],image,col,{fit:'contain'});m.faces.shift();return;
+  }
   const portrait=k==='portrait',w=portrait?1.25:1.8,h=portrait?1.6:1.2;
   const trim=a.badgeBorder||GOLD;
   m.box(-w/2,-.1,.25,w,.2,h,col);m.texture([[-w/2+.08,.108,.25+h-.08],[w/2-.08,.108,.25+h-.08],[w/2-.08,.108,.33],[-w/2+.08,.108,.33]],image,WHITE,{zoom:a.badgeZoom,x:a.badgeX,y:a.badgeY,fit:k==='artwork'?'contain':'cover'});
@@ -562,29 +567,33 @@ const families={
   },
 };
 export const ISOMETRIC_MODELS=Object.freeze(models);
-export function createIsometricModel(glyph,color,t=0,action={},image){
+export function createIsometricModel(glyph,color,t=0,action={},image,view='isometric'){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
-  const scene=new IsoScene();scene.material=({person:'cloth',mounted:'cloth',formation:'cloth',vehicle:'paint',ship:'paint',aircraft:'paint',fort:'stone',building:'plaster',landmark:'stone',bridge:'metal',nature:'earth',goods:'wood',image:'wood',time:'metal',accessory:'metal'})[recipe.family]||'matte';
+  const scene=new IsoScene(view);scene.material=({person:'cloth',mounted:'cloth',formation:'cloth',vehicle:'paint',ship:'paint',aircraft:'paint',fort:'stone',building:'plaster',landmark:'stone',bridge:'metal',nature:'earth',goods:'wood',image:'wood',time:'metal',accessory:'metal'})[recipe.family]||'matte';
   families[recipe.family](scene,recipe.options,color||'#919c72',t,action,image);return scene;
 }
-function modelFor(glyph,color,t,action,image){
+function modelFor(glyph,color,t,action,image,view='isometric'){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
   // Keep immutable static geometry and its face ordering between animation
   // frames. Size, movement, damage and canvas rotation remain outside the model.
   let imageId=0;if(image){if(!imageIds.has(image))imageIds.set(image,++imageSerial);imageId=imageIds.get(image);}
-  const key=JSON.stringify([glyph,color,imageId,currentSceneLighting().key,...imageSettings.map(k=>action[k])]);
+  const key=JSON.stringify([glyph,color,view,imageId,currentSceneLighting().key,...imageSettings.map(k=>action[k])]);
   if(animated(recipe)){
     let previous=animatedModels.get(key);
-    if(!previous||previous.time!==t){previous={scene:createIsometricModel(glyph,color,t,action,image),time:t};animatedModels.set(key,previous);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
+    if(!previous||previous.time!==t){previous={scene:createIsometricModel(glyph,color,t,action,image,view),time:t};animatedModels.set(key,previous);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
     return {scene:previous.scene,key,animated:true};
   }
   let scene=modelCache.get(key);
-  if(!scene){scene=createIsometricModel(glyph,color,t,action,image);modelCache.set(key,scene);if(modelCache.size>256)modelCache.delete(modelCache.keys().next().value);}
+  if(!scene){scene=createIsometricModel(glyph,color,t,action,image,view);modelCache.set(key,scene);if(modelCache.size>256)modelCache.delete(modelCache.keys().next().value);}
   return {scene,key,animated:false};
 }
 export function drawIsometricObject(c,glyph,size,color,t=0,action={},image,{shadows=true}={}){
   const model=modelFor(glyph,color,t,action,image);
   return model.animated?model.scene.draw(c,size,{shadows}):drawStaticModel(c,model.scene,size,model.key,shadows);
+}
+export function drawSideObject(c,glyph,size,color,t=0,action={},image){
+  const model=modelFor(glyph,color,t,action,image,'side');
+  return model.animated?model.scene.draw(c,size,{shadows:false}):drawStaticModel(c,model.scene,size,model.key,false);
 }
 export function drawIsometricShadow(c,glyph,size,color,t=0,action={},image,pose={}){
   return drawModelShadow(c,modelFor(glyph,color,t,action,image).scene,size,pose);

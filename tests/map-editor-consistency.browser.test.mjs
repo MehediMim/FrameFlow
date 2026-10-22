@@ -184,20 +184,20 @@ try {
   assert.ok(await evaluate(`document.querySelector('#mMapContext').hidden&&document.querySelector('#mMapContext').childElementCount===0`),'empty workspace dismisses and clears the bar');
   await evaluate(`document.querySelector('[data-mid="object"]').click();document.querySelector('#mMapContext summary').click()`);
   await waitFor(`!!document.querySelector('body > .m-object-cascade:not([hidden])')`);
-  const categoryPoint=await evaluate(`(()=>{const r=document.querySelector('body > .m-object-cascade [data-object-category="company"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  const categoryPoint=await evaluate(`(()=>{const r=document.querySelector('body > .m-object-cascade [data-object-category="people"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...categoryPoint,button:'none',buttons:0});
-  await waitFor(`!document.querySelector('body > .m-object-cascade [data-object-category-panel="company"]').hidden`);
+  await waitFor(`!document.querySelector('body > .m-object-cascade [data-object-category-panel="people"]').hidden`);
   assert.equal(await evaluate(`document.querySelectorAll('body > .m-object-cascade [data-object-category-panel]:not([hidden])').length`),1,'hover shows only the category beside its name');
-  await waitFor(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="company"] img')].every(img=>img.complete&&img.naturalWidth>0)`);
+  await waitFor(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="people"] img')].every(img=>img.complete&&img.naturalWidth>0)`);
   await writeFile(join(tmpdir(),'frameflow-nested-object-picker.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
-  const chosen=await evaluate(`(()=>{const el=document.querySelector('body > .m-object-cascade [data-object-category-panel="company"] [data-direct-object-choice]'),r=el.getBoundingClientRect();return{id:el.dataset.directObjectChoice,x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  const chosen=await evaluate(`(()=>{const el=document.querySelector('body > .m-object-cascade [data-object-category-panel="people"] [data-direct-object-choice]'),r=el.getBoundingClientRect();return{id:el.dataset.directObjectChoice,x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await click({x:chosen.x,y:chosen.y});
   assert.equal((await stored()).actions.find(a=>a.id==='object').glyph,chosen.id,'nested canvas picker changes the selected object');
   await waitFor(`!document.querySelector('body > .m-object-cascade')`);
   await evaluate(`document.querySelector('#mInspector [data-object-menu] summary').click()`);
   await waitFor(`!!document.querySelector('body > .m-object-cascade:not([hidden])')`);
-  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="transport"]').focus();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));`);
-  assert.ok(await evaluate(`!!document.activeElement.closest('[data-object-category-panel="transport"]')`),'keyboard navigation enters the adjacent object list');
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="vehicles"]').focus();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));`);
+  assert.ok(await evaluate(`!!document.activeElement.closest('[data-object-category-panel="vehicles"]')`),'keyboard navigation enters the adjacent object list');
   await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));`);
   assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-menu]').open`),false,'Escape closes the nested menu');
   const timelineBeforeArrange=(await stored()).actions.map(a=>[a.id,a.start,a.dur,a.createdOrder]);
@@ -233,10 +233,13 @@ try {
     const E=await import('./map-engine.mjs?v=map-order-1'),{arrangeLayers}=await import('./map-layer-actions.mjs');
     const geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),p=E.newMapProject(),canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const c=canvas.getContext('2d');
     p.camera.init={lon:0,lat:44,zoom:4,pitch:0,bearing:0};p.atlasLabels={countries:false,oceans:false};p.graticule=false;
-    E.OBJECT_ICONS.__stackProbe={label:'Stack probe',draw:(c,s,color)=>{c.fillStyle=color;c.fillRect(-70,-70,140,140);}};
-    const object=E.makeAction('object',0,{id:'red',glyph:'__stackProbe',place:{kind:'point',name:'Anchor',lon:0,lat:44},color:'#ff0000',dur:120}),label=E.makeAction('label',0,{text:'MMMM',x:50,y:50,labelPlacement:'screen',dur:120,labelStyle:{shape:'none',size:40,text:'#ffffff',useTheme:false,halo:false,shadow:false}});
+    const image=new Image();image.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><rect width="140" height="140" fill="red"/></svg>');await image.decode();
+    const source=document.createElement('canvas');source.width=source.height=140;source.getContext('2d').drawImage(image,0,0);
+    const redImage=source.toDataURL();source.getContext('2d').fillStyle='blue';source.getContext('2d').fillRect(0,0,140,140);const blueImage=source.toDataURL();
+    const object=E.makeAction('object',0,{id:'red',glyph:'artwork',image:redImage,size:8,place:{kind:'point',name:'Anchor',lon:0,lat:40},color:'#ff0000',dur:120}),label=E.makeAction('label',0,{text:'MMMM',x:50,y:50,labelPlacement:'screen',dur:120,labelStyle:{shape:'none',size:40,text:'#ffffff',useTheme:false,halo:false,shadow:false}});
+    await E.preloadBadges({...p,actions:[object,{...object,image:blueImage}]});
     const sample=actions=>{c.clearRect(0,0,320,180);E.drawMap(c,320,180,{...p,actions},60,geo);return [...c.getImageData(145,82,30,16).data];};
-    try{const plain=sample([object]),labeled=sample([object,label]),text=sample([label]),base=sample([]);p.actions=[object,{...object,id:'blue',color:'#0000ff'}];const blue=sample(p.actions);arrangeLayers(p,['red'],'front');const red=sample(p.actions);return{behind:plain.every((v,i)=>v===labeled[i]),textVisible:text.some((v,i)=>v!==base[i]),changesStack:blue.some((v,i)=>v!==red[i])};}finally{delete E.OBJECT_ICONS.__stackProbe;}
+    const plain=sample([object]),labeled=sample([object,label]),text=sample([label]),base=sample([]);p.actions=[object,{...object,id:'blue',image:blueImage,color:'#0000ff'}];const blue=sample(p.actions);arrangeLayers(p,['red'],'front');const red=sample(p.actions);return{behind:plain.every((v,i)=>v===labeled[i]),textVisible:text.some((v,i)=>v!==base[i]),changesStack:blue.some((v,i)=>v!==red[i])};
   })()`);
   assert.deepEqual(compositing,{behind:true,textVisible:true,changesStack:true},'rendered pixels put labels behind objects and obey map arrangement');
   const pathMotion=await evaluate(`(async()=>{

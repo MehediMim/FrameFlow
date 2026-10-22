@@ -1,28 +1,19 @@
 import { OBJECT_ICONS } from './map-objects.mjs';
-import { drawIsometricObject } from './map-isometric-objects.mjs';
+import { drawIsometricObject, drawSideObject } from './map-isometric-objects.mjs';
 
 // Cache a static frame of the actual vector artwork, including tall masts/tools.
 const previews = new Map();
-export function objectPreview(glyph,view='normal') {
+export function objectPreview(glyph,view='side') {
   const key=glyph+':'+view;
   if (previews.has(key)) return previews.get(key);
   const icon = OBJECT_ICONS[glyph];
   const canvas = document.createElement('canvas');
-  const W=view==='isometric'?448:224,H=W;
+  const W=448,H=W;
   canvas.width = canvas.height = W;
   const c = canvas.getContext('2d');
-  c.translate(W/2,view==='isometric'?300:140);
-  if(view==='isometric')drawIsometricObject(c,glyph,26,icon?.color);
-  else if (icon?.draw) {
-    c.save(); icon.draw(c, 26, icon.color, 0); c.restore();
-  } else {
-    // Image-based objects have no artwork until the user supplies an image.
-    c.strokeStyle = '#b6cbd2'; c.lineWidth = 3;
-    c.strokeRect(-27, -34, 54, 44);
-    c.beginPath(); c.moveTo(-23, 6); c.lineTo(-5, -15); c.lineTo(5, -4); c.lineTo(15, -16); c.lineTo(24, 6); c.stroke();
-    c.beginPath(); c.arc(12, -23, 4, 0, Math.PI * 2); c.stroke();
-    if (glyph === 'banner') { c.beginPath(); c.moveTo(-31, -42); c.lineTo(-31, 27); c.stroke(); }
-  }
+  c.translate(W/2,300);
+  const draw=view==='isometric'?drawIsometricObject:drawSideObject;
+  draw(c,glyph,26,icon?.color);
   // Fit the visible silhouette so a person, a wide vehicle, and a tall ship
   // share the same readable thumbnail size without cutting off their details.
   const pixels = c.getImageData(0, 0, W, H).data;
@@ -40,5 +31,5 @@ export function objectPreview(glyph,view='normal') {
   const url = thumb.toDataURL(); previews.set(key, url); return url;
 }
 export function paintObjectPreviews(root) {
-  for (const img of root.querySelectorAll('img[data-object-preview]')) img.src = objectPreview(img.dataset.objectPreview,img.dataset.objectView||'normal');
+  for (const img of root.querySelectorAll('img[data-object-preview]')) img.src = objectPreview(img.dataset.objectPreview,img.dataset.objectView||'side');
 }

@@ -1,14 +1,32 @@
 import assert from 'node:assert/strict';
 import {OBJECT_ICONS} from '../map-objects.mjs';
-import {IsoScene,projectIso} from '../map-isometric-geometry.mjs';
+import {IsoScene,projectIso,projectSide} from '../map-isometric-geometry.mjs';
+import {OBJECT_CATEGORIES,objectEntries,objectCategory} from '../map-object-catalog.mjs';
+import {OBJECT_VIEWS,validateObjectView,objectViewOf} from '../map-object-view.mjs';
 import {ISOMETRIC_MODELS,createIsometricModel} from '../map-isometric-objects.mjs';
 import {projectShadowPoint,shadowGeometry,ISOMETRIC_LIGHT} from '../map-isometric-shadow.mjs';
 
 assert.deepEqual(Object.keys(ISOMETRIC_MODELS).sort(),Object.keys(OBJECT_ICONS).sort(),'every catalog entry has an explicit model');
 assert.deepEqual(projectIso([0,0,1]),[0,-1],'height stays vertical');
 assert.deepEqual(projectIso([1,1,0]),[0,1],'ground axes have equal foreshortening');
+assert.deepEqual(projectSide([2,8,3]),[2,-3],'side elevation keeps width and height without ground foreshortening');
+assert.deepEqual(Object.keys(OBJECT_VIEWS),['side','isometric']);
+const legacy={objectView:'normal'};validateObjectView(legacy);assert.equal(legacy.objectView,'side');
+assert.equal(objectViewOf({}),'side');
+assert.throws(()=>validateObjectView({objectView:'unknown'}),/Invalid object view/);
+const catalog=OBJECT_CATEGORIES.flatMap(([group])=>objectEntries(group).map(([glyph])=>glyph));
+assert.deepEqual(catalog.toSorted(),Object.keys(OBJECT_ICONS).sort(),'every object appears in exactly one category');
+assert.equal(objectCategory('doctor'),'people');assert.equal(objectCategory('house'),'buildings');
+const artwork=createIsometricModel('artwork','#ffffff',0,{}, {width:1024,height:512});
+assert.equal(artwork.faces.length,1,'free artwork has no opaque backing or frame');
+assert.ok(artwork.faces[0].image,'uploaded pixels remain the texture');
+assert.equal((artwork.faces[0].points[1][0]-artwork.faces[0].points[0][0])/artwork.faces[0].points[0][2],2,'artwork keeps its aspect ratio in isometric view');
 for(const [glyph,icon]of Object.entries(OBJECT_ICONS)){
   const scene=createIsometricModel(glyph,icon.color,2,{}),points=scene.faces.flatMap(f=>f.points);
+  const side=createIsometricModel(glyph,icon.color,2,{},undefined,'side');
+  assert.deepEqual(side.faces,scene.faces,glyph+' shares exactly the same geometry, colors and materials in both views');
+  const bounds=side.bounds(false);
+  assert.ok(Object.values(bounds).every(Number.isFinite)&&bounds.right>bounds.left&&bounds.bottom>bounds.top,glyph+' has a visible side elevation');
   assert.ok(points.length>=12,glyph+' has modeled surfaces');
   for(const point of points)assert.ok(point.length===3&&point.every(Number.isFinite),glyph+' has finite world-space vertices');
   for(let axis=0;axis<3;axis++)assert.ok(Math.max(...points.map(p=>p[axis]))-Math.min(...points.map(p=>p[axis]))>.01,glyph+' has geometry along every world axis');

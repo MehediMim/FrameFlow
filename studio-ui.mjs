@@ -132,6 +132,19 @@ function installPortraitPreview(canvas) {
   new MutationObserver(update).observe(canvas,{attributes:true,attributeFilter:['width','height']});
   update();
 }
+function mergePreviewToolbar(root) {
+  const bar=root?.querySelector('.stagebar'),transport=root?.querySelector('.transport');
+  if(!bar||!transport)return;
+  const actions=bar.querySelector(':scope > div'),metadata=bar.querySelector(':scope > span'),time=transport.querySelector('.time');
+  if(!actions)return;
+  const status=document.createElement('div');status.className='ff-playback-status';
+  if(time){time.before(status);status.append(time);}
+  else transport.prepend(status);
+  if(metadata)status.append(metadata);
+  actions.classList.add('ff-preview-actions');actions.setAttribute('role','group');actions.setAttribute('aria-label','Preview controls');
+  transport.append(actions);transport.classList.add('ff-preview-toolbar');
+  bar.remove();
+}
 function install() {
   if(!document.getElementById('ffStudioStyles')){const css=document.createElement('link');css.id='ffStudioStyles';css.rel='stylesheet';css.href=new URL('./studio-ui.css',import.meta.url).href;document.head.append(css);}
   document.body.classList.add('ff-unified');
@@ -146,6 +159,7 @@ function install() {
   }
   for(const [canvasId,rootId] of [['mCanvas','mapStudio']]){
     installCanvasZoom(document.getElementById(canvasId),document.getElementById(rootId));
+    mergePreviewToolbar(document.getElementById(rootId));
   }
   for(const canvasId of ['mCanvas']){
     const canvas=document.getElementById(canvasId);

@@ -330,9 +330,12 @@ try {
     const on=state();button.click();await settle();const off=state();button.click();await settle();return {on,off,restored:state()};
   })()`);
   assert.ok(await evaluate(`(()=>{
-    const buttons=[...document.querySelectorAll('body>header button.ff-icon-button,#mapStudio .stagebar button,#mapStudio .timeline-tools button')];
+    const buttons=[...document.querySelectorAll('body>header button.ff-icon-button,#mapStudio .ff-preview-actions button,#mapStudio .timeline-tools button')];
     return buttons.length>=17&&buttons.every(button=>button.querySelector('svg.ff-icon')&&button.title&&button.getAttribute('aria-label')&&!button.textContent.trim()&&button.getBoundingClientRect().width===34);
   })()`),'all three toolbars use compact icon buttons with tooltips and accessible names');
+  assert.ok(await evaluate(`!document.querySelector('#mapStudio .stagebar')&&!!document.querySelector('#mapStudio .transport #mSnapshot')&&!!document.querySelector('#mapStudio .transport #mCompLabel')&&!!document.querySelector('#mapStudio .transport [data-preview-zoom]')`),'preview actions and canvas metadata share the bottom playback bar');
+  const zoomChange=await evaluate(`(()=>{const label=document.querySelector('[data-zoom-label]'),before=label.textContent;document.querySelector('[data-zoom="in"]').click();const after=label.textContent;document.querySelector('[data-zoom="fit"]').click();return {before,after};})()`);
+  assert.notEqual(zoomChange.before,zoomChange.after,'preview zoom remains functional after moving its controls');
   assert.equal(magnetStates.on.label,'');assert.equal(magnetStates.on.pressed,'true');assert.equal(magnetStates.on.enabled,'true');
   assert.equal(magnetStates.off.label,'');assert.equal(magnetStates.off.pressed,'false');assert.equal(magnetStates.off.enabled,'false');
   assert.notEqual(magnetStates.on.background,magnetStates.off.background,'Magnet has visibly different enabled and disabled surfaces');
@@ -352,7 +355,7 @@ try {
     assert.ok(await evaluate(`(()=>{
       const transport=document.querySelector('#mapStudio .transport').getBoundingClientRect(),head=document.querySelector('#mapStudio .timeline-head').getBoundingClientRect();
       const inside=(r,b)=>r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom;
-      return [...document.querySelectorAll('#mapStudio .play-controls button')].every(button=>{const r=button.getBoundingClientRect(),svg=button.querySelector('svg');return r.width===32&&r.height===32&&svg&&inside(r,transport)&&inside(svg.getBoundingClientRect(),r);})&&[...document.querySelectorAll('#mapStudio .timeline-tools button')].every(button=>inside(button.getBoundingClientRect(),head));
+      return [...document.querySelectorAll('#mapStudio .play-controls button')].every(button=>{const r=button.getBoundingClientRect(),svg=button.querySelector('svg');return r.width===32&&r.height===32&&svg&&inside(r,transport)&&inside(svg.getBoundingClientRect(),r);})&&[...document.querySelectorAll('#mapStudio .ff-preview-actions button')].every(button=>inside(button.getBoundingClientRect(),transport))&&[...document.querySelectorAll('#mapStudio .timeline-tools button')].every(button=>inside(button.getBoundingClientRect(),head));
     })()`),width+'px: playback icons and timeline tools fit their bars');
     await writeFile(join(tmpdir(),'frameflow-playback-'+width+'.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   }

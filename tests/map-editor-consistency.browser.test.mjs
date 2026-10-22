@@ -329,8 +329,12 @@ try {
     const settle=()=>new Promise(resolve=>setTimeout(resolve,200));
     const on=state();button.click();await settle();const off=state();button.click();await settle();return {on,off,restored:state()};
   })()`);
-  assert.equal(magnetStates.on.label,'Magnet: On');assert.equal(magnetStates.on.pressed,'true');assert.equal(magnetStates.on.enabled,'true');
-  assert.equal(magnetStates.off.label,'Magnet: Off');assert.equal(magnetStates.off.pressed,'false');assert.equal(magnetStates.off.enabled,'false');
+  assert.ok(await evaluate(`(()=>{
+    const buttons=[...document.querySelectorAll('body>header button.ff-icon-button,#mapStudio .stagebar button,#mapStudio .timeline-tools button')];
+    return buttons.length>=17&&buttons.every(button=>button.querySelector('svg.ff-icon')&&button.title&&button.getAttribute('aria-label')&&!button.textContent.trim()&&button.getBoundingClientRect().width===34);
+  })()`),'all three toolbars use compact icon buttons with tooltips and accessible names');
+  assert.equal(magnetStates.on.label,'');assert.equal(magnetStates.on.pressed,'true');assert.equal(magnetStates.on.enabled,'true');
+  assert.equal(magnetStates.off.label,'');assert.equal(magnetStates.off.pressed,'false');assert.equal(magnetStates.off.enabled,'false');
   assert.notEqual(magnetStates.on.background,magnetStates.off.background,'Magnet has visibly different enabled and disabled surfaces');
   assert.notEqual(magnetStates.on.color,magnetStates.off.color,'enabled Magnet uses a distinct foreground');
   assert.equal(magnetStates.on.width,magnetStates.off.width,'toggling does not shift the toolbar');

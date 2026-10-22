@@ -1,7 +1,7 @@
 import { duplicateLayers, removeLayers, arrangeLayers } from './map-layer-actions.mjs?v=map-order-1';
 import { installDirectMapEditing } from './map-direct-edit.mjs?v=add-submenu-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
-import { interfaceIcon } from './interface-icons.mjs';
+import { interfaceIcon, setIconButton } from './interface-icons.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
@@ -1316,6 +1316,7 @@ function renderSettings() {
   $('#mTextureScaleValue').textContent = texture.scale.toFixed(1) + '×';
   $('#mTextureStrength').disabled = $('#mTextureScale').disabled = texture.type === 'none';
   $('#mGraticule').classList.toggle('active', !!proj.graticule);
+  $('#mGraticule').setAttribute('aria-pressed', String(!!proj.graticule));
   renderLabelPanel();
 }
 function renderAreaSettings() {
@@ -1685,8 +1686,7 @@ mapFullscreenButton?.addEventListener('click', toggleMapFullscreen);
 document.addEventListener('fullscreenchange', () => {
   const active = document.fullscreenElement === mapFullscreenRoot;
   if (mapFullscreenButton) {
-    mapFullscreenButton.textContent = active ? '⛶ Exit fullscreen' : '⛶ Fullscreen';
-    mapFullscreenButton.title = active ? 'Exit fullscreen (Esc or F)' : 'Show map fullscreen (F)';
+    setIconButton(mapFullscreenButton, active ? 'exitFullscreen' : 'fullscreen', active ? 'Exit fullscreen' : 'Show map fullscreen', active ? 'Exit fullscreen (Esc or F)' : 'Show map fullscreen (F)');
   }
   requestAnimationFrame(() => { draw(); });
 });

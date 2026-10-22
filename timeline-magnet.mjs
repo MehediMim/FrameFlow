@@ -1,3 +1,4 @@
+import { setIconButton } from './interface-icons.mjs';
 // Intervals use an exclusive end so adjacent clips can occupy the same lane.
 export function packTimeline(clips) {
   const ends = [], lanes = new Map();
@@ -47,7 +48,7 @@ export function installMagneticTimeline(timeline) {
   toggle.setAttribute('aria-label', 'Magnetic snapping');
   const renderState = () => {
     const enabled = timeline.dataset.magnetic === 'true';
-    toggle.textContent = enabled ? 'Magnet: On' : 'Magnet: Off';
+    setIconButton(toggle, 'magnet', 'Magnetic snapping');
     toggle.setAttribute('aria-pressed', String(enabled));
     toggle.title = `Magnetic snapping ${enabled ? 'on' : 'off'}. Snap to clips, playhead and seconds. Hold Alt while dragging to bypass.`;
   };

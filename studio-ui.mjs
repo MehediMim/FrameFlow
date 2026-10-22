@@ -1,4 +1,5 @@
 // Map Studio controls, dialogs, and preview layout.
+import { interfaceIcon, setIconButton } from './interface-icons.mjs';
 export const CANVAS_SIZES = [['1280,720','Landscape · 1280 × 720'],['1920,1080','Full HD · 1920 × 1080'],['1080,1920','Portrait · 1080 × 1920'],['1080,1080','Square · 1080 × 1080']];
 const esc = v => String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function settingsSection(title, content, { collapsible = false, open = true } = {}) {
@@ -82,6 +83,7 @@ export function installCanvasZoom(canvas,root) {
   wrap.classList.add('ff-zoom-wrap');area.classList.add('ff-zoom-area');canvas.classList.add('ff-zoom-canvas');
   const controls=document.createElement('div');controls.className='canvas-zoom';controls.dataset.previewZoom='';controls.setAttribute('role','group');controls.setAttribute('aria-label','Preview zoom');
   controls.innerHTML='<button type="button" data-zoom="out" title="Zoom out" aria-label="Zoom out">−</button><span data-zoom-label>Fit</span><button type="button" data-zoom="in" title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-zoom="actual">100%</button><button type="button" data-zoom="fit">Fit all</button>';
+  for (const [key,icon,label] of [['out','pullBack','Zoom out'],['in','pushIn','Zoom in'],['actual','actualSize','Actual size (100%)'],['fit','fitCanvas','Fit canvas in preview']]) setIconButton(controls.querySelector(`[data-zoom="${key}"]`),icon,label);
   const actions=bar.querySelector(':scope > div:last-of-type');
   (actions||bar).append(controls);
   const fullscreen=bar.querySelector('#mapFullscreen,#pFullscreen,[data-action="fullscreen"]');
@@ -155,7 +157,7 @@ function install() {
     if(png){png.textContent='PNG ↓';png.title='Download current frame as PNG';png.setAttribute('aria-label','Download current frame as PNG');}
     const button=preview.querySelector('#motionFullscreen,#mapFullscreen,#pFullscreen,[data-action="fullscreen"]');
     if(button){
-      const update=()=>{const active=document.fullscreenElement===preview;button.textContent=active?'⛶ Exit fullscreen':'⛶ Fullscreen';button.title=active?'Exit fullscreen (Esc or F)':'Show preview fullscreen (F)';button.setAttribute('aria-pressed',String(active));};
+      const update=()=>{const active=document.fullscreenElement===preview;setIconButton(button,active?'exitFullscreen':'fullscreen',active?'Exit fullscreen':'Show preview fullscreen',active?'Exit fullscreen (Esc or F)':'Show preview fullscreen (F)');button.setAttribute('aria-pressed',String(active));};
       document.addEventListener('fullscreenchange',update);update();
     }
   }
@@ -166,8 +168,14 @@ function install() {
     if(button){button.textContent='⚙ Canvas settings';button.setAttribute('aria-controls',panel.id);button.setAttribute('aria-haspopup','dialog');}
   }
   for(const id of ['mModal'])document.getElementById(id)?.classList.add('ff-dialog');
+  for(const [id,icon,label] of [['mUndo','undo','Undo (Ctrl/Cmd+Z)'],['mRedo','redo','Redo (Ctrl/Cmd+Shift+Z)'],['mNew','newProject','New project'],['mSettingsButton','settings','Canvas settings'],['mOpen','open','Open project'],['mSave','save','Save project'],['mExport','export','Export video'],['mGraticule','grid','Toggle grid lines'],['mSnapshot','snapshot','Download current frame as PNG'],['mSplit','split','Split selected item at playhead (S)'],['mFitTimeline','fitTimeline','Fit layers and camera keys in the timeline view']]) setIconButton(document.getElementById(id),icon,label);
   for(const el of document.querySelectorAll('.starter > .eyebrow,.starter > h3,.starter > p'))el.hidden=true;
   for(const el of document.querySelectorAll('.timeline-head > div > b'))el.textContent='Timeline';
+  for(const label of document.querySelectorAll('.timeline-tools label')){
+    const input=label.querySelector('input[type=range]');if(!input)continue;
+    for(const node of [...label.childNodes])if(node.nodeType===3)node.remove();
+    label.insertAdjacentHTML('afterbegin',interfaceIcon('pushIn'));label.title='Timeline zoom';input.setAttribute('aria-label','Timeline zoom');
+  }
   for(const el of document.querySelectorAll('.transport > label')){const t=[...el.childNodes].find(n=>n.nodeType===3);if(t)t.textContent='TIME (s) ';}
   for(const el of document.querySelectorAll('.ruler-label > span'))el.textContent='SECONDS →';
   // Do not let editor shortcuts modify a project while any shared dialog is open.

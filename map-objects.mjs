@@ -16,7 +16,7 @@ import { drawZoneLandscape } from './map-strategy-terrain.mjs';
 import { networkMargin } from './map-network-style.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
 import { drawIsometricObject, drawIsometricShadow, drawSideObject } from './map-isometric-objects.mjs';
-import { isIsometricView } from './map-object-view.mjs';
+import { isIsometricView, pathViewFacing } from './map-object-view.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
@@ -72,13 +72,20 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if (!H.actAlpha(a, frame)) return;
   if (a.glyph === 'image') { H.drawBadge(c, v, geo, a, frame, labels); return; }
   const ic = OBJECT_ICONS[a.glyph] || OBJECT_ICONS.tank, u = v.unit, size = a.size || 1, s = 26 * size * u, t = frame - a.start;
-  let X, Y, ang = null;
+  let X, Y, ang = null,facing={objectView:a.objectView,mirror:false};
   if (a.mode === 'path' || a.mode === 'move') {
     const r = H.planeRoute(geo, a.mode === 'move' ? { ...a, mode: 'direct', from: a.place } : a); if (!r) return;
     const p = H.ease(a.easing, H.actionProgress(a, frame)), pt = H.routeAt(r, p), k = Math.round(v.cx - pt.X);
     X = pt.X + k; Y = pt.Y;
     const p0 = H.routeAt(r, Math.max(0, p - .02)), p1 = H.routeAt(r, Math.min(1, p + .02)), q0 = H.project(v, p0.X + k, p0.Y), q1 = H.project(v, p1.X + k, p1.Y);
     if (Math.hypot(q1.x - q0.x, q1.y - q0.y) > .5) ang = Math.atan2(q1.y - q0.y, q1.x - q0.x);
+    if(q0.z>=v.near&&q1.z>=v.near){
+      let dx=q1.x-q0.x,dy=q1.y-q0.y;
+      // At a reversal the centered tangent can cancel out. Prefer the outgoing
+      // segment, or the incoming segment when holding at the route's end.
+      if(Math.hypot(dx,dy)<1e-8){const q=H.project(v,X,Y);dx=q1.x-q.x;dy=q1.y-q.y;if(Math.hypot(dx,dy)<1e-8){dx=q.x-q0.x;dy=q.y-q0.y;}}
+      facing=pathViewFacing(a,dx,dy);
+    }
     if (a.trail !== false && pt.i > 0) {
       c.save(); c.beginPath(); let on = false;
       for (let i = 0; i <= pt.i; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); if (q.z < v.near) { on = false; continue; } if (on) c.lineTo(q.x, q.y); else { c.moveTo(q.x, q.y); on = true; } }
@@ -86,6 +93,8 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
       c.globalAlpha = .75; c.strokeStyle = a.color; c.lineWidth = 3 * u; c.setLineDash([8 * u, 6 * u]); c.lineCap = 'round'; c.stroke(); c.restore();
     }
   } else { const r = H.resolveLoc(geo, a.place, v.cx); if (!r) return; X = r.X; Y = r.Y; }
+  a={...a,objectView:facing.objectView};
+  v.objectFacings?.set(a.id,facing);
   const left = a.start + a.dur - frame;
   if (a.exit === 'explode') { const xe = H.clamp01(1 - left / 30); if (xe > .1) { c.save(); explosion(H, c, v, X, Y, s * 1.6, (xe - .1) / .9, '#ff7a1a', frame); c.restore(); return; } }
   const enter = a.enter === 'none' ? 1 : H.clamp01(t / 18), xd = a.exit === 'none' ? 0 : H.clamp01(1 - left / 18);
@@ -103,7 +112,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if(isometric){
     const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
     c.save();c.globalAlpha=alpha;c.translate(g0.x+dx,g0.y);c.scale(sc,sc);
-    drawIsometricShadow(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{angle:angle+(movingAngle!==null&&ic.rot?movingAngle:0),mirror:movingAngle!==null&&!ic.rot&&Math.cos(movingAngle)<0,height:Math.max(0,(lift-dy)/(s*sc)),flatten:1-collapse*.94});c.restore();
+    drawIsometricShadow(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{angle,mirror:facing.mirror,height:Math.max(0,(lift-dy)/(s*sc)),flatten:1-collapse*.94});c.restore();
   }
   // A small feathered contact shadow separates the illustration from the map.
   if(!isometric){
@@ -114,6 +123,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   }
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y + dy);
   if (movingAngle !== null) { if (ic.rot) c.rotate(movingAngle); else if (Math.cos(movingAngle) < 0) c.scale(-1, 1); }
+  if(facing.mirror)c.scale(-1,1);
   c.rotate(angle); c.scale(sc, sc);
   let isometricBounds;
   const drawIntact = (c) => {

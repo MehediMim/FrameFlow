@@ -8,6 +8,7 @@ import { targetedAttack } from '../map-battle-effects.mjs';
 import { destructionProgress } from '../map-damage.mjs';
 import { splitMapItem,mapSourceItem } from '../map-timing.mjs';
 import { drawObject } from '../map-objects.mjs';
+import { pathViewFacing,validateObjectView } from '../map-object-view.mjs';
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} ~ ${b}`);
 const a=makeAction('object',10,{glyph:'stoneFort',easing:'linear',size:1,dur:120});
 putObjectKey(a,70,{size:3,objectAngle:180,damageState:'burning'});
@@ -42,7 +43,7 @@ p.armyPresets=[{id:'saved',name:'Siege',units:ARMY_PRESETS.siege.units}];validat
 for(const bad of [{objectKeys:[{frame:999,values:{size:2}}]},{objectKeys:[{frame:0,values:{size:NaN}}]},{objectKeys:[{frame:0,values:{damageState:'broken'}}]},{armyUnits:[{glyph:'army',count:1}]},{wallTowerEvery:1.5}]){const copy=structuredClone(p);Object.assign(copy.actions[0],bad);assert.throws(()=>validateMapProject(copy));}
 console.log('Object sparse keys, retiming, damage steps, wall placement, army composition and targeted attacks passed');
 
-const facing=makeAction('object',10,{glyph:'car',mode:'path',objectView:'isometric',dur:120});
+const facing=makeAction('object',10,{glyph:'car',mode:'path',objectView:'isometric',objectFacing:'manual',dur:120});
 putObjectKey(facing,50,{objectView:'isometricBack'});putObjectKey(facing,90,{objectView:'isometric'});
 assert.equal(objectPoseAt(facing,49).objectView,'isometric');
 assert.equal(objectPoseAt(facing,50).objectView,'isometricBack');
@@ -67,3 +68,15 @@ const rotationsFor=view=>{
 for(const view of ['isometric','isometricBack'])assert.ok(rotationsFor(view).every(angle=>angle===0),'manual '+view+' stays upright on a vertical path');
 assert.ok(rotationsFor('side').some(angle=>Math.abs(angle)>1),'side view retains path heading');
 console.log('Manual view keys: step switching, seeking, moving, deleting, splitting, validation and upright isometric path orientation passed');
+const movingIso={glyph:'car',mode:'path',objectView:'isometric'};
+for(const [dx,dy,objectView,mirror]of [[1,1,'isometric',false],[-1,1,'isometric',true],[1,-1,'isometricBack',false],[-1,-1,'isometricBack',true],[0,1,'isometric',false],[0,-1,'isometricBack',false],[1,0,'isometric',false],[-1,0,'isometric',true]]){
+  assert.deepEqual(pathViewFacing(movingIso,dx,dy),{objectView,mirror},'automatic facing matches screen direction '+[dx,dy]);
+}
+assert.deepEqual(pathViewFacing({...movingIso,objectFacing:'manual'},1,-1),{objectView:'isometric',mirror:false},'manual override retains the chosen view');
+assert.deepEqual(pathViewFacing({...movingIso,objectView:'side'},1,-1),{objectView:'side',mirror:false},'side view is preserved');
+assert.deepEqual(pathViewFacing(movingIso,0,0),{objectView:'isometric',mirror:false},'stationary points have a stable fallback');
+assert.deepEqual(pathViewFacing(movingIso,NaN,1),{objectView:'isometric',mirror:false});
+assert.throws(()=>validateObjectView({objectFacing:'invalid'}),/facing/);
+assert.equal(objectPoseAt({...facing,objectFacing:'path',objectKeys:[{frame:30,values:{objectView:'side'}}]},80).objectView,'isometric','automatic facing ignores manual view keys until explicitly selected');
+const automaticProject=newMapProject();automaticProject.actions=[makeAction('object',0,{...movingIso,objectFacing:'path'})];validateMapProject(JSON.parse(JSON.stringify(automaticProject)));
+console.log('Automatic facing: all diagonals, cardinal directions, stationary fallback, manual override and validation passed');

@@ -590,14 +590,14 @@ function artworkFields(a) {
   return `<div class="m-badge"><span class="mini-label">SVG / PNG artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden><p class="mini-label">Transparent artwork keeps its proportions, without a badge or frame. SVG is embedded as a high-resolution image for saving and export.</p></div>`;
 }
 function objectFields(a) {
-  const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
+  const pose={...objectPoseAt(a,frame),...lastView?.objectFacings?.get(a.id)},wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
   const imageObject=['portrait','image','artwork','banner'].includes(a.glyph);
   const animations=objectAnimationOptions(a.glyph),animation=animations.some(([key])=>key===a.objectAnimation)?a.objectAnimation:'auto';
   const artwork=()=>a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):bannerFields(a);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
   return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph,pose.objectView)
     +F.sel('objectView','Object view',pose.objectView,Object.entries(OBJECT_VIEWS))
-    +(['path','move'].includes(a.mode)?'<p class="mini-label">Move the playhead to a turn, then choose the view. Each change records a view keyframe at that point.</p>':'')
+    +(['path','move'].includes(a.mode)?F.sel('objectFacing','Facing',a.objectFacing||'path',[['path','Automatic - follow path'],['manual','Manual view keyframes']])+'<p class="mini-label">Automatic facing shows the front when moving down the screen, the back when moving up, and turns left or right with the path.</p>':'')
     +(imageObject?'<div class="section-title">YOUR IMAGE &amp; STYLE</div>'+artwork():'')
     +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
@@ -633,12 +633,12 @@ function objectKeyFields(a) {
 function bindObjectKeys(a) {
   $$('#mInspector [data-object-key]').forEach(el=>el.onclick=()=>{
     if(frame<a.start||frame>a.start+a.dur)return;
-    const field=el.dataset.objectKey,key=a.objectKeys?.find(k=>k.frame===frame&&k.values[field]!==undefined);
-    pause();checkpoint();if(key)removeObjectKey(a,frame,[field]);else putObjectKey(a,frame,{[field]:objectPoseAt(a,frame)[field]});changed();updateObjectInspector(a);
+    const field=el.dataset.objectKey,key=a.objectKeys?.find(k=>k.frame===frame&&k.values[field]!==undefined),value=field==='objectView'?(lastView?.objectFacings?.get(a.id)?.objectView??objectPoseAt(a,frame).objectView):objectPoseAt(a,frame)[field];
+    pause();checkpoint();if(field==='objectView')a.objectFacing='manual';if(key)removeObjectKey(a,frame,[field]);else putObjectKey(a,frame,{[field]:value});changed();updateObjectInspector(a);
   });
 }
 function updateObjectInspector(a) {
-  const pose=objectPoseAt(a,frame),outside=frame<a.start||frame>a.start+a.dur;
+  const pose={...objectPoseAt(a,frame),...lastView?.objectFacings?.get(a.id)},outside=frame<a.start||frame>a.start+a.dur;
   for(const field of ['size','objectAngle','objectView','damageState']){
     const el=$(`#mInspector [data-mf="${field}"]`);if(!el)continue;
     if(document.activeElement!==el){el.value=pose[field];const out=el.parentElement.querySelector('.m-val');if(out)out.textContent=field==='size'?pose.size.toFixed(2)+'x':pose[field];}
@@ -647,7 +647,7 @@ function updateObjectInspector(a) {
   const previewRoots=[$('#mInspector'),document.querySelector('#mMapContext'),document.querySelector('body > .m-object-cascade'),...$$('#mItems [data-mid]').filter(el=>el.dataset.mid===a.id)];
   for(const root of previewRoots.filter(Boolean)){
     let changedView=false;
-    for(const img of root.querySelectorAll('img[data-object-view]'))if(img.dataset.objectView!==pose.objectView){img.dataset.objectView=pose.objectView;changedView=true;}
+    for(const img of root.querySelectorAll('img[data-object-view]')){img.style.transform=pose.mirror?'scaleX(-1)':'';if(img.dataset.objectView!==pose.objectView){img.dataset.objectView=pose.objectView;changedView=true;}}
     if(changedView)paintObjectPreviews(root);
   }
   $$('#mInspector [data-object-key]').forEach(el=>{const field=el.dataset.objectKey,has=a.objectKeys?.some(k=>k.frame===frame&&k.values[field]!==undefined);el.disabled=outside;el.classList.toggle('current',!!has);el.textContent=(has?'Remove ':'Key ')+({size:'size',objectAngle:'rotation',objectView:'view',damageState:'damage'}[field]);});
@@ -1008,10 +1008,12 @@ function bindInspector(it) {
       if(key==='railStyle'){it.railStyle=v;changed();renderInspector();return;}
       if(key==='roadLanes'){it.roadLanes=Number(v);changed();return;}
       if (key === 'objectView') {
-        if(['move','path'].includes(it.mode))putObjectKey(it,clamp(frame,it.start,it.start+it.dur),{objectView:v});
+        if(['move','path'].includes(it.mode)&&it.objectFacing==='manual')putObjectKey(it,clamp(frame,it.start,it.start+it.dur),{objectView:v});
+        else if(['move','path'].includes(it.mode))it.objectView=v;
         else writeObjectValue(it,'objectView',v);
         changed();renderInspector();return;
       }
+      if (key === 'objectFacing') { it.objectFacing=v;changed();renderInspector();return; }
       if (key === 'objectAnimation') { it.objectAnimation=v;changed();renderInspector();return; }
       if (key.includes('.')) { const [endpoint, property] = key.split('.'); if (!Number.isFinite(v)) { renderInspector(); return; } it[endpoint][property] = clamp(v, +el.min, +el.max); previewCamera = null; changed(); renderInspector(); return; }
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }

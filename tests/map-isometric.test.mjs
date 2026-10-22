@@ -22,19 +22,27 @@ assert.equal(objectCategory('doctor'),'people');assert.equal(objectCategory('hou
 const artwork=createIsometricModel('artwork','#ffffff',0,{}, {width:1024,height:512});
 assert.equal(artwork.faces.length,1,'free artwork has no opaque backing or frame');
 assert.ok(artwork.faces[0].image,'uploaded pixels remain the texture');
-assert.equal((artwork.faces[0].points[1][0]-artwork.faces[0].points[0][0])/artwork.faces[0].points[0][2],2,'artwork keeps its aspect ratio in isometric view');
+assert.equal(Math.hypot(...artwork.faces[0].points[1].map((value,i)=>value-artwork.faces[0].points[0][i]))/artwork.faces[0].points[0][2],2,'artwork keeps its aspect ratio in isometric view');
 for(const [glyph,icon]of Object.entries(OBJECT_ICONS)){
   const scene=createIsometricModel(glyph,icon.color,2,{}),points=scene.faces.flatMap(f=>f.points);
   const side=createIsometricModel(glyph,icon.color,2,{},undefined,'side');
   const rear=createIsometricModel(glyph,icon.color,2,{},undefined,'isometricBack');
-  const rearPoints=new Set(rear.faces.flatMap(f=>f.points).map(p=>JSON.stringify(p)));
-  for(const [x,y,z]of points)assert.ok(rearPoints.has(JSON.stringify([-x,-y,z])),glyph+' rear view turns the same model by 180 degrees');
+  const forward=ISOMETRIC_MODELS[glyph].forward;
+  assert.ok(['x','y'].includes(forward),glyph+' declares its native forward axis');
+  for(const [view,model]of [['isometric',scene],['isometricBack',rear]]){
+    const turns=(forward==='y'?1:0)+(view==='isometricBack'?1:0),rotate=([x,y,z])=>turns===0?[x,y,z]:turns===1?[y,-x,z]:[-x,-y,z];
+    const vertices=new Set(model.faces.flatMap(f=>f.points).map(p=>JSON.stringify(p)));
+    for(const point of side.faces.flatMap(f=>f.points))assert.ok(vertices.has(JSON.stringify(rotate(point))),glyph+' normalizes every vertex in '+view);
+    const heading=projectIso(rotate(forward==='x'?[1,0,0]:[0,1,0]));
+    assert.ok(heading[0]>0,glyph+' faces right in '+view);
+    assert.equal(Math.sign(heading[1]),view==='isometric'?1:-1,glyph+' has the correct front/back heading');
+  }
   const rearBounds=rear.bounds(false);
   assert.ok(Object.values(rearBounds).every(Number.isFinite)&&rearBounds.right>rearBounds.left&&rearBounds.bottom>rearBounds.top,glyph+' has a complete rear silhouette');
   assert.ok(Object.values(shadowGeometry(rear).bounds).every(Number.isFinite),glyph+' has finite rear shadow bounds');
   assert.deepEqual(createIsometricModel(glyph,icon.color,2,{},undefined,'isometricBack').faces,rear.faces,glyph+' rear view scrubs deterministically');
 
-  assert.deepEqual(side.faces,scene.faces,glyph+' shares exactly the same geometry, colors and materials in both views');
+  for(const material of new Set(side.faces.map(f=>f.material)))assert.ok(scene.faces.some(f=>f.material===material),glyph+' preserves '+material+' across views');
   const bounds=side.bounds(false);
   assert.ok(Object.values(bounds).every(Number.isFinite)&&bounds.right>bounds.left&&bounds.bottom>bounds.top,glyph+' has a visible side elevation');
   assert.ok(points.length>=12,glyph+' has modeled surfaces');

@@ -6,6 +6,7 @@ export const DAMAGE_STATES={intact:'Intact',damaged:'Damaged',burning:'Burning',
 export function objectPoseAt(a,frame){
   const pose={size:a.size??1,objectAngle:a.objectAngle??0,damageState:a.damageState||'intact',objectView:objectViewOf(a)};
   for(const field of Object.keys(pose)){
+    if(field==='objectView'&&['move','path'].includes(a.mode)&&a.objectFacing!=='manual')continue;
     const track=(a.objectKeys||[]).filter(k=>k.values[field]!==undefined).sort((a,b)=>a.frame-b.frame);
     if(!track.length)continue;
     const next=track.findIndex(k=>k.frame>frame);

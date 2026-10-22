@@ -117,8 +117,37 @@ try {
   await evaluate(`(()=>{const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));Object.assign(p.actions[0],{mode:'path',path:[{lon:-3,lat:49},{lon:2,lat:46},{lon:-1,lat:45}],objectView:'isometric',objectKeys:[]});localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
   await evaluate(`document.querySelector('#mItems [data-mid]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-mf="objectFacing"]').value`),'path','automatic facing is the default for path objects');
+  await change('#mInspector [data-mf="objectView"]','isometricBack');
+  assert.equal((await saved()).actions[0].objectFacing,undefined,'selecting an isometric style keeps automatic facing enabled');
+  assert.equal((await saved()).actions[0].objectKeys.length,0,'automatic facing needs no view keyframes');
+  await change('#mInspector [data-mf="objectView"]','isometric');
+  const autoFacing=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),p=E.newMapProject();
+    p.camera.init={lon:0,lat:45,zoom:4,pitch:0,bearing:0};p.shots=[];
+    const c=document.createElement('canvas');c.width=640;c.height=360;const x=c.getContext('2d'),failures=[];
+    const paths=[[[[-3,48],[3,42]],'isometric',false],[[[-3,42],[3,48]],'isometricBack',false],[[[3,48],[-3,42]],'isometric',true],[[[3,42],[-3,48]],'isometricBack',true]];
+    const render=(a,frame)=>{const v=E.drawMap(x,640,360,{...p,actions:[a]},frame,geo);return{facing:v.objectFacings.get(a.id),png:c.toDataURL()};};
+    for(const mode of ['path','move'])for(const [points,objectView,mirror]of paths){
+      const locations=points.map(([lon,lat])=>({kind:'point',lon,lat})),a=E.makeAction('object',0,{glyph:'car',objectView:'isometric',mode,place:locations[0],to:locations[1],path:locations,curve:'straight',easing:'linear',dur:120,enter:'none',exit:'none',objectAnimation:'none',trail:false});
+      for(const frame of [0,60,119]){
+        const first=render(a,frame);
+        if(first.facing.objectView!==objectView||first.facing.mirror!==mirror)failures.push(mode+': wrong quadrant at '+frame);
+        if(first.png!==render(a,frame).png)failures.push(mode+': unstable scrubbing');
+        if(!mirror&&first.png!==render({...a,objectFacing:'manual',objectView},frame).png)failures.push(mode+': wrong rendered view');
+      }
+      p.fps=30;const at30=render(a,30).png;p.fps=60;if(at30!==render({...a,dur:240,animDur:a.animDur*2},60).png)failures.push('FPS changed facing');p.fps=30;
+    }
+    const turning=E.makeAction('object',0,{glyph:'car',objectView:'isometric',mode:'path',curve:'straight',easing:'linear',dur:120,enter:'none',exit:'none',objectAnimation:'none',path:[{lon:-3,lat:48},{lon:3,lat:42},{lon:6,lat:48}]});
+    const before=render(turning,15).facing,after=render(turning,105).facing;
+    if(before.objectView!=='isometric'||after.objectView!=='isometricBack')failures.push('turn did not change front to back');
+    return failures;
+  })()`);
+  assert.deepEqual(autoFacing,[],'path and destination movement automatically face all four diagonals, including turns, endpoints, seeking and equal FPS time');
+  await change('#mInspector [data-mf="objectFacing"]','manual');
   await change('#mFrame','1');await change('#mInspector [data-mf="objectView"]','isometricBack');
   await change('#mFrame','2');await change('#mInspector [data-mf="objectView"]','isometric');
+  assert.equal((await saved()).actions[0].objectFacing,'manual','manual keyframes require the explicit manual facing mode');
   assert.deepEqual((await saved()).actions[0].objectKeys.map(k=>[k.frame,k.values.objectView]),[[0,'isometric'],[30,'isometricBack'],[60,'isometric']],'path view choices create held switches and preserve the starting view without Auto-key');
   await change('#mInspector [data-mf="__objectTrack"]','objectView');
   await evaluate(`document.querySelector('[data-map-key="object:objectView:30"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`);

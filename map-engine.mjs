@@ -1763,6 +1763,7 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   const background=ctx,foreground=mapForeground(ctx,W,H);
   if(foreground){ctx=foreground.context;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';}
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
+  v.objectFacings=new Map();
   // Foreground elements follow their map stacking order, independently of timeline rows.
   for (const a of proj.actions) {
     if(a.type==='shape')tag(a,()=>drawShape(OBJ_H,ctx,v,geo,a,frame,labels));

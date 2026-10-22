@@ -8,7 +8,7 @@ import { OBJECT_ANIMATIONS, objectAnimationTime } from './map-object-animation.m
 // used here: these miniatures are built from world-space volumes and surfaces.
 const STONE='#b4b0a1',WOOD='#95643e',IRON='#56646b',GLASS='#7cb2bf',SKIN='#d5a176',GOLD='#d3a64d',WHITE='#eee6d1';
 const models={};
-const register=(family,recipes)=>{for(const [key,options]of Object.entries(recipes))models[key]={family,options:{...options,rustic:key.startsWith('kingdom')}};};
+const register=(family,recipes)=>{for(const [key,options]of Object.entries(recipes))models[key]={family,forward:['mounted','animal','vehicle','gun','ship','aircraft','bridge'].includes(family)||['bicycle','palanquin'].includes(key)?'x':'y',options:{...options,rustic:key.startsWith('kingdom')}};};
 function slab(m,color='#8c9869',w=2.25,d=1.7){
   m.face([[-w*.6,-d*.6,-.012],[w*.6,-d*.6,-.012],[w*.6,d*.6,-.012],[-w*.6,d*.6,-.012]],color,1,false,'ground');m.faces.at(-1).groundColor=color;
 }
@@ -596,6 +596,10 @@ export function objectAnimationOf(glyph,action={}){
 export function createIsometricModel(glyph,color,t=0,action={},image,view='isometric'){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
   const scene=new IsoScene(view);scene.material=({person:'cloth',mounted:'cloth',formation:'cloth',vehicle:'paint',ship:'paint',aircraft:'paint',fort:'stone',building:'plaster',landmark:'stone',bridge:'metal',nature:'earth',goods:'wood',image:'wood',time:'metal',accessory:'metal'})[recipe.family]||'matte';
+  // Each recipe declares its native forward axis. Both isometric views face
+  // right: +X projects down-right, while -Y projects up-right from behind.
+  const turns=view==='side'?0:(recipe.forward==='y'?1:0)+(view==='isometricBack'?1:0);
+  scene.complete||=turns>0;
   const animation=objectAnimationOf(glyph,action);t=objectAnimationTime(action,t);
   if(animation==='drive')scene.wheelPhase=t*6;
   families[recipe.family](scene,{...recipe.options,animation},color||'#919c72',t,action,image);
@@ -606,11 +610,10 @@ export function createIsometricModel(glyph,color,t=0,action={},image,view='isome
       return [x,y*c-(z-.3)*s,.3+y*s+(z-.3)*c+.025*(1-Math.cos(t*1.8))];
     });
   }
-  if(view==='isometricBack'){
-    // Turn the model around its vertical axis before projection and occlusion.
-    // Shadows use these turned vertices with the same world-space sun.
+  if(turns){
+    // Rotate world geometry, retaining readable front text and the same sun.
     for(const face of scene.faces){
-      face.points=face.points.map(([x,y,z])=>[-x,-y,z]);
+      face.points=face.points.map(([x,y,z])=>turns===1?[y,-x,z]:[-x,-y,z]);
       face.depth=face.points.reduce((sum,[x,y,z])=>sum+x+y+z,0)/face.points.length;
     }
   }

@@ -19,7 +19,7 @@ function section(aside, name, nodes, index, keep=[]) {
   const summary=document.createElement('summary');
   summary.className='ff-left-summary';
   const txt=document.createElement('span');txt.textContent=name;
-  const icon=document.createElement('span');icon.className='ff-left-chevron';icon.textContent='⌄';icon.setAttribute('aria-hidden','true');
+  const icon=document.createElement('span');icon.className='ff-left-chevron';icon.setAttribute('aria-hidden','true');
   summary.append(txt,...keep,icon);
   const body=document.createElement('div');body.className='ff-left-content';body.append(...nodes);
   details.append(summary,body);
@@ -34,7 +34,9 @@ function organize(aside) {
   const output=document.createDocumentFragment();
   const flush=()=>{if(current.length){output.append(section(aside,title,current,number++,keep));current=[];}keep=[];};
   for(const child of children){
-    if(isHeading(child)){
+    if(child.classList.contains('ff-sidebar-header')){
+      flush();output.append(child);
+    } else if(isHeading(child)){
       flush(); title=titleOf(child);
       // A heading's existing button is preserved; the heading itself becomes part of the section.
       if(child.querySelector('button,input,select')) current.push(child);

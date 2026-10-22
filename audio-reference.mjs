@@ -1,4 +1,5 @@
 import { snapTimelineDelta } from './timeline-magnet.mjs';
+import { interfaceIcon } from './interface-icons.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 // Audio layers share the editor's selection, inspector and timeline. Media stays in this session.
 const studios = new Map();
@@ -52,7 +53,7 @@ export function registerAudioStudio(studio, host) {
   }
   const input=document.createElement('input');input.type='file';input.accept='audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac';input.hidden=true;document.body.append(input);
   const slot=document.querySelector(`[data-audio-studio="${studio}"]`);if(slot)slot.hidden=true;
-  const add=document.createElement('button');add.type='button';add.innerHTML='<b>♫</b>Audio';add.title='Add an audio layer';$(host.addGrid).append(add);
+  const add=document.createElement('button');add.type='button';add.innerHTML=`<b>${interfaceIcon('audio')}</b>Audio`;add.title='Add an audio layer';$(host.addGrid).append(add);
   add.onclick=()=>{pendingReplace=null;input.click();};
   input.onchange=async()=>{
     const file=input.files?.[0],replaceId=pendingReplace;input.value='';pendingReplace=null;if(!file)return;

@@ -48,6 +48,7 @@ try{
   await cdp('Page.navigate',{url:`http://127.0.0.1:${port}/guide.html#damage`});
   await waitFor(`document.querySelector('#lessonTitle')?.textContent==='Animate damage & destruction'`);
   assert.equal(await evaluate(`document.querySelector('#playDemo').getAttribute('aria-pressed')`),'false','reduced motion disables autoplay');
+  assert.deepEqual(await evaluate(`(()=>{const css=getComputedStyle(document.querySelector('#playDemo'));return {radius:css.borderRadius,color:css.color,icon:!!document.querySelector('#playDemo .ff-icon')};})()`),{radius:'6px',color:'rgb(233, 238, 232)',icon:true},'guide playback uses shared neutral controls and stroke icons');
   await evaluate(`localStorage.setItem('frameflow-map-v1','project-sentinel')`);
   await waitFor(`document.querySelectorAll('#lessonNav a').length===${LESSONS.length}`);
   const seek=async value=>evaluate(`(()=>{const slider=document.querySelector('#demoSeek');slider.value=${value};slider.dispatchEvent(new Event('input',{bubbles:true}));return document.querySelector('canvas').toDataURL();})()`);

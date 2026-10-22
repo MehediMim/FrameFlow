@@ -10,7 +10,7 @@
 .two label .ff-palette{margin-top:7px}
 /* Each button has its own tooltip; no dialog or additional settings needed. */
 
-</style><link rel="stylesheet" href="inspector-panels.css?v=neutral-sections-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=inspector-labels-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&display=swap"><link rel="stylesheet" href="landing-war.css?v=campaign-landing-1"></head><body class="landing">
+</style><link rel="stylesheet" href="inspector-panels.css?v=neutral-sections-1"><link rel="stylesheet" href="left-panels.css"><link id="ffStudioStyles" rel="stylesheet" href="studio-ui.css?v=inspector-labels-1"><link rel="stylesheet" href="landing-map.css?v=paired-camera-1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&display=swap"><link rel="stylesheet" href="landing-war.css?v=campaign-landing-1"><link rel="stylesheet" href="interface.css?v=shared-interface-1"></head><body class="landing">
 <style>
 /* Support links for Map Studio and the landing page. */
 .support-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;text-decoration:none;font-weight:700;border:1px solid #b6f36e77;border-radius:7px;background:#b6f36e14;color:#c9fa92;padding:9px 12px;transition:background .2s,border-color .2s}
@@ -251,6 +251,7 @@ body.landing #landing{display:block}
 <div id="mapStudio">
 <div class="workspace">
 <aside class="left">
+<div class="tabs ff-sidebar-header"><b>Tools &amp; layers</b><span>MAP</span></div>
 <div class="section-title">ADD LAYER <span>＋</span></div><div class="add-grid" id="mAddGrid"></div>
 <div class="section-title">CAMERA <span>▣</span></div><div class="m-presets" id="mPresets"></div>
 <div class="section-title">LAYERS <span id="mItemCount"></span></div><div id="mItems"></div>
@@ -265,7 +266,7 @@ body.landing #landing{display:block}
 <div class="transport"><span class="time" id="mTimecode">00:00:00</span><div class="play-controls"><button id="mStart" title="First frame">|◀</button><button id="mPrev" title="Previous frame">‹</button><button id="mPlay" class="play" title="Play / pause (Space)">▶</button><button id="mNext" title="Next frame">›</button><button id="mEnd" title="Last frame">▶|</button><button id="mLoop" class="active" title="Loop playback">↻</button></div><label>FRAME <input id="mFrame" type="number" min="0" value="0"></label></div><div class="ff-audio-slot" data-audio-studio="map"></div>
 </main>
 <aside class="right">
-<div class="tabs"><b id="mInspTitle">Properties</b><span>MAP</span></div>
+<div class="tabs ff-sidebar-header"><b id="mInspTitle">Properties</b><span>MAP</span></div>
 <div id="mInspector"></div>
 <dialog class="composition" id="mSettingsPanel" aria-label="Map settings"><div class="section-title">MAP SETTINGS <button id="mSettingsClose" type="button" aria-label="Close map settings">✕</button></div>
 <input type="hidden" id="mAreaMode" value="world">

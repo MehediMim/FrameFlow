@@ -1,0 +1,108 @@
+/* Shared UI components. Load after page-specific layouts; keep map artwork independent. */
+:root{--bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border);--text:var(--ff-text);--muted:var(--ff-muted);--accent:var(--ff-accent)}
+body{font-family:var(--ff-font-body)}
+.ff-icon{display:inline-block;width:var(--ff-icon-size);height:var(--ff-icon-size);flex:0 0 var(--ff-icon-size);vertical-align:middle;pointer-events:none}
+.player-controls button{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+body.ff-unified #mapStudio :is(.add-grid,.m-presets) b{display:inline-flex;align-items:center;justify-content:center}
+:where(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--ff-focus);outline-offset:3px}
+/* Secondary actions use neutral surfaces. Primary actions and selected states carry lime. */
+body.ff-unified :is(button,.help),.guide-header .studio-link,.player-controls button,.lesson-footer button,#clearSearch{border-radius:var(--ff-radius);font-family:var(--ff-font-body);font-weight:500}
+body.ff-unified button:not(.ff-color-chip):not(.m-key):not(.diamond):not([data-war-jump]):not(.m-hit-menu-item){transition:background-color .15s,border-color .15s,color .15s}
+body.ff-unified>header button,body.ff-unified #mapStudio :is(.stagebar button,.transport button,.timeline-tools button,.layer-actions button,.starter button),.player-controls button,.lesson-footer button,#clearSearch{background:var(--ff-surface);color:var(--ff-text);border:1px solid var(--ff-border);border-radius:var(--ff-radius);min-height:var(--ff-control-height);padding:6px 10px;line-height:1.4}
+body.ff-unified>header button:hover,body.ff-unified #mapStudio :is(.stagebar button,.transport button,.timeline-tools button,.layer-actions button,.starter button):hover,.player-controls button:hover,.lesson-footer button:hover,#clearSearch:hover{background:var(--ff-surface-hover);border-color:var(--ff-border-strong)}
+body.ff-unified>header button.primary,body.ff-unified #mapStudio .transport button.primary,.guide-header .studio-link{background:var(--ff-accent);color:var(--ff-on-accent);border:1px solid var(--ff-accent);font-weight:700}
+body.ff-unified .modes button.on{background:var(--ff-surface-hover);color:var(--ff-text);box-shadow:inset 0 -2px var(--ff-accent)}
+body.ff-unified>header{background:var(--ff-panel);border-color:var(--ff-border)}
+body.ff-unified>header #mProjectName{background:var(--ff-control);border-radius:var(--ff-radius);color:var(--ff-text);font-family:var(--ff-font-body)}
+body.ff-unified :is(button,input,select,textarea,summary):focus-visible{outline-color:var(--ff-focus)}
+body.ff-unified .support-link,#landing .support-link{background:transparent;border-color:var(--ff-border);color:var(--ff-muted);border-radius:var(--ff-radius)}
+body.ff-unified .support-link:hover,#landing .support-link:hover{background:var(--ff-surface-hover);border-color:var(--ff-border-strong);color:var(--ff-text)}
+/* Inputs share geometry and contrast without changing compact timeline controls. */
+body.ff-unified #mapStudio :is(input,select,textarea),body.ff-unified dialog.ff-dialog :is(input,select,textarea),.search-wrap{background:var(--ff-control);color:var(--ff-text);border-color:var(--ff-border);border-radius:var(--ff-radius)}
+body.ff-unified dialog.ff-dialog{background:var(--ff-surface);border-color:var(--ff-border);border-radius:var(--ff-radius-dialog);font-family:var(--ff-font-body)}
+body.ff-unified dialog.ff-settings :is(.ff-settings-footer,.m-settings-group){background:var(--ff-panel);border-color:var(--ff-border)}
+body.ff-unified #mapStudio :is(input[type=range],input[type=checkbox]),.player-controls input{accent-color:#aabbb0}
+body.ff-unified #mInspector :is(input:not([type=range]):not([type=color]):not([type=checkbox]),select){min-height:var(--ff-control-height);padding:7px 8px;font-size:11px}
+body.ff-unified #mInspector label{font-size:11px;line-height:1.5;color:var(--ff-muted)}
+body.ff-unified #mInspector .two{gap:var(--ff-space-2)}
+body.ff-unified #mInspector .mini-label{color:var(--ff-subtle);font-size:10px;line-height:1.65}
+body.ff-unified #mInspector .m-val{color:var(--ff-text)}
+/* Panels have a neutral heading, a stable spacing rhythm and one disclosure icon. */
+body.ff-unified #mapStudio :is(.ff-inspector-section,.ff-left-section){background:var(--ff-panel);border:1px solid var(--ff-border);border-radius:var(--ff-radius-card);margin-bottom:var(--ff-space-2)}
+body.ff-unified #mapStudio :is(.ff-inspector-summary,.ff-left-summary){min-height:40px;padding:10px 12px;color:var(--ff-text);font-size:11px;font-weight:650;letter-spacing:.3px;line-height:1.45;border-radius:var(--ff-radius-card)}
+body.ff-unified #mapStudio :is(.ff-inspector-section,.ff-left-section)[open]>:is(.ff-inspector-summary,.ff-left-summary){background:var(--ff-surface);color:var(--ff-text);border-bottom:1px solid var(--ff-border);border-radius:var(--ff-radius-card) var(--ff-radius-card) 0 0}
+body.ff-unified #mapStudio :is(.ff-inspector-summary,.ff-left-summary):hover{background:var(--ff-surface-hover)}
+body.ff-unified :is(.ff-inspector-chevron,.ff-left-chevron){width:7px;height:7px;flex:0 0 7px;border-right:1.5px solid var(--ff-muted);border-bottom:1.5px solid var(--ff-muted);transform:rotate(-45deg);margin-right:3px}
+body.ff-unified :is(.ff-inspector-section,.ff-left-section)[open]>summary :is(.ff-inspector-chevron,.ff-left-chevron){transform:rotate(45deg)}
+body.ff-unified .ff-inspector-content{padding:var(--ff-space-3)}
+body.ff-unified .ff-left-content{padding:var(--ff-space-3)}
+/* Both sidebars use the same shell, content inset and section rhythm. */
+:root{--ff-right:var(--ff-left)}
+body.ff-unified #mapStudio .workspace{grid-template-columns:var(--ff-left) minmax(0,1fr) var(--ff-right)}
+body.ff-unified #mapStudio .workspace>:is(.left,.right){background:var(--ff-panel);padding:0;min-width:0;scrollbar-width:thin;scrollbar-color:var(--ff-border-strong) var(--ff-panel)}
+body.ff-unified #mapStudio .workspace>.left{gap:0}
+body.ff-unified #mapStudio .workspace>:is(.left,.right)>.ff-sidebar-header{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px;height:48px;min-height:48px;flex:0 0 48px;margin:0;padding:12px;background:var(--ff-panel);border-bottom:1px solid var(--ff-border);width:100%;box-sizing:border-box}
+body.ff-unified #mapStudio .ff-sidebar-header b{font-size:12px;font-weight:650;line-height:1.5;color:var(--ff-text)}
+body.ff-unified #mapStudio .ff-sidebar-header>span{font-size:9px;line-height:1.5;letter-spacing:1.2px;color:var(--ff-subtle)}
+body.ff-unified #mapStudio .workspace>.left>.ff-left-section{width:calc(100% - 24px);margin:0 12px 8px}
+body.ff-unified #mapStudio .workspace>.left>.ff-sidebar-header{margin-bottom:12px}
+body.ff-unified #mInspector.ff-inspector-accordion{padding:12px!important}
+body.ff-unified #mapStudio :is(.ff-left-section,.ff-inspector-section){margin-bottom:8px}
+body.ff-unified #mapStudio :is(.ff-left-content,.ff-inspector-content){padding:12px}
+body.ff-unified .ff-inspector-group-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 2px 10px;margin-top:12px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ff-muted)}
+body.ff-unified .ff-inspector-group-heading:first-of-type{margin-top:0}
+body.ff-unified .ff-inspector-group-heading button{min-height:24px;padding:3px 6px;border:1px solid var(--ff-border);background:transparent;color:var(--ff-muted);font-size:10px;letter-spacing:0;text-transform:none}
+body.ff-unified .ff-inspector-group-heading button:hover{background:var(--ff-surface-hover);color:var(--ff-text)}
+body.ff-unified #mInspector .inspector-title{display:flex;align-items:center;gap:8px;padding-bottom:12px;margin-bottom:8px;border-bottom:1px solid var(--ff-border);font-size:13px;color:var(--ff-text)}
+body.ff-unified #mInspector .inspector-title>span{color:var(--ff-muted)}
+body.ff-unified #mapStudio :is(.add-grid,.m-presets) button{background:var(--ff-surface);border-radius:var(--ff-radius);border-color:var(--ff-border);gap:8px;font-size:11px;font-weight:500;min-height:40px;padding:8px;line-height:1.4}
+body.ff-unified #mapStudio :is(.add-grid,.m-presets) button:hover{background:var(--ff-surface-hover);border-color:var(--ff-border-strong)}
+body.ff-unified #mapStudio :is(.add-grid,.m-presets) b{color:var(--ff-muted);font-size:var(--ff-icon-size);line-height:1.2;width:18px;flex-basis:18px;text-align:center}
+body.ff-unified #mapStudio .m-presets button{gap:6px;padding:8px 6px;overflow-wrap:normal;word-break:normal}
+body.ff-unified #mapStudio .m-presets b{width:16px;flex-basis:16px}
+body.ff-unified #mapStudio .m-presets button>span{min-width:0;overflow-wrap:normal;word-break:normal}
+body.ff-unified #mInspector :is(.m-object-key-buttons button,.m-path-key-actions button){background:var(--ff-surface);color:var(--ff-text);border-color:var(--ff-border);border-radius:var(--ff-radius)}
+body.ff-unified #mInspector .m-object-key-buttons button.current{color:var(--ff-accent);border-color:var(--ff-selection-border);background:var(--ff-selection)}
+/* Selection is identical in Layers, the timeline and the guide. */
+body.ff-unified #mapStudio :is(.m-item,.track-label):is(.selected,.multi-selected),.nav-section a[aria-current=page]{background:var(--ff-selection);border-color:var(--ff-selection-border);box-shadow:inset 2px 0 var(--ff-accent);color:var(--ff-text);border-radius:var(--ff-radius)}
+body.ff-unified #mapStudio .m-item{font-size:11px;line-height:1.5;min-height:36px;border-radius:var(--ff-radius)}
+body.ff-unified #mapStudio .m-item:is(.selected,.multi-selected) .name{color:var(--ff-text);font-weight:600}
+body.ff-unified #mapStudio .m-item .type{color:var(--ff-muted)}
+body.ff-unified #mapStudio .m-clip:is(.selected,.multi-selected){border-color:var(--ff-selection-border);box-shadow:inset 0 0 0 1px var(--ff-accent)}
+body.ff-unified #mapStudio .stagebar button.active{background:var(--ff-selection);border-color:var(--ff-selection-border);color:var(--ff-text)}
+body.ff-unified #mapStudio .ff-row-actions>button{background:transparent;border:0;min-height:24px;padding:2px;color:var(--ff-muted)}
+body.ff-unified #mapStudio .ff-row-actions svg{width:14px;height:14px;stroke-width:1.7}
+body.ff-unified #mapStudio .ff-row-actions>button[data-row-action=delete]:hover{color:var(--ff-danger)}
+/* Homepage component colors follow the editor; illustration palettes keep their story. */
+#landing{--mh-bg:var(--ff-bg);--mh-surface:var(--ff-panel);--mh-border:var(--ff-border);--mh-text:var(--ff-text);--mh-muted:var(--ff-muted);--mh-accent:var(--ff-accent);background:var(--ff-bg);color:var(--ff-text)}
+#landing :is(.mh-button,.mh-filter-buttons button,.mh-feature-search input){border-radius:var(--ff-radius);font-family:var(--ff-font-body)}
+#landing .mh-button{background:var(--ff-surface);color:var(--ff-text);border:1px solid var(--ff-border);font-weight:600}
+#landing .mh-button:hover{background:var(--ff-surface-hover);border-color:var(--ff-border-strong);transform:none}
+#landing .mh-button.mh-primary{background:var(--ff-accent);border-color:var(--ff-accent);color:var(--ff-on-accent)}
+#landing .mh-button.mh-primary:hover{background:#c6fa8b}
+#landing .mh-war-cta .mh-button.mh-primary{animation:none}
+#landing :is(.mh-eyebrow,.mh-card-number,.mh-small-note,.mh-text-link,.mh-nav-links a:hover,.mh-library-link,.mh-library-status){color:var(--ff-muted)}
+#landing .mh-text-link:hover,#landing .mh-library-link:hover{color:var(--ff-text)}
+#landing :is(.mh-card,.mh-library-card,.mh-preview,.mh-group-card,.mh-label-card,.mh-export-panel,.mh-feature-search){border-color:var(--ff-border);border-radius:var(--ff-radius-card)}
+#landing :is(.mh-card,.mh-library-card,.mh-group-card){background:var(--ff-panel)}
+#landing .mh-filter-buttons button{background:var(--ff-surface);border:1px solid var(--ff-border);color:var(--ff-muted)}
+#landing .mh-filter-buttons button[aria-pressed=true]{background:var(--ff-selection);border-color:var(--ff-selection-border);color:var(--ff-accent)}
+#landing .mh-feature-search input{background:var(--ff-control);border-color:var(--ff-border);color:var(--ff-text)}
+#landing .mh-war-controls button:not([data-war-jump]){background:var(--ff-panel);color:var(--ff-text);border-color:var(--ff-border);border-radius:var(--ff-radius)}
+#landing .mh-war-controls button:not([data-war-jump]):hover{background:var(--ff-surface-hover);border-color:var(--ff-border-strong)}
+#landing :is(a,button,input):focus-visible{outline:2px solid var(--ff-focus);outline-offset:3px}
+/* The guide uses the same controls and surfaces as the studio. */
+.guide-header{background:var(--ff-panel)}
+.guide-header .studio-link{border-radius:var(--ff-radius)}
+.intro .eyebrow,.lesson-heading .eyebrow,.steps-label,.step-label span,.coverage h3,.lesson-footer>a,.guide-note>a{color:var(--ff-muted)}
+.lesson-description,.intro>p,.lesson-steps p{color:var(--ff-muted)}
+.demo-player,.lesson-steps button{border-color:var(--ff-border);border-radius:var(--ff-radius-card);background:var(--ff-panel)}
+.demo-top,.player-controls{background:var(--ff-surface);color:var(--ff-muted);border-color:var(--ff-border)}
+.player-controls button:first-child{background:var(--ff-surface);color:var(--ff-text);border-color:var(--ff-border)}
+.player-controls button[aria-pressed=true]{background:var(--ff-selection);border-color:var(--ff-selection-border);color:var(--ff-accent)}
+.lesson-steps button[aria-current=step]{background:var(--ff-selection);border-color:var(--ff-selection-border);border-top-color:var(--ff-accent)}
+.nav-section a[aria-current=page] span{color:var(--ff-accent)}
+.coverage span{border-color:var(--ff-border);border-radius:var(--ff-radius);color:var(--ff-muted)}
+.search-wrap{border-radius:var(--ff-radius);min-height:40px}
+.search-wrap input{font-family:var(--ff-font-body);font-size:12px}
+@media(prefers-reduced-motion:reduce){body.ff-unified button{transition:none}}

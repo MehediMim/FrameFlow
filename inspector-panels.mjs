@@ -4,6 +4,7 @@ const TARGETS = ['mInspector'];
 const preferences = new Map();
 const CSS_SECTION = 'ff-inspector-section';
 const headingSelector = '.section-title';
+const advancedTitles = new Set(['ANIMATION','KEYFRAMES','PATH ANIMATION','FORMATION','FILL START POINT','HIGHLIGHT EXTENT','RIBBON TEXT STYLE','PLAQUE TEXT STYLE']);
 
 function keyFor(panel, title) {
   return `${panel.id}:${title.toLowerCase().replace(/\s+/g, ' ').trim()}`;
@@ -34,18 +35,19 @@ function arrange(panel) {
   if (!nodes.length) return;
   const fragment = document.createDocumentFragment();
   const sections = [];
-  let group = [], currentTitle = 'GENERAL', serial = 0, hasHeading = false;
+  let group = [], currentTitle = 'GENERAL', hasHeading = false;
   let pinned = [];
   const flush = () => {
     if (!group.some(n => n.nodeType === Node.ELEMENT_NODE || n.textContent.trim())) { group = []; return; }
     const title = currentTitle;
     const k = keyFor(panel, title);
-    serial++;
     const details = document.createElement('details');
     details.className = CSS_SECTION;
     details.dataset.sectionKey = k;
     const stored = preferences.get(k);
-    details.open = panel.id==='mInspector' ? true : stored === undefined ? (panel.id === 'inspector' ? motionSectionPriority(title) <= 20 : serial === 1) : stored;
+    const advanced = advancedTitles.has(title.toUpperCase());
+    details.dataset.priority = advanced ? 'advanced' : 'essential';
+    details.open = stored ?? !advanced;
     const summary = document.createElement('summary');
     summary.className = 'ff-inspector-summary';
     const text = document.createElement('span');
@@ -53,15 +55,17 @@ function arrange(panel) {
     text.textContent = title;
     const chevron = document.createElement('span');
     chevron.className = 'ff-inspector-chevron';
-    chevron.textContent = '⌄';
+    chevron.textContent = '';
     chevron.setAttribute('aria-hidden','true');
     summary.append(text, chevron);
     const content = document.createElement('div');
     content.className = 'ff-inspector-content';
     content.append(...group);
     details.append(summary, content);
-    details.addEventListener('toggle', () => preferences.set(k, details.open));
-    sections.push({title, details});
+    details.addEventListener('toggle', () => {
+      if (details.isConnected) preferences.set(k, details.open);
+    });
+    sections.push({title, details, advanced});
     group = [];
   };
   // Keep the layer title immediately visible; put all property fields in groups.
@@ -83,7 +87,27 @@ function arrange(panel) {
     } else group.push(node);
   }
   flush();
-  sections.forEach(({details}) => fragment.append(details));
+  for (const advanced of [false, true]) {
+    const group = sections.filter(section => section.advanced === advanced);
+    if (!group.length) continue;
+    const heading = document.createElement('div');
+    heading.className = 'ff-inspector-group-heading';
+    const label = document.createElement('span');
+    label.textContent = advanced ? 'Advanced' : 'Essentials';
+    heading.append(label);
+    if (advanced) {
+      const expand = document.createElement('button');
+      expand.type = 'button';
+      expand.textContent = 'Expand all';
+      expand.setAttribute('aria-label', 'Expand all advanced properties');
+      expand.addEventListener('click', () => group.forEach(({details}) => {
+        details.open = true;
+        preferences.set(details.dataset.sectionKey, true);
+      }));
+      heading.append(expand);
+    }
+    fragment.append(heading, ...group.map(({details}) => details));
+  }
   if (!fragment.childNodes.length) return;
   // Avoid triggering expensive studio rerenders, only replace this panel's children.
   panel.replaceChildren(...pinned, fragment);

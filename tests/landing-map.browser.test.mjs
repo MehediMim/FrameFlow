@@ -65,6 +65,8 @@ try {
   assert.deepEqual(evaluateInfo.duplicates,[],'landing IDs do not collide with editor controls');
   assert.ok(evaluateInfo.title.includes('Map Animation Studio'));
   assert.ok(await evaluate(`document.querySelector('[data-war-stage=hero] canvas').width>300`),'campaign map canvas renders');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.mh-nav .mh-primary')).backgroundColor`),'rgb(182, 243, 110)','homepage primary action shares the lime token');
+  assert.ok(await evaluate(`!!document.querySelector('#mhWarPlay svg.ff-icon')`),'homepage playback uses shared stroke icons');
   await waitFor(`document.getElementById('landing').dataset.showcaseReady`);
   assert.equal(await evaluate(`document.getElementById('landing').dataset.showcaseReady`),'true','real map and texture renderers complete');
   assert.equal(await evaluate(`document.querySelectorAll('[data-map-object]').length`),56,'historical, modern, and civilian map objects are on display');

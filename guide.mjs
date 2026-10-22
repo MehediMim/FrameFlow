@@ -1,4 +1,5 @@
 import { LESSONS } from './guide-lessons.mjs';
+import { interfaceIcon } from './interface-icons.mjs';
 import { OBJECT_ICONS } from './map-objects.mjs';
 import { drawDamage, drawDestruction } from './map-damage.mjs';
 
@@ -195,7 +196,7 @@ function tick(now) {
 }
 function syncPlayback() {
   cancelAnimationFrame(raf);raf=0;last=0;
-  $('#playDemo').textContent=playing?'Pause':'Play';
+  $('#playDemo').innerHTML=interfaceIcon(playing?'pause':'play')+`<span>${playing?'Pause':'Play'}</span>`;
   $('#playDemo').setAttribute('aria-label',playing?'Pause animation':'Play animation');
   $('#playDemo').setAttribute('aria-pressed',String(playing));
   if(playing&&!document.hidden)raf=requestAnimationFrame(tick);
@@ -213,4 +214,5 @@ window.addEventListener('hashchange',()=>selectLesson(location.hash.slice(1),tru
 document.addEventListener('visibilitychange',syncPlayback);
 reduced.addEventListener('change',()=>{if(reduced.matches){playing=false;syncPlayback();}});
 atlas.addEventListener('load',render);
+$('#replayDemo').innerHTML=interfaceIcon('replay')+'<span>Replay</span>';
 selectLesson(location.hash.slice(1));syncPlayback();

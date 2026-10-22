@@ -259,6 +259,43 @@ try {
   assert.ok(await evaluate(`(()=>{const el=document.querySelector('#mInspector [data-mf="__lscustom"]').closest('label'),c=el.closest('.ff-inspector-content');return el.getBoundingClientRect().width>c.getBoundingClientRect().width*.8;})()`),'label checkboxes occupy a full row');
   await evaluate(`document.querySelector('#mInspector [data-mf="__lscustom"]').scrollIntoView({block:'nearest'})`);
   await writeFile(join(tmpdir(),'frameflow-inspector-label-layout.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await evaluate(`document.querySelector('#mItems [data-mid="object"]').click()`);
+  await waitFor(`!!document.querySelector('#mInspector [data-mf="enter"]')?.closest('[data-priority="advanced"]')`);
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="enter"]').closest('details').open`),false,'animation options start in a collapsed Advanced section');
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="damageState"]').closest('details').open`),true,'frequent appearance controls remain visible');
+  assert.ok(await evaluate(`(()=>{const groups=[...document.querySelectorAll('#mInspector > .ff-inspector-section')];const firstAdvanced=groups.findIndex(el=>el.dataset.priority==='advanced');return firstAdvanced>0&&groups.slice(firstAdvanced).every(el=>el.dataset.priority==='advanced');})()`),'advanced sections follow essential controls');
+  await evaluate(`document.querySelector('#mInspector [data-mf="enter"]').closest('details').querySelector('summary').click()`);
+  await change('#mInspector [data-mf="objectAngle"]',12);
+  await waitFor(`document.querySelector('#mInspector [data-mf="objectAngle"]').value==='12'`);
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="enter"]').closest('details').open`),true,'expanded preferences survive property edits');
+  await evaluate(`document.querySelector('#mInspector [data-mf="enter"]').closest('details').querySelector('summary').click()`);
+  await change('#mInspector [data-mf="objectAngle"]',24);
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf="enter"]').closest('details').open`),false,'collapsed preferences survive property edits');
+  await evaluate(`document.querySelector('.ff-inspector-group-heading button').click()`);
+  assert.ok(await evaluate(`[...document.querySelectorAll('#mInspector [data-priority="advanced"]')].every(el=>el.open)`),'Expand all reveals advanced controls');
+  const components=await evaluate(`(()=>{const css=selector=>getComputedStyle(document.querySelector(selector));return {primary:css('#mExport').backgroundColor,secondary:css('#mSave').backgroundColor,icon:css('#mAddGrid b').color,heading:css('.ff-left-summary').color,radius:css('#mExport').borderRadius,selected:css('#mItems .selected').boxShadow};})()`);
+  assert.equal(components.primary,'rgb(182, 243, 110)','lime identifies the primary export action');
+  assert.notEqual(components.secondary,components.primary,'secondary controls have neutral surfaces');
+  assert.notEqual(components.icon,'rgb(182, 243, 110)','unselected tool icons are neutral');
+  assert.notEqual(components.heading,'rgb(182, 243, 110)','panel headings are neutral');
+  assert.ok(await evaluate(`[...document.querySelectorAll('#mAddGrid b,#mPresets b')].every(el=>el.querySelector('svg.ff-icon'))`),'tools and camera presets share stroke icons');
+  assert.equal(components.radius,'6px','controls use the shared radius');
+  assert.ok(components.selected.includes('182, 243, 110'),'selected layers have a lime edge');
+  const sidebars=await evaluate(`(()=>{
+    const compare=(left,right,fields)=>{const a=getComputedStyle(document.querySelector(left)),b=getComputedStyle(document.querySelector(right));return fields.every(field=>a[field]===b[field]);};
+    const base='#mapStudio .workspace > ';
+    return {
+      shells:compare(base+'.left',base+'.right',['width','backgroundColor','paddingTop','paddingRight','paddingBottom','paddingLeft','scrollbarColor']),
+      headers:compare(base+'.left > .ff-sidebar-header',base+'.right > .ff-sidebar-header',['height','padding','backgroundColor','borderBottomColor','position']),
+      sections:compare('.ff-left-section','.ff-inspector-section',['backgroundColor','borderRadius','borderTopColor','marginBottom']),
+      summaries:compare('.ff-left-summary','.ff-inspector-summary',['height','padding','fontSize','fontWeight','letterSpacing','backgroundColor','color']),
+      content:compare('.ff-left-content','.ff-inspector-content',['padding']),
+      pinned:!!document.querySelector(base+'.left > .ff-sidebar-header')&&!document.querySelector('.ff-left-section .ff-sidebar-header')
+    };
+  })()`);
+  assert.ok(Object.values(sidebars).every(Boolean),'left and right panel shells, headers, cards, summaries and content share one design: '+JSON.stringify(sidebars));
+  await evaluate(`document.querySelector('#mInspector').parentElement.scrollTop=0`);
+  await writeFile(join(tmpdir(),'frameflow-interface-editor.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await evaluate(`document.querySelector('#mSettingsButton').click()`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#mSettingsPanel .ff-settings-body')).display`),'grid','desktop categories and settings use a two-column layout');
   assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tab]').length`),4,'settings have four categories without Starting view');
@@ -282,6 +319,10 @@ try {
   await writeFile(join(tmpdir(),'frameflow-organized-settings-mobile.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await evaluate(`document.querySelector('#mSettingsPanel .ff-settings-footer button').click()`);
   assert.equal(await evaluate(`document.querySelector('#mSettingsPanel').open`),false);
+  await cdp('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
+  await change('#mSize','1080,1920');
+  await waitFor(`!!document.querySelector('#mapStudio .ff-portrait-layout')`);
+  assert.ok(await evaluate(`[...document.querySelectorAll('#mapStudio .workspace > .left,#mapStudio .workspace > .right')].every(panel=>{const r=panel.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth&&panel.scrollWidth<=panel.clientWidth+1;})`),'sidebar styling fits the portrait workspace');
   assert.deepEqual(errors,[]);
   console.log('Editor consistency: spatial layer selection, dragging, shared controls and context actions, mixed Shift-selection, batch actions, undo and pinned overlays passed');
 } finally {

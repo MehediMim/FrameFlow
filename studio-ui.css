@@ -1,5 +1,5 @@
 /* One visual contract for Motion, Map, Paper and Scene. Loaded after studio CSS. */
-:root{--ff-control:#242d27;--ff-border:#39473d;--ff-surface:#202823;--ff-radius:6px;--ff-left:260px;--ff-right:255px;--ff-timeline:238px}
+:root{--ff-left:260px;--ff-right:255px;--ff-timeline:238px}
 .ff-unified > header{height:auto;min-height:62px;flex:0 0 auto;gap:8px;flex-wrap:wrap;padding:10px 16px}
 .ff-unified > header :is(#projectName,#mProjectName,#pProjectName,#scName){width:clamp(110px,12vw,190px);margin:0;padding:8px 10px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:#22262a;font-size:12px}
 .ff-unified > header :is(#saveState,#mSaveState,#pSaveState,#scStatus){font-size:10px;margin-right:auto;white-space:nowrap}

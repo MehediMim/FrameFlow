@@ -1,6 +1,7 @@
 import { duplicateLayers, removeLayers, arrangeLayers } from './map-layer-actions.mjs?v=map-order-1';
 import { installDirectMapEditing } from './map-direct-edit.mjs?v=add-submenu-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
+import { interfaceIcon } from './interface-icons.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
@@ -327,8 +328,8 @@ function regionFields(a) {
     + campaign.regionFields(a) + '</div>';
 }
 function buildStaticUI() {
-  $('#mAddGrid').innerHTML = Object.entries(ACTION_TYPES).filter(([, a]) => !a.hidden).map(([k, a]) => `<button data-madd="${k}" title="${esc(a.hint)}"><b>${a.icon}</b>${a.label}</button>`).join('');
-  $('#mPresets').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<button data-mpre="${k}" title="${esc(p.hint)}"><b>${p.icon}</b><span>${p.label}</span></button>`).join('');
+  $('#mAddGrid').innerHTML = Object.entries(ACTION_TYPES).filter(([, a]) => !a.hidden).map(([k, a]) => `<button data-madd="${k}" title="${esc(a.hint)}"><b>${interfaceIcon(k)}</b>${a.label}</button>`).join('');
+  $('#mPresets').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<button data-mpre="${k}" title="${esc(p.hint)}"><b>${interfaceIcon(k)}</b><span>${p.label}</span></button>`).join('');
   $$('[data-madd]').forEach(el => el.onclick = () => addAction(el.dataset.madd));
   $$('[data-mpre]').forEach(el => el.onclick = () => addShot(el.dataset.mpre));
   $('#mTheme').innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
@@ -567,10 +568,11 @@ function objectFields(a) {
     +(a.mode==='move'?F.loc('to','Destination',a.to,'place'):'')
     +(['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'Start position':'Location',a.place,'place'))
     +(['move','path'].includes(a.mode)?F.chk('trail','Draw a trail',a.trail!==false):'')
-    +'<div class="section-title">APPEARANCE &amp; ANIMATION</div>'
-    +(a.glyph==='image'?'':'<div class="two">'+F.sel('enter','Appears',a.enter,OBJECT_ENTER)+F.sel('exit','Disappears',a.exit,OBJECT_EXIT.map(([key,label])=>[key,key==='none'?'Stay to end':label]))+'</div>'+F.sel('idle','While visible',a.idle,OBJECT_IDLE))
+    +'<div class="section-title">APPEARANCE</div>'
     +F.range('opacity','Opacity',a.opacity??1,0,1,.05,x=>Math.round(x*100)+'%')
     +(a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
+    +'<div class="section-title">ANIMATION</div>'
+    +(a.glyph==='image'?'':'<div class="two">'+F.sel('enter','Appears',a.enter,OBJECT_ENTER)+F.sel('exit','Disappears',a.exit,OBJECT_EXIT.map(([key,label])=>[key,key==='none'?'Stay to end':label]))+'</div>'+F.sel('idle','While visible',a.idle,OBJECT_IDLE))
     +F.sel('easing','Motion',a.easing,EASE_OPTS)
     +F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['damageState','Damage state']])
     +objectKeyFields(a)

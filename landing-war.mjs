@@ -2,6 +2,7 @@
 // One deterministic scene (render(t) is a pure function of time) powers both the hero
 // (autoplay + scrubber + click-to-strike) and the scroll-scrubbed "three acts" section.
 // It reads the bundled map-data/countries-110m.json and never touches an editor project.
+import { interfaceIcon } from './interface-icons.mjs';
 
 const root = document.getElementById('landing');
 
@@ -552,7 +553,7 @@ if (root) {
     function setPlaying(v) {
       playing = v; last = 0;
       play.setAttribute('aria-pressed', String(v)); play.setAttribute('aria-label', v ? 'Pause campaign preview' : 'Play campaign preview');
-      play.querySelector('[data-play-icon]').textContent = v ? 'Ⅱ' : '▶'; play.querySelector('[data-play-text]').textContent = v ? 'Pause' : 'Play';
+      play.querySelector('[data-play-icon]').innerHTML = interfaceIcon(v ? 'pause' : 'play'); play.querySelector('[data-play-text]').textContent = v ? 'Pause' : 'Play';
       kick();
     }
     play.addEventListener('click', () => setPlaying(!playing));

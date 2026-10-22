@@ -1,7 +1,14 @@
-/* Shared visual language for the public page and Map Studio. */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Shared visual language for the public page, Map Studio and feature guide. */
 :root{
-  --ff-bg:#111713;--ff-panel:#191f1c;--ff-surface:#202823;--ff-control:#242d27;
-  --ff-border:#39473d;--ff-text:#e9efe5;--ff-muted:#9aa99c;--ff-accent:#b6f36e;
-  --ff-radius:6px;--ff-space:8px;--ff-font-body:'DM Sans',sans-serif;--ff-font-heading:Manrope,sans-serif;
+  --ff-bg:#131816;--ff-panel:#1b211e;--ff-surface:#222a25;--ff-control:#252e28;
+  --ff-surface-hover:#2d3730;--ff-border:#3d4941;--ff-border-strong:#59665d;
+  --ff-text:#e9eee8;--ff-muted:#a0ada3;--ff-subtle:#839188;--ff-accent:#b6f36e;
+  --ff-on-accent:#192512;--ff-selection:#b6f36e0d;--ff-selection-border:#7e9c63;
+  --ff-focus:#c0cec5;--ff-danger:#ef9b95;
+  --ff-radius:6px;--ff-radius-card:8px;--ff-radius-dialog:12px;
+  --ff-space:8px;--ff-space-1:4px;--ff-space-2:8px;--ff-space-3:12px;--ff-space-4:16px;--ff-space-6:24px;
+  --ff-control-height:32px;--ff-icon-size:16px;
+  --ff-font-body:'DM Sans',Arial,Helvetica,sans-serif;--ff-font-heading:Manrope,Arial,Helvetica,sans-serif;
   --bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border);--text:var(--ff-text);--muted:var(--ff-muted);--accent:var(--ff-accent);
 }

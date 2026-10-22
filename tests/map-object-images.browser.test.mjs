@@ -120,9 +120,12 @@ try {
   // Grouped image/trade objects, portrait uploads and plaque text controls.
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);
   await change('#mInspector [data-mf="glyph"]','portrait');
+  assert.equal(await evaluate(`(()=>{const upload=document.querySelector('[data-badgeimg]'),movement=document.querySelector('[data-mf="__pinMove"]');return !!(upload.compareDocumentPosition(movement)&Node.DOCUMENT_POSITION_FOLLOWING)})()`),true,'portrait upload is above movement settings');
+  assert.equal(await evaluate(`(()=>{const file=document.querySelector('[data-badgefile]');let clicked=false;const original=file.click;file.click=()=>{clicked=true};document.querySelector('[data-badgeimg]').click();file.click=original;return clicked})()`),true,'upload button opens the portrait file picker');
   await change('#mInspector [data-mf="label"]','Manuel');
   await upload(pngPath);
   await waitFor(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1).image?.startsWith('data:image/png')`);
+  assert.equal(await evaluate(`document.querySelector('.m-portrait-image-preview')?.src===JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1).image`),true,'uploaded image is previewed in the portrait inspector');
   const categories=await evaluate(`(()=>{const s=document.querySelector('[data-mf="glyph"]');return [...s.querySelectorAll('optgroup')].map(g=>({label:g.label,values:[...g.children].map(o=>o.value)}))})()`);
   assert.deepEqual(categories.find(g=>g.label==='Images, portraits & flags').values.slice().sort(),['artwork','banner','image','portrait']);
   assert.ok(categories.find(g=>g.label==='Trade & cargo').values.includes('importGoods'));

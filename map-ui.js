@@ -543,7 +543,7 @@ function badgeFields(a) {
 }
 const shrinkImage = importObjectImage;
 function portraitFields(a) {
-  return `<div class="m-badge"><span class="mini-label">Portrait picture</span><div class="two"><button type="button" data-badgeimg>${a.image?'Change portrait':'Upload portrait'}</button><button type="button" data-badgeclear ${a.image?'':'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden></div>`
+  return `<div class="m-badge"><span class="mini-label">Your portrait image</span>${a.image?`<img class="m-portrait-image-preview" src="${esc(a.image)}" alt="Selected ruler portrait">`:'<p class="mini-label">Choose your own ruler photo or illustration for the gold frame.</p>'}<div class="two"><button type="button" data-badgeimg>${a.image?'Change portrait image…':'Upload portrait image…'}</button><button type="button" data-badgeclear ${a.image?'':'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" aria-label="Upload ruler portrait image" data-badgefile hidden></div>`
     + '<p class="mini-label">Upload a ruler or commander portrait. The picture and name ribbon move together.</p>'
     + F.color('color','Backdrop & ribbon',a.color)
     + F.color('badgeBorder','Frame color',a.badgeBorder||'#c7a469')
@@ -557,8 +557,11 @@ function artworkFields(a) {
 }
 function objectFields(a) {
   const pose=objectPoseAt(a,frame),wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
+  const imageObject=['portrait','image','artwork','banner'].includes(a.glyph);
+  const artwork=()=>a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):bannerFields(a);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
   return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph)
+    +(imageObject?'<div class="section-title">YOUR IMAGE &amp; STYLE</div>'+artwork():'')
     +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
     +(a.mode==='move'?F.loc('to','Destination',a.to,'place'):'')
@@ -578,8 +581,7 @@ function objectFields(a) {
     +(wall?'':F.num('count',a.glyph==='army'?'Army copies':'Count',a.count??1,1,a.glyph==='army'?Math.max(1,Math.floor(100/total)):100,1)+formationFields(a)+`<div class="two">${F.num('gapX','Horizontal gap',a.gapX??defaultObjectGap(a),0,1000)}${F.num('gapY','Vertical gap',a.gapY??defaultObjectGap(a),0,1000)}</div>`)
     +(wall?F.range('wallSpacing','Segment spacing',a.wallSpacing??52,12,120,1,x=>x+' px')+F.num('wallTowerEvery','Tower every N segments',a.wallTowerEvery??8,0,50)+F.chk('wallGate','Gate in the middle',!!a.wallGate):'')
     +(a.glyph==='army'?armyFields(a):'')
-    +'<div class="section-title">ARTWORK &amp; COLOR</div>'
-    +(a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):a.glyph==='banner'?bannerFields(a):F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
+    +(imageObject?'':'<div class="section-title">COLOR</div>'+F.color('color',a.glyph==='army'?'Trail color':'Color',a.color))
     +F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
     +'<div class="section-title">LABEL</div>'+F.chk('showLabel',a.glyph==='portrait'?'Show ribbon name':'Show label',a.showLabel)+(a.showLabel?F.text('label',a.glyph==='portrait'?'Ribbon name':'Label text',a.label,60,'Uses the default name'):'');
 }

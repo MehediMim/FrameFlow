@@ -323,6 +323,35 @@ try {
   await change('#mSize','1080,1920');
   await waitFor(`!!document.querySelector('#mapStudio .ff-portrait-layout')`);
   assert.ok(await evaluate(`[...document.querySelectorAll('#mapStudio .workspace > .left,#mapStudio .workspace > .right')].every(panel=>{const r=panel.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth&&panel.scrollWidth<=panel.clientWidth+1;})`),'sidebar styling fits the portrait workspace');
+  const magnetStates=await evaluate(`(async()=>{
+    const button=document.querySelector('#mapStudio .ff-magnet-toggle');
+    const state=()=>({label:button.textContent,pressed:button.getAttribute('aria-pressed'),enabled:button.closest('.timeline').dataset.magnetic,background:getComputedStyle(button).backgroundColor,color:getComputedStyle(button).color,width:button.getBoundingClientRect().width});
+    const settle=()=>new Promise(resolve=>setTimeout(resolve,200));
+    const on=state();button.click();await settle();const off=state();button.click();await settle();return {on,off,restored:state()};
+  })()`);
+  assert.equal(magnetStates.on.label,'Magnet: On');assert.equal(magnetStates.on.pressed,'true');assert.equal(magnetStates.on.enabled,'true');
+  assert.equal(magnetStates.off.label,'Magnet: Off');assert.equal(magnetStates.off.pressed,'false');assert.equal(magnetStates.off.enabled,'false');
+  assert.notEqual(magnetStates.on.background,magnetStates.off.background,'Magnet has visibly different enabled and disabled surfaces');
+  assert.notEqual(magnetStates.on.color,magnetStates.off.color,'enabled Magnet uses a distinct foreground');
+  assert.equal(magnetStates.on.width,magnetStates.off.width,'toggling does not shift the toolbar');
+  assert.deepEqual(magnetStates.restored,magnetStates.on);
+  await evaluate(`document.querySelector('#mLoop').click()`);
+  assert.equal(await evaluate(`document.querySelector('#mLoop').getAttribute('aria-pressed')`),'false');
+  await evaluate(`document.querySelector('#mLoop').click();document.querySelector('#mPlay').click()`);
+  assert.equal(await evaluate(`document.querySelector('#mPlay').getAttribute('aria-label')`),'Pause playback');
+  await evaluate(`document.querySelector('#mPlay').click()`);
+  assert.equal(await evaluate(`document.querySelector('#mPlay').getAttribute('aria-label')`),'Play animation');
+  await change('#mSize','1280,720');
+  await waitFor(`!document.querySelector('#mapStudio .ff-portrait-layout')`);
+  for(const width of [1600,1100,980]){
+    await cdp('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
+    assert.ok(await evaluate(`(()=>{
+      const transport=document.querySelector('#mapStudio .transport').getBoundingClientRect(),head=document.querySelector('#mapStudio .timeline-head').getBoundingClientRect();
+      const inside=(r,b)=>r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom;
+      return [...document.querySelectorAll('#mapStudio .play-controls button')].every(button=>{const r=button.getBoundingClientRect(),svg=button.querySelector('svg');return r.width===32&&r.height===32&&svg&&inside(r,transport)&&inside(svg.getBoundingClientRect(),r);})&&[...document.querySelectorAll('#mapStudio .timeline-tools button')].every(button=>inside(button.getBoundingClientRect(),head));
+    })()`),width+'px: playback icons and timeline tools fit their bars');
+    await writeFile(join(tmpdir(),'frameflow-playback-'+width+'.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  }
   assert.deepEqual(errors,[]);
   console.log('Editor consistency: spatial layer selection, dragging, shared controls and context actions, mixed Shift-selection, batch actions, undo and pinned overlays passed');
 } finally {

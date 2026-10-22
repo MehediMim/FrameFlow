@@ -43,9 +43,16 @@ export function installMagneticTimeline(timeline) {
   if (!rows || !labels) return;
   timeline.dataset.magnetic = 'true';
   const toggle = document.createElement('button');
-  toggle.type = 'button'; toggle.textContent = 'Magnet'; toggle.setAttribute('aria-pressed', 'true');
-  toggle.title = 'Snap to clips, playhead and seconds. Hold Alt while dragging to bypass.';
-  toggle.onclick = () => { const enabled = timeline.dataset.magnetic !== 'true'; timeline.dataset.magnetic = String(enabled); toggle.setAttribute('aria-pressed', String(enabled)); };
+  toggle.type = 'button'; toggle.className = 'ff-magnet-toggle';
+  toggle.setAttribute('aria-label', 'Magnetic snapping');
+  const renderState = () => {
+    const enabled = timeline.dataset.magnetic === 'true';
+    toggle.textContent = enabled ? 'Magnet: On' : 'Magnet: Off';
+    toggle.setAttribute('aria-pressed', String(enabled));
+    toggle.title = `Magnetic snapping ${enabled ? 'on' : 'off'}. Snap to clips, playhead and seconds. Hold Alt while dragging to bypass.`;
+  };
+  toggle.onclick = () => { timeline.dataset.magnetic = String(timeline.dataset.magnetic !== 'true'); renderState(); };
+  renderState();
   timeline.querySelector('.timeline-tools')?.prepend(toggle);
   // Empty space remains scrubbable after the individual rows share lanes.
   rows.addEventListener('pointerdown', event => {

@@ -70,6 +70,20 @@ body.ff-unified #mapStudio .m-item:is(.selected,.multi-selected) .name{color:var
 body.ff-unified #mapStudio .m-item .type{color:var(--ff-muted)}
 body.ff-unified #mapStudio .m-clip:is(.selected,.multi-selected){border-color:var(--ff-selection-border);box-shadow:inset 0 0 0 1px var(--ff-accent)}
 body.ff-unified #mapStudio .stagebar button.active{background:var(--ff-selection);border-color:var(--ff-selection-border);color:var(--ff-text)}
+/* Icon controls need their own geometry; normal button padding crowds their glyphs. */
+body.ff-unified #mapStudio .workspace>main{container:ff-preview / inline-size}
+body.ff-unified #mapStudio .transport{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;height:auto;min-height:52px;flex:0 0 auto;padding:8px 12px}
+body.ff-unified #mapStudio .transport .time{font-size:11px;white-space:nowrap}
+body.ff-unified #mapStudio .transport>label{justify-self:end;min-width:0}
+body.ff-unified #mapStudio .transport .play-controls{display:flex;justify-self:center;gap:4px;flex-wrap:nowrap}
+body.ff-unified #mapStudio .transport .play-controls button{display:grid;place-items:center;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;line-height:1;border-radius:var(--ff-radius)}
+body.ff-unified #mapStudio .transport .play-controls button:is(.active,[aria-pressed=true]),body.ff-unified #mapStudio .timeline-tools button[aria-pressed=true]{background:var(--ff-selection);color:var(--ff-accent);border-color:var(--ff-selection-border);box-shadow:inset 0 -2px var(--ff-accent)}
+body.ff-unified #mapStudio .timeline-head{height:auto;min-height:44px;flex:0 0 auto;padding:6px 10px;gap:8px 12px;flex-wrap:wrap}
+body.ff-unified #mapStudio .timeline-tools{gap:8px;flex-wrap:wrap}
+body.ff-unified #mapStudio .ff-magnet-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:106px}
+body.ff-unified #mapStudio .ff-magnet-toggle::before{content:'';width:6px;height:6px;flex:none;border:1px solid currentColor;border-radius:50%;background:transparent}
+body.ff-unified #mapStudio .ff-magnet-toggle[aria-pressed=true]::before{background:currentColor}
+@container ff-preview (max-width:480px){body.ff-unified #mapStudio .transport{grid-template-columns:1fr 1fr}body.ff-unified #mapStudio .transport .play-controls{grid-row:2;grid-column:1/-1}body.ff-unified #mapStudio .transport>label{grid-column:2;grid-row:1}}
 body.ff-unified #mapStudio .ff-row-actions>button{background:transparent;border:0;min-height:24px;padding:2px;color:var(--ff-muted)}
 body.ff-unified #mapStudio .ff-row-actions svg{width:14px;height:14px;stroke-width:1.7}
 body.ff-unified #mapStudio .ff-row-actions>button[data-row-action=delete]:hover{color:var(--ff-danger)}

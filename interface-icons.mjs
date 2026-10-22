@@ -1,5 +1,10 @@
 // One stroke-based icon family for editor actions and guide playback.
 const paths = {
+  firstFrame:'<path d="M5 4v16m14-16L8 12l11 8Z"/>',
+  previousFrame:'<path d="m15 5-7 7 7 7"/>',
+  nextFrame:'<path d="m9 5 7 7-7 7"/>',
+  lastFrame:'<path d="M19 4v16M5 4l11 8-11 8Z"/>',
+  loop:'<path d="M19 7H7a4 4 0 0 0-4 4m13-7 3 3-3 3M5 17h12a4 4 0 0 0 4-4M8 14l-3 3 3 3"/>',
   audio:'<path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/>',
   scene:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/>',
   border:'<path d="m4 8 5-4 6 3 5-1-1 12-7 2-7-4Z" stroke-dasharray="3 3"/>',

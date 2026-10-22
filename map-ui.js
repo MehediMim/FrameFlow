@@ -256,11 +256,16 @@ function setFrame(n) {
   if(!playing&&['shape','group'].includes(current()?.type))renderInspector();
   window.dispatchEvent(new CustomEvent("ff-frame",{detail:{studio:"map",frame,fps:proj.fps,playing}}));
 }
-function pause() { playing = false; cancelAnimationFrame(raf); $('#mPlay').textContent = '▶'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
+function updatePlayControl() {
+  $('#mPlay').innerHTML = interfaceIcon(playing ? 'pause' : 'play');
+  $('#mPlay').setAttribute('aria-label', playing ? 'Pause playback' : 'Play animation');
+  $('#mPlay').setAttribute('aria-pressed', String(playing));
+}
+function pause() { playing = false; cancelAnimationFrame(raf); updatePlayControl(); window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
 function play() {
   if (playing) { pause(); return; }
   if (frame >= proj.frames - 1) frame = 0;
-  playing = true; startTime = performance.now(); startFrame = frame; $('#mPlay').textContent = 'Ⅱ'; window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:true,frame,fps:proj.fps}}));
+  playing = true; startTime = performance.now(); startFrame = frame; updatePlayControl(); window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:true,frame,fps:proj.fps}}));
   const tick = t => {
     let f = startFrame + Math.floor((t - startTime) / 1000 * proj.fps);
     if (f >= proj.frames) { if (loop) f %= proj.frames; else { setFrame(proj.frames - 1); pause(); return; } }
@@ -1605,7 +1610,13 @@ function bindToolbar() {
   $('#mSnapshot').onclick = async () => { if (!geo || (!await ensureDetail() && requiresDetail())) return; await preloadBadges(proj); await loadFonts(mapFontsUsed(proj)); await document.fonts.ready; const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; if (THEMES[proj.theme]?.relief) await geo.relief.ready(imageryNeeds(proj, geo, c.width, c.height, frame)); drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
   $('#mPlay').onclick = play; $('#mStart').onclick = () => { pause(); setFrame(0); }; $('#mEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
-  $('#mLoop').onclick = () => { loop = !loop; $('#mLoop').classList.toggle('active', loop); };
+  for (const [id, icon, label] of [['mStart','firstFrame','First frame'],['mPrev','previousFrame','Previous frame'],['mNext','nextFrame','Next frame'],['mEnd','lastFrame','Last frame'],['mLoop','loop','Loop playback']]) {
+    $('#'+id).innerHTML = interfaceIcon(icon);$('#'+id).setAttribute('aria-label',label);
+  }
+  updatePlayControl();
+  const updateLoopControl = () => { $('#mLoop').classList.toggle('active',loop);$('#mLoop').setAttribute('aria-pressed',String(loop));$('#mLoop').title = `Loop playback: ${loop ? 'On' : 'Off'}`; };
+  updateLoopControl();
+  $('#mLoop').onclick = () => { loop = !loop; updateLoopControl(); };
   $('#mFrame').onchange = e => { pause(); setFrame(Math.round(+e.target.value * proj.fps)); };
   $('#mZoomT').oninput = () => { timelineAutoFit=false;renderTimeline();setFrame(frame); };
   $('#mFitTimeline').onclick=()=>{timelineAutoFit=true;renderTimeline();setFrame(frame);$('#mScroll').scrollLeft=0;};

@@ -11,7 +11,7 @@ import { TIME_OBJECTS } from './map-time-objects.mjs';
 import { LANDMARK_OBJECTS } from './map-landmark-objects.mjs';
 import { PEOPLE_OBJECTS } from './map-people-objects.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
-import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork } from './map-path-animation.mjs';
+import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
 import { drawDamage, drawRubble } from './map-damage.mjs';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
@@ -178,7 +178,9 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   if(a.pathKeys?.length)a={...a,path:pathAt(a,frame)};
   if (!H.actAlpha(a, frame) || a.mode !== 'path' || (a.path || []).length < 2) return;
   const r = H.planeRoute(geo, a); if (!r) return;
-  const u = v.unit, k = Math.round(v.cx - r.mid), p = a.revealPath===false?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
+  const animation=measurementShape?'static':pathAnimationMode(a),flow=['flow','both'].includes(animation);
+  const u = v.unit, k = Math.round(v.cx - r.mid), p = ['static','flow'].includes(animation)?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
+  const seconds=(frame-a.start)/(v.fps||30),phase=seconds*(a.flowSpeed??24)*u;
   for (let i = 0; i < r.n; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); P.push(q.z < v.near ? null : q); }
   const zone = a.shape === 'zone' || a.shape === 'noFly', w = (a.width || 6) * u;
   // Keep the full measurement anchored to the shape while its geometry reveals.
@@ -201,8 +203,8 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   let text = null;
   c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
   if(Object.hasOwn(NETWORK_SHAPES,a.shape)){
-    const visible=['static','flow'].includes(a.networkAnimation)?P:revealPolyline(P,p);
-    drawNetwork(c,clipPolyline(visible,v.W,v.H,40*u),a,u,(frame-a.start)/(v.fps||30));
+    const visible=['static','flow'].includes(animation)?P:revealPolyline(P,p);
+    drawNetwork(c,clipPolyline(visible,v.W,v.H,40*u),{...a,networkAnimation:animation},u,seconds);
     const end=visible.filter(Boolean).at(-1);c.restore();
     const label=shapeLabel(a,r);
     if(!a.showMeasurement&&label&&end)labels.push({x:end.x,y:end.y-16*u,text:label,alpha:1,scale:1});
@@ -212,12 +214,14 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     const pts = P.filter(Boolean); if (pts.length < 3) { c.restore(); return; }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
     c.globalAlpha = (a.fillAlpha ?? .28) * p; c.fillStyle = a.color; c.fill();
-    if (a.shape === 'noFly') {
+    if (a.shape === 'noFly'||flow) {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (const q of pts) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
-      c.save(); c.clip(); c.beginPath(); for (let x = x0 - (y1 - y0); x < x1; x += 12 * u) { c.moveTo(x, y1); c.lineTo(x + (y1 - y0), y0); } c.globalAlpha = .55 * p; c.strokeStyle = a.color; c.lineWidth = 1.6 * u; c.stroke(); c.restore();
+      x0=Math.max(-40*u,x0);x1=Math.min(v.W+40*u,x1);y0=Math.max(-40*u,y0);y1=Math.min(v.H+40*u,y1);
+      const gap=(a.shape==='noFly'?12:20)*u,offset=flow?((phase%gap)+gap)%gap:0;
+      c.save(); c.clip(); c.beginPath(); for (let x = x0 - (y1 - y0)+offset; x < x1; x += gap) { c.moveTo(x, y1); c.lineTo(x + (y1 - y0), y0); } c.globalAlpha = (a.shape==='noFly'?.55:Math.min(.35,(a.fillAlpha??.28)*.6)) * p; c.strokeStyle = a.shape==='noFly'?a.color:'#fff2d8'; c.lineWidth = 1.6 * u; c.stroke(); c.restore();
     }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
-    c.globalAlpha = .95 * p; c.strokeStyle = a.color; c.lineWidth = w * .6; c.setLineDash(a.shape === 'noFly' ? [10 * u, 7 * u] : []); c.stroke();
+    c.globalAlpha = .95 * p; c.strokeStyle = a.color; c.lineWidth = w * .6; c.setLineDash(a.shape === 'noFly'||flow ? [10 * u, 7 * u] : []); c.lineDashOffset=flow?-phase:0;c.stroke();
     text = { x: pts.reduce((s, q) => s + q.x, 0) / pts.length, y: pts.reduce((s, q) => s + q.y, 0) / pts.length };
   } else {
     const e = p * (r.n - 1), L = []; let i = 0;
@@ -231,6 +235,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     const lw = a.shape === 'front' ? w * .8 : w * 1.4, dash = a.shape === 'retreat' ? [10 * u, 7 * u] : [];
     path(); c.globalAlpha = .35; c.strokeStyle = '#000'; c.lineWidth = lw + 3 * u; c.setLineDash(dash); c.stroke();
     path(); c.globalAlpha = .95; c.strokeStyle = a.color; c.lineWidth = lw; c.stroke(); c.setLineDash([]);
+    if(flow){path();c.globalAlpha=.65;c.strokeStyle='#fff2d8';c.lineWidth=Math.max(u,lw*.24);c.setLineDash([9*u,14*u]);c.lineDashOffset=-phase;c.stroke();c.setLineDash([]);c.lineDashOffset=0;}
     const end = L.filter(Boolean).at(-1);
     if (a.shape === 'front') {
       const gap = 24 * u * (.6 + (a.width || 6) / 12), th = 9 * u * (.6 + (a.width || 6) / 12); let acc = gap / 2;

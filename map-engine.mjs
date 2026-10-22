@@ -1,4 +1,5 @@
 import { curvedGlyphs, flagImageCrop, flagFeatureParts } from './map-label-curve.mjs';
+import { mapStackOrder } from './map-layer-actions.mjs?v=map-order-1';
 import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-scene-panel.mjs';
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
@@ -19,10 +20,10 @@ import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayo
 import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
-import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=object-shadow-1';
+import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=path-flow-1';
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
-export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=object-shadow-1';
+export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=path-flow-1';
 
 const RAD = Math.PI / 180, MAX_LAT = 85.0511287798, BASE_PX = 512, FOV = 45 * RAD;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -898,6 +899,15 @@ function drawAttribution(ctx, v, text) {
 }
 // ---------------------------------------------------------------- Base map
 const baseMapCache = new WeakMap();
+const mapForegroundCache = new WeakMap();
+function mapForeground(ctx,W,H){
+  if(typeof OffscreenCanvas==='undefined'&&typeof document==='undefined')return null;
+  let surface=mapForegroundCache.get(ctx);
+  if(!surface){surface=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(W,H):document.createElement('canvas');mapForegroundCache.set(ctx,surface);}
+  if(surface.width!==W)surface.width=W;if(surface.height!==H)surface.height=H;
+  const foreground=surface.getContext('2d');foreground.clearRect(0,0,W,H);
+  return{surface,context:foreground};
+}
 function drawPreviewBase(ctx, v, geo, th, proj) {
   // One bounded raster per preview context. Animated overlays and exports keep
   // their normal rendering path; satellite tiles must refresh as they arrive.
@@ -1667,6 +1677,7 @@ const OBJ_H = { drawBadge, objectLocationAt, objectImage: src => { const e = bad
 // ---------------------------------------------------------------- Whole frame
 /** Draws the project at `frame` onto a canvas context of size W x H. Returns the view used. */
 export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cacheBase = false } = {}) {
+  proj={...proj,actions:mapStackOrder(proj.actions)};
   const camera = previewCamera || cameraAt(proj, geo, W, H, frame);
   const groups=proj.actions.filter(a=>a.type==='group');
   if(groups.length)proj={...proj,actions:proj.actions.flatMap(a=>{
@@ -1723,11 +1734,15 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   }
   // Composite texture over country highlights, underneath borders and labels.
   drawTexture(ctx, W, H, proj.texture);
+  // Collect labels while painting foreground geometry onto one reusable surface.
+  // Composite that geometry after text so labels never cover objects or paths.
+  const background=ctx,foreground=mapForeground(ctx,W,H);
+  if(foreground){ctx=foreground.context;ctx.save();ctx.lineJoin='round';ctx.lineCap='round';}
   for (const a of proj.actions) if (a.type === 'border') drawBorder(ctx, v, geo, th, a, frame);
-  for (const a of proj.actions) if (a.type === 'shape') tag(a, () => drawShape(OBJ_H, ctx, v, geo, a, frame, labels));
-  // Travelers, pins, objects and effects stack in list order (later = in front), so Up / Down in the item list really changes what covers what.
+  // Foreground elements follow their map stacking order, independently of timeline rows.
   for (const a of proj.actions) {
-    if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
+    if(a.type==='shape')tag(a,()=>drawShape(OBJ_H,ctx,v,geo,a,frame,labels));
+    else if (a.type === 'plane') tag(a, () => drawPlane(ctx, v, geo, th, a, frame, labels, routeNames.get(a) || []));
     else if (a.type === 'pin') tag(a, () => drawPin(ctx, v, geo, th, a, frame, labels));
     else if (a.type === 'object') tag(a, () => {
       if (!actAlpha(a, frame)) return;
@@ -1748,7 +1763,9 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   }
   for (const a of proj.actions) if (a.type === 'label') tag(a, () => queueTextLabel(v, geo, a, frame, labels));
   v.labels = labels;
+  if(foreground){ctx.restore();ctx=background;}
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
+  if(foreground)ctx.drawImage(foreground.surface,0,0);
   vignette(ctx, v, th);
   for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
@@ -1894,6 +1911,7 @@ export function validateMapProject(p) {
     if (!Number.isSafeInteger(raw.start) || raw.start < 0 || !Number.isSafeInteger(raw.dur) || raw.dur < 1 || !Number.isSafeInteger(raw.start + raw.dur)) throw Error('Invalid item timing.');
     const it = mapSourceItem(raw);
     if (it.visible !== undefined && typeof it.visible !== 'boolean') throw Error('Invalid layer visibility.');
+    if(it.mapOrder!==undefined&&(!Number.isSafeInteger(it.mapOrder)||it.mapOrder<0))throw Error('Invalid map stacking order.');
     if ((it.animStart !== undefined || it.animEnd !== undefined) && (!Number.isSafeInteger(it.animStart) || !Number.isSafeInteger(it.animEnd) || it.animStart < it.start || it.animEnd <= it.animStart || it.animEnd > it.start + it.dur)) throw Error('Animation keyframes must be inside the timeline bar.');
     if (it.timingKeys !== undefined && (!Array.isArray(it.timingKeys) || it.timingKeys.length > 2 || new Set(it.timingKeys).size !== it.timingKeys.length || it.timingKeys.some(k => !['start', 'dur'].includes(k)))) throw Error('Invalid timing keyframes.');
     if (typeof it.id !== 'string' || ids.has(it.id) || typeof it.name !== 'string') throw Error('Invalid item.');

@@ -76,7 +76,7 @@ try {
   assert.ok(await cameraVisible(),'camera stays pinned after zooming out');
   await evaluate(`document.querySelector('#mapStudio [data-zoom="fit"]').click()`);
   const checkPinnedBar=async()=>{
-    const pinned=()=>evaluate(`(()=>{const bar=document.querySelector('#mMapContext'),r=bar.getBoundingClientRect(),v=document.querySelector('.m-stage-viewport').getBoundingClientRect(),control=bar.querySelector('select:not([hidden]),button,input'),c=control.getBoundingClientRect();return !bar.hidden&&Math.abs(r.top-v.top-12)<2&&Math.abs((r.left+r.right-v.left-v.right)/2)<2&&bar.contains(document.elementFromPoint(c.left+c.width/2,c.top+c.height/2));})()`);
+    const pinned=()=>evaluate(`(()=>{const bar=document.querySelector('#mMapContext'),r=bar.getBoundingClientRect(),v=document.querySelector('.m-stage-viewport').getBoundingClientRect(),control=bar.querySelector('summary,select:not([hidden]),input:not([hidden]):not([type=hidden])'),c=control.getBoundingClientRect();return !bar.hidden&&Math.abs(r.top-v.top-12)<2&&Math.abs((r.left+r.right-v.left-v.right)/2)<2&&bar.contains(document.elementFromPoint(c.left+c.width/2,c.top+c.height/2));})()`);
     assert.ok(await pinned(),'canvas controls are visible at the viewport top');
     await evaluate(`(()=>{document.querySelector('#mapStudio [data-zoom="actual"]').click();for(let i=0;i<8;i++)document.querySelector('#mapStudio [data-zoom="in"]').click();const area=document.querySelector('#mCanvas').closest('.stage-area');area.scrollLeft=area.scrollWidth;area.scrollTop=area.scrollHeight;})()`);
     assert.ok(await pinned(),'canvas controls stay visible and usable after zooming in and scrolling');
@@ -173,12 +173,12 @@ try {
   assert.equal(await evaluate(`document.querySelectorAll('#mMapContext [data-direct-highlight],#mMapContext [data-direct-border]').length`),0,'region actions moved to right-click');
   await rightClick(await point(-3,48));
   assert.ok(await evaluate(`!!document.querySelector('#mMapAddContext [data-direct-label]')`),'selected land context menu includes Label');
-  assert.equal(await evaluate(`document.querySelector('#mMapAddContext [data-direct-add-object]')`),null,'selected land offers region actions');
+  assert.equal(await evaluate(`document.querySelector('#mMapAddContext > [data-direct-add-object]')`),null,'Add object is nested alongside region actions');
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
   await click(-4,40,true);assert.equal(await evaluate(`document.querySelector('#mMapContext').dataset.selectionCount`),'2','Shift-click selects multiple countries');
   assert.ok(await evaluate(`document.querySelector('#mMapContext').hidden`),'multiple bare regions also have no settings bar');
   await rightClick(await point(-4,40));
-  await evaluate(`document.querySelector('#mMapAddContext [data-direct-label]').click()`);
+  await evaluate(`document.querySelector('[data-direct-add]').click();document.querySelector('#mMapAddContext [data-direct-label]').click()`);
   const regionLabel=(await stored()).actions.at(-1);
   assert.equal(regionLabel.type,'highlight');assert.equal(regionLabel.showFill,false);assert.equal(regionLabel.showLabel,true);assert.equal(regionLabel.regionLabels,true);assert.equal(regionLabel.target.members.length,2);
   await checkPinnedBar();
@@ -189,7 +189,7 @@ try {
   await evaluate(`document.querySelector('#mUndo').click();document.querySelector('#mUndo').click();document.querySelector('#mUndo').click()`);
   await click(-3,48);await click(-4,40,true);
   await rightClick(await point(-4,40));
-  await evaluate(`document.querySelector('#mMapAddContext [data-direct-highlight]').click()`);
+  await evaluate(`document.querySelector('[data-direct-add]').click();document.querySelector('#mMapAddContext [data-direct-highlight]').click()`);
   const highlight=(await stored()).actions.at(-1);assert.equal(highlight.type,'highlight');assert.equal(highlight.target.members.length,2);assert.equal(highlight.dim,0);assert.equal(highlight.pulse,false);
   assert.equal(await evaluate(`document.querySelector('#mInspector [data-mf]').dataset.mf`),'__hmode','land properties put region controls before keyframe settings');
   assert.equal(await evaluate(`document.querySelector('#mTrackRows [data-mrow]').dataset.mrow`),highlight.id,'newest timeline item is at the top');
@@ -199,7 +199,7 @@ try {
 
   const rightPoint=await point(-6,44);
   await rightClick(rightPoint);await waitFor(`!document.querySelector('#mMapAddContext').hidden`);
-  await evaluate(`document.querySelector('[data-direct-add-object]').click()`);
+  await evaluate(`document.querySelector('[data-direct-add]').click();document.querySelector('[data-direct-add-object]').click()`);
   const placed=(await stored()).actions.at(-1);
   assert.equal(placed.type,'object');assert.equal(placed.enter,'none');
   assert.ok(Math.abs(placed.place.lon+6)<.01&&Math.abs(placed.place.lat-44)<.01,'right-click adds the object at that position: '+JSON.stringify(placed.place)+' frame='+await evaluate(`document.querySelector('#mFrame').value`));
@@ -226,7 +226,7 @@ try {
   await evaluate(`document.querySelector('#mResetView').click();document.querySelector('#mStart').click()`);
   for (const type of ['pin']) {
     await rightClick(await point(-10,44));
-    await evaluate(`document.querySelector('[data-direct-add-${type}]').click()`);
+    await evaluate(`document.querySelector('[data-direct-add]').click();document.querySelector('[data-direct-add-${type}]').click()`);
     const item=(await stored()).actions.at(-1);
     assert.equal(item.type,type);
     assert.ok(Math.abs(item.place.lon+10)<.01&&Math.abs(item.place.lat-44)<.01,`${type} uses right-click position`);

@@ -126,7 +126,7 @@ export function registerAudioStudio(studio, host) {
   window.addEventListener('pointerup',()=>{if(drag){drag=null;refresh();}});
   for(const type of ['ff-play','ff-frame'])window.addEventListener(type,e=>{if(e.detail.studio!==studio)return;playing=e.detail.playing;sync(type==='ff-play');});
   window.addEventListener('blur',()=>{if(drag){drag=null;refresh();}});
-  return {renderList,renderTimeline,renderInspector,remove,duplicate,move,canMove,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
+  return {add:()=>add.click(),renderList,renderTimeline,renderInspector,remove,duplicate,move,canMove,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
     item: id => state.layers.find(l => l.id === id),
     rowEnabled(id, action) { const i = state.layers.findIndex(l => l.id === id); return i >= 0 && (action === 'up' ? i > 0 : action === 'down' ? i < state.layers.length - 1 : true); },
     rowAction(id, action) { host.pause(); host.select(id); if(action === 'visibility') { checkpoint(); const l=current(); l.muted=!l.muted; refresh(id); } else if(action === 'up' || action === 'down') move(action === 'up' ? -1 : 1); else if(action === 'duplicate') duplicate(); else if(action === 'delete') remove(); },

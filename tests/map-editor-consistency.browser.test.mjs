@@ -200,6 +200,57 @@ try {
   assert.ok(await evaluate(`!!document.activeElement.closest('[data-object-category-panel="transport"]')`),'keyboard navigation enters the adjacent object list');
   await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));`);
   assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-menu]').open`),false,'Escape closes the nested menu');
+  const timelineBeforeArrange=(await stored()).actions.map(a=>[a.id,a.start,a.dur,a.createdOrder]);
+  await rightClick(await point(-12,47));
+  assert.ok(await evaluate(`['forward','backward','front','back'].every(key=>document.querySelector('[data-direct-arrange-'+key+']'))`),'right-click offers all four arrangement commands');
+  assert.ok(await evaluate(`document.querySelector('[data-direct-arrange-menu]').hidden`),'stacking commands start inside a closed Arrange submenu');
+  const arrangePoint=await evaluate(`(()=>{const r=document.querySelector('[data-direct-arrange]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...arrangePoint,button:'none',buttons:0});
+  await waitFor(`!document.querySelector('[data-direct-arrange-menu]').hidden`);
+  await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));`);
+  assert.ok(await evaluate(`document.querySelector('[data-direct-arrange-menu]').hidden`),'Left closes the Arrange submenu');
+  await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));`);
+  assert.ok(await evaluate(`!!document.activeElement.closest('[data-direct-arrange-menu]')`),'Right enters the Arrange submenu');
+  await evaluate(`document.querySelector('[data-direct-arrange-front]').click()`);
+  assert.equal(await evaluate(`(async()=>{const {mapStackOrder}=await import('./map-layer-actions.mjs');return mapStackOrder(JSON.parse(localStorage.getItem('frameflow-map-v1')).actions).filter(a=>['object','pin','shape','effect','plane'].includes(a.type)).at(-1).id;})()`),'object','Bring to front updates map stacking');
+  assert.deepEqual((await stored()).actions.map(a=>[a.id,a.start,a.dur,a.createdOrder]),timelineBeforeArrange,'arrangement leaves timeline ordering and timing intact');
+  await rightClick(await point(-12,47));await evaluate(`document.querySelector('[data-direct-arrange]').click();document.querySelector('[data-direct-arrange-back]').click()`);
+  assert.equal(await evaluate(`(async()=>{const {mapStackOrder}=await import('./map-layer-actions.mjs');return mapStackOrder(JSON.parse(localStorage.getItem('frameflow-map-v1')).actions).filter(a=>['object','pin','shape','effect','plane'].includes(a.type))[0].id;})()`),'object','Send to back updates map stacking');
+  await evaluate(`document.querySelector('#mUndo').click();document.querySelector('#mUndo').click()`);
+  await rightClick(await point(-12,47));
+  assert.ok(await evaluate(`document.querySelector('[data-direct-add-menu]').hidden&&!document.querySelector('#mMapAddContext > [data-direct-add-object]')`),'creation commands are nested inside Add');
+  await evaluate(`document.querySelector('[data-direct-add]').click()`);
+  assert.ok(await evaluate(`!document.querySelector('[data-direct-add-menu]').hidden&&['object','pin','shape','effect','highlight','border','scene','audio'].every(key=>document.querySelector('[data-direct-add-'+key+']')?.closest('[data-direct-add-menu]'))`),'Add includes all eight map tools');
+  await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));`);
+  assert.ok(await evaluate(`!!document.activeElement.closest('[data-direct-add-menu]')`),'Add supports keyboard submenu navigation');
+  await evaluate(`document.querySelector('input[type=file][accept^="audio/"]').addEventListener('click',e=>{window.__contextAudioRequested=true;e.preventDefault();},{once:true});document.querySelector('[data-direct-add-audio]').click()`);
+  assert.equal(await evaluate(`window.__contextAudioRequested`),true,'nested Audio opens the existing file chooser');
+  await rightClick(await point(-12,47));await evaluate(`document.querySelector('[data-direct-add]').click();document.querySelector('[data-direct-add-scene]').click()`);
+  assert.equal((await stored()).actions.at(-1).type,'scene','nested Scene panel creates its layer');
+  await evaluate(`document.querySelector('#mUndo').click();document.querySelector('[data-mid="object"]').click()`);
+  const compositing=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs?v=map-order-1'),{arrangeLayers}=await import('./map-layer-actions.mjs');
+    const geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),p=E.newMapProject(),canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const c=canvas.getContext('2d');
+    p.camera.init={lon:0,lat:44,zoom:4,pitch:0,bearing:0};p.atlasLabels={countries:false,oceans:false};p.graticule=false;
+    E.OBJECT_ICONS.__stackProbe={label:'Stack probe',draw:(c,s,color)=>{c.fillStyle=color;c.fillRect(-70,-70,140,140);}};
+    const object=E.makeAction('object',0,{id:'red',glyph:'__stackProbe',place:{kind:'point',name:'Anchor',lon:0,lat:44},color:'#ff0000',dur:120}),label=E.makeAction('label',0,{text:'MMMM',x:50,y:50,labelPlacement:'screen',dur:120,labelStyle:{shape:'none',size:40,text:'#ffffff',useTheme:false,halo:false,shadow:false}});
+    const sample=actions=>{c.clearRect(0,0,320,180);E.drawMap(c,320,180,{...p,actions},60,geo);return [...c.getImageData(145,82,30,16).data];};
+    try{const plain=sample([object]),labeled=sample([object,label]),text=sample([label]),base=sample([]);p.actions=[object,{...object,id:'blue',color:'#0000ff'}];const blue=sample(p.actions);arrangeLayers(p,['red'],'front');const red=sample(p.actions);return{behind:plain.every((v,i)=>v===labeled[i]),textVisible:text.some((v,i)=>v!==base[i]),changesStack:blue.some((v,i)=>v!==red[i])};}finally{delete E.OBJECT_ICONS.__stackProbe;}
+  })()`);
+  assert.deepEqual(compositing,{behind:true,textVisible:true,changesStack:true},'rendered pixels put labels behind objects and obey map arrangement');
+  const pathMotion=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs?v=path-flow-1'),geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),p=E.newMapProject(),canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;const c=canvas.getContext('2d');
+    p.camera.init={lon:0,lat:44,zoom:4,pitch:0,bearing:0};p.atlasLabels={countries:false,oceans:false};p.graticule=false;
+    const path=[{lon:-4,lat:42},{lon:4,lat:42},{lon:4,lat:46},{lon:-4,lat:46}];
+    const render=(a,frame)=>{c.clearRect(0,0,640,360);E.drawMap(c,640,360,{...p,actions:[a]},frame,geo);return canvas.toDataURL();};
+    const results={};for(const shape of ['arrow','retreat','front','zone','noFly','road','railway','river']){
+      const a=E.makeAction('shape',0,{shape,path,dur:300,animDur:30,width:8});
+      results[shape]=render(a,60)!==render(a,75)&&render({...a,networkAnimation:'static'},60)===render({...a,networkAnimation:'static'},75)&&render({...a,flowSpeed:0},60)===render({...a,flowSpeed:0},75);
+    }
+    for(const shape of ['distance','area']){const a=E.makeAction('shape',0,{shape,path,dur:300,animDur:30,showDistanceArrow:true,showAreaBoundary:true});results[shape]=render(a,60)===render(a,75);}
+    return results;
+  })()`);
+  assert.ok(Object.values(pathMotion).every(Boolean),'arrows, fronts, zones and networks keep flowing after reveal; static mode, zero speed and measurements stay still: '+JSON.stringify(pathMotion));
   await waitFor(`!!document.querySelector('#mInspector [data-mf="__lscustom"]')?.closest('.ff-inspector-section')`);
   assert.ok(await evaluate(`document.querySelector('#mInspector [data-mf="showLabel"]').closest('.ff-inspector-section')===document.querySelector('#mInspector [data-mf="__lscustom"]').closest('.ff-inspector-section')`),'label visibility and label style share one section');
   assert.equal(await evaluate(`[...document.querySelectorAll('#mInspector .ff-inspector-summary-label')].filter(el=>el.textContent==='LABEL').length`),1,'only one Label section is shown');

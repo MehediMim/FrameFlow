@@ -1,21 +1,21 @@
-import { duplicateLayers, removeLayers } from './map-layer-actions.mjs';
-import { installDirectMapEditing } from './map-direct-edit.mjs?v=nested-picker-1';
+import { duplicateLayers, removeLayers, arrangeLayers } from './map-layer-actions.mjs?v=map-order-1';
+import { installDirectMapEditing } from './map-direct-edit.mjs?v=add-submenu-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs?v=typed-lanes-1';
-import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=animation-gap-1';
+import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=path-flow-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, featureForTarget, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=expanded-settings-1';
-import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
+import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=add-submenu-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=animation-gap-1';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=path-flow-1';
 import { CITIES } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './fonts.mjs';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
@@ -23,22 +23,22 @@ import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.m
 import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { applyDocumentaryLook, DOCUMENTARY_LABEL } from './map-documentary.mjs';
-import { terrainSettingsOf } from './map-engine.mjs?v=animation-gap-1';
+import { terrainSettingsOf } from './map-engine.mjs?v=path-flow-1';
 import { FORMATIONS, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
-import { resolveLoc } from './map-engine.mjs?v=animation-gap-1';
+import { resolveLoc } from './map-engine.mjs?v=path-flow-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
-import { sampleCameraPreset, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=animation-gap-1';
+import { sampleCameraPreset, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=path-flow-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs?v=paired-camera-1';
 import { syncCameraTimeline, cameraKeyAt, addCameraPair, cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
 import { trimMapHistory } from './map-history.mjs';
-import { installCampaignUI } from './map-campaign-ui.mjs?v=merged-tools-1';
+import { installCampaignUI } from './map-campaign-ui.mjs?v=path-flow-1';
 import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
-import { planeRoute } from './map-engine.mjs?v=animation-gap-1';
+import { planeRoute } from './map-engine.mjs?v=path-flow-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const OBJECT_CATEGORIES = [
@@ -435,7 +435,8 @@ function runLayerAction(ids,action){
   try{
     if(action==='duplicate')result=duplicateLayers(snapshot,layers.map(a=>a.id));
     else if(action==='delete')removeLayers(snapshot,layers.map(a=>a.id));
-    else if(action==='visibility')for(const a of [...snapshot.shots,...snapshot.actions])if(ids.includes(a.id))a.visible=layers.some(a=>a.visible===false);
+    else if(action==='visibility'){for(const a of [...snapshot.shots,...snapshot.actions])if(ids.includes(a.id))a.visible=layers.some(a=>a.visible===false);}
+    else if(['forward','backward','front','back'].includes(action))arrangeLayers(snapshot,ids,action);
     checkpoint();proj=snapshot;sel=result.at(-1)||(action==='delete'?null:sel);
     directMapEditing?.setSelection(result.length?result:action==='delete'?[]:ids);saveLocal();renderAll();return result;
   }catch(error){notify(error.message);return [];}
@@ -709,7 +710,7 @@ function actionFields(a) {
         + (!measurement||a.showDistanceArrow||a.showAreaBoundary?F.range('width', 'Line width', a.width, 1, 16, .5):'')
         + (['zone','noFly'].includes(a.shape)||a.shape==='area'&&a.showAreaBoundary?F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%'):'')
         + F.chk('showLabel', 'Show label', a.showLabel) + (a.showLabel ? F.text('label', 'Label text', a.label, 60) : '')
-        + (measurement?'':'<details><summary>Optional animation</summary>' + campaign.pathFields(a) + '</details>');
+        + (measurement?'':campaign.pathFields(a));
     }
 
     case 'pin': {
@@ -1662,7 +1663,7 @@ campaign=installCampaignUI({canvas,F,project:()=>proj,current,frame:()=>frame,ge
   projectPoint:(view,p)=>{const X=lonToX(p.lon);return projectPoint(view,X+Math.round(view.cx-X),latToY(p.lat));},
   pointAt:e=>{if(!lastView||!geo)return null;const{sx,sy}=canvasXY(e);return screenToLonLat(lastView,sx,sy);}
 });
-directMapEditing=installDirectMapEditing({canvas,project:()=>proj,view:()=>lastView,geo:()=>geo,frame:()=>frame,current,select,pause,checkpoint,changed,renderInspector,draw,notify,layerAction:runLayerAction,add:addAction,duplicate:()=>$('#mDuplicate').click(),exporting:()=>exporting,creationOrder:nextCreationOrder,busy:()=>!!(pick||pathDraw||exporting||mapPan)});
+directMapEditing=installDirectMapEditing({canvas,project:()=>proj,view:()=>lastView,geo:()=>geo,frame:()=>frame,current,select,pause,checkpoint,changed,renderInspector,draw,notify,layerAction:runLayerAction,add:addAction,addAudio:()=>audioUI?.add(),duplicate:()=>$('#mDuplicate').click(),exporting:()=>exporting,creationOrder:nextCreationOrder,busy:()=>!!(pick||pathDraw||exporting||mapPan)});
 buildStaticUI(); buildLists(); bindSettings(); bindToolbar(); $('#mHint').textContent = HINT;
 audioUI = registerAudioStudio('map', {
  getSelected:()=>sel, getFrame:()=>frame, getFps:()=>proj.fps, getFrames:()=>proj.frames,

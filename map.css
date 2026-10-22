@@ -201,6 +201,9 @@ body.mode-map #mapStudio{display:flex}
 .m-map-add-context button{display:block;width:100%;min-height:32px;padding:7px 10px;border:0;border-radius:4px;background:transparent;color:var(--ff-text);text-align:left;font-size:11px}
 .m-map-add-context button:hover,.m-map-add-context button:focus-visible{background:#36492b;outline:2px solid var(--ff-accent);outline-offset:-2px}
 .m-map-add-context [data-direct-context-delete]{color:#ffada3}
+.m-map-submenu>[data-direct-submenu]{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.m-map-submenu-panel{position:fixed;z-index:1001;width:190px;max-height:calc(100dvh - 16px);overflow-y:auto;padding:4px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:var(--ff-surface);box-shadow:0 5px 18px #0008}
+.m-map-submenu-panel[hidden]{display:none}
 @media(max-width:650px){#mMapContext .m-map-object-controls{grid-template-columns:repeat(2,minmax(80px,1fr))}}
 
 #mInspector.ff-inspector-accordion{padding-top:8px!important}
@@ -243,3 +246,5 @@ body.ff-unified .m-object-cascade .m-object-choice{min-height:40px;border-radius
 body.ff-unified .m-object-cascade .m-object-choice img{width:28px;height:28px;flex:none;object-fit:contain}
 body.ff-unified .m-object-cascade h4{position:sticky;top:0;margin:0;padding:8px;background:var(--ff-surface);color:var(--ff-muted);font-size:10px;font-weight:600}
 body.ff-unified .m-object-cascade [data-object-category-panel][hidden]{display:none}
+
+.m-map-add-context button:disabled{opacity:.4;cursor:default}

@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "FrameFlow Map Studio",
+  "short_name": "FrameFlow",
+  "description": "Create animated maps with routes, objects, camera keyframes and video export.",
+  "start_url": "./index.html#map",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#131816",
+  "theme_color": "#131816",
+  "icons": [
+    { "src": "assets/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

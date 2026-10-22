@@ -8,7 +8,7 @@ Serve this directory with a static web server, for example `python -m http.serve
 
 ## Make an animated map
 
-Open [the animated feature guide](guide.html) from the home navigation or the editor sidebar for 29 searchable lessons. Each has a playable, scrubbable demonstration, three practical steps, a toolkit overview, and a direct lesson URL. The guide respects reduced-motion preferences and leaves editor projects untouched. Run `npm run test:guide:browser` to check all lessons and player interactions.
+Open [the animated feature guide](guide.html) from the home navigation or the editor sidebar for 31 searchable lessons. Each has a playable, scrubbable demonstration, three practical steps, a toolkit overview, and a direct lesson URL. The guide respects reduced-motion preferences and leaves editor projects untouched. Run `npm run test:guide:browser` to check all lessons and player interactions.
 
 1. Create a project and choose the canvas size, frame rate, duration, and map style in Canvas settings.
 2. Add regions, routes, pins, labels, objects, or effects.
@@ -18,6 +18,16 @@ Open [the animated feature guide](guide.html) from the home navigation or the ed
 Project duration has no fixed cap. Existing Map Studio projects and local saves remain supported. Old Motion, Paper, and Scene URLs redirect to Map Studio.
 
 To animate destruction, add an object damage keyframe for Intact, Damaged, or Burning, then a later Destroyed keyframe. The object collapses with falling debris and fading dust over 0.9 seconds, then remains rubble. Scrubbing and video export use the same animation. Objects that begin Destroyed appear as settled rubble.
+
+Every object has **Properties → Object type → Object view → Normal / Isometric**. Isometric uses separate miniature models built from world-space geometry. Detailed materials include tiled and thatched roofs, masonry, timber grain, glass reflections and metal trim. Figures have tapered limbs, facial details and seated riding poses; vehicles have shaped bodywork and wheel rims; sailing ships have curved hulls, billowed cloth and rigging. Layered foliage, irregular mountain ridges, soft ground contact shadows and continuous lighting on rounded forms add depth. Static artwork is cached at the current output scale with a bounded pixel budget. Uploaded images appear on modeled frames, portrait stands or hanging standards. View selection is saved in the project, reflected in picker and Layers thumbnails, and rendered in PNG and video exports. Existing objects default to Normal.
+
+Normal view uses a compact oval contact shadow. Isometric view projects the model geometry onto the ground using the same sun direction as its surface lighting. Shadows preserve silhouette gaps, grow softer with height, stay darker at contact points and shorten during collapse. Turning an object preserves the light direction. Airborne shadows stay on the ground during movement and entry animation. Shadow masks and artwork use separate bounded caches for playback and export.
+
+Overlapping highlights now reveal over the previous highlight without clearing the unrevealed area first. The newer fill replaces the older one only where its animation has reached, while exclusions keep showing the layer underneath. Timeline bars still control each highlight's visibility.
+
+For an illustrated strategy map, choose **Canvas settings → Appearance → Kingdom strategy · illustrated**. In **Object type → Kingdom strategy · settlements & resources**, choose from 24 original settlement buildings, units, trees and resources, including a town center, castle, windmill, mining camp and village worker. These use the normal object movement, size, rotation and damage controls.
+
+For landscape areas, add **Arrow / zone → Zone / occupied area**, draw at least three corners, then choose **Properties → Landscape → Zone landscape**. Fill the zone with grassland, jungle, woodland, pine forest, mountains, hills, river water, a lake, desert, snow, marsh or farmland. Set detail density, terrain size, opacity and a seed to rearrange scenery. A **River** path remains available for narrow waterways. Landscape details are clipped to the zone and included in PNG and video exports; existing plain zones keep their appearance. This is original strategy-inspired artwork and uses no game assets.
 
 Add an **Object**, then use **Object type** in Properties to choose **Famous landmarks & infrastructure** or **People & occupations**. The library includes 16 landmarks (including Padma Bridge and Bangladesh National Parliament) and 16 occupations. These objects support color changes, labels, movement, size and rotation keyframes, and video export.
 

@@ -1,15 +1,19 @@
 import { OBJECT_ICONS } from './map-objects.mjs';
+import { drawIsometricObject } from './map-isometric-objects.mjs';
 
 // Cache a static frame of the actual vector artwork, including tall masts/tools.
 const previews = new Map();
-export function objectPreview(glyph) {
-  if (previews.has(glyph)) return previews.get(glyph);
+export function objectPreview(glyph,view='normal') {
+  const key=glyph+':'+view;
+  if (previews.has(key)) return previews.get(key);
   const icon = OBJECT_ICONS[glyph];
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 224;
+  const W=view==='isometric'?448:224,H=W;
+  canvas.width = canvas.height = W;
   const c = canvas.getContext('2d');
-  c.translate(112, 140);
-  if (icon?.draw) {
+  c.translate(W/2,view==='isometric'?300:140);
+  if(view==='isometric')drawIsometricObject(c,glyph,26,icon?.color);
+  else if (icon?.draw) {
     c.save(); icon.draw(c, 26, icon.color, 0); c.restore();
   } else {
     // Image-based objects have no artwork until the user supplies an image.
@@ -21,10 +25,10 @@ export function objectPreview(glyph) {
   }
   // Fit the visible silhouette so a person, a wide vehicle, and a tall ship
   // share the same readable thumbnail size without cutting off their details.
-  const pixels = c.getImageData(0, 0, 224, 224).data;
-  let left = 224, top = 224, right = 0, bottom = 0;
-  for (let y = 0; y < 224; y++) for (let x = 0; x < 224; x++) {
-    if (pixels[(y * 224 + x) * 4 + 3] < 8) continue;
+  const pixels = c.getImageData(0, 0, W, H).data;
+  let left = W, top = H, right = 0, bottom = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (pixels[(y * W + x) * 4 + 3] < 8) continue;
     left = Math.min(left, x); top = Math.min(top, y);
     right = Math.max(right, x + 1); bottom = Math.max(bottom, y + 1);
   }
@@ -33,8 +37,8 @@ export function objectPreview(glyph) {
     const w = right - left, h = bottom - top, scale = 96 / Math.max(w, h);
     thumb.getContext('2d').drawImage(canvas, left, top, w, h, (112 - w * scale) / 2, (112 - h * scale) / 2, w * scale, h * scale);
   }
-  const url = thumb.toDataURL(); previews.set(glyph, url); return url;
+  const url = thumb.toDataURL(); previews.set(key, url); return url;
 }
 export function paintObjectPreviews(root) {
-  for (const img of root.querySelectorAll('img[data-object-preview]')) img.src = objectPreview(img.dataset.objectPreview);
+  for (const img of root.querySelectorAll('img[data-object-preview]')) img.src = objectPreview(img.dataset.objectPreview,img.dataset.objectView||'normal');
 }

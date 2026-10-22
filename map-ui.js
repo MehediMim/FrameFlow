@@ -40,10 +40,13 @@ import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
+import { ZONE_TERRAINS } from './map-strategy-terrain.mjs';
+import { OBJECT_VIEWS } from './map-object-view.mjs';
 import { planeRoute } from './map-engine.mjs?v=path-flow-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const OBJECT_CATEGORIES = [
+  ['kingdom', 'Kingdom strategy · settlements & resources'],
   ['images', 'Images, portraits & flags'], ['trade', 'Trade & cargo'],
   ['transport', 'Travel & civilian transport'], ['places', 'Cities & everyday places'],
   ['landmarks', 'Famous landmarks & infrastructure'], ['people', 'People & occupations'],
@@ -412,7 +415,7 @@ function captureCamera() {
 function renderItems() {
   const its = displayItems();
   $('#mItemCount').textContent = its.length;
-  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
+  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(it.objectView||'normal')}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
   paintObjectPreviews($('#mItems'));
   $$('[data-mid]').forEach(el => el.onclick = e => selectFromList(el.dataset.mid,e));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current() || !!current().fullTimelineCamera;
@@ -566,7 +569,8 @@ function objectFields(a) {
   const imageObject=['portrait','image','artwork','banner'].includes(a.glyph);
   const artwork=()=>a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):bannerFields(a);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
-  return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph)
+  return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph,a.objectView)
+    +F.sel('objectView','Object view',a.objectView||'normal',Object.entries(OBJECT_VIEWS))
     +(imageObject?'<div class="section-title">YOUR IMAGE &amp; STYLE</div>'+artwork():'')
     +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
@@ -667,14 +671,14 @@ function battleFields(a) {
     + F.range('battleRange','Reach / spread area',a.battleRange??180,40,800,10,x=>x+' px')
     + F.range('battleSpread','Volley angle spread',a.battleSpread??35,0,120,5,x=>x+' degrees'));
 }
-function objectPicker(glyph) {
+function objectPicker(glyph,view='normal') {
   const entries=group=>Object.entries(OBJECT_ICONS).filter(([,icon])=>(icon.group||'general')===group).sort((a,b)=>a[1].label.localeCompare(b[1].label));
   return `<div class="m-object-picker"><span class="mini-label">Object</span>
     <select data-object-type hidden aria-label="Object type">${[['all','All types'],...OBJECT_CATEGORIES].map(([key,label])=>`<option value="${key}" ${key===(objectTypeFilters.get(sel)||'all')?'selected':''}>${esc(label)}</option>`).join('')}</select>
     <select data-mf="glyph" data-t="sel" aria-label="Object" hidden>${OBJECT_CATEGORIES.map(([group,label])=>`<optgroup label="${esc(label)}">${entries(group).map(([key,icon])=>`<option value="${key}" ${key===glyph?'selected':''}>${esc(icon.label)}</option>`).join('')}</optgroup>`).join('')}</select>
-    <details data-object-menu><summary aria-label="Choose object"><img data-object-preview="${glyph}" alt=""><span>${esc(OBJECT_ICONS[glyph]?.label||'Choose an object')}</span><span class="m-object-caret" aria-hidden="true">&#9662;</span></summary>
+    <details data-object-menu><summary aria-label="Choose object"><img data-object-preview="${glyph}" data-object-view="${esc(view)}" alt=""><span>${esc(OBJECT_ICONS[glyph]?.label||'Choose an object')}</span><span class="m-object-caret" aria-hidden="true">&#9662;</span></summary>
     <div class="m-object-cascade" hidden><div class="m-object-types" role="menu" aria-label="Object types">${OBJECT_CATEGORIES.map(([group,label])=>`<button type="button" role="menuitem" data-object-category="${group}" aria-haspopup="true" aria-expanded="false"><span>${esc(label)}</span><span aria-hidden="true">&#8250;</span></button>`).join('')}</div>
-    <div class="m-object-submenus">${OBJECT_CATEGORIES.map(([group,label])=>`<div data-object-category-panel="${group}" role="listbox" aria-label="${esc(label)}" hidden><h4>${esc(label)}</h4>${entries(group).map(([key,icon])=>`<button type="button" class="m-object-choice" role="option" data-object-choice="${key}" aria-selected="${key===glyph}"><img data-object-preview-lazy="${key}" alt=""><span>${esc(icon.label)}</span></button>`).join('')}</div>`).join('')}</div></div></details></div>`;
+    <div class="m-object-submenus">${OBJECT_CATEGORIES.map(([group,label])=>`<div data-object-category-panel="${group}" role="listbox" aria-label="${esc(label)}" hidden><h4>${esc(label)}</h4>${entries(group).map(([key,icon])=>`<button type="button" class="m-object-choice" role="option" data-object-choice="${key}" aria-selected="${key===glyph}"><img data-object-preview-lazy="${key}" data-object-view="${esc(view)}" alt=""><span>${esc(icon.label)}</span></button>`).join('')}</div>`).join('')}</div></div></details></div>`;
 }
 
 function highlightExtentFields(a) {
@@ -738,6 +742,7 @@ function actionFields(a) {
     case 'shape': {
       const measurement=['distance','area'].includes(a.shape);
       return F.sel('shape', 'Shape', a.shape, Object.entries(SHAPES).map(([k, s]) => [k, s.label])) + pathFields(a)
+        + (a.shape==='zone'?'<div class="section-title">LANDSCAPE</div>'+F.sel('zoneTerrain','Zone landscape',a.zoneTerrain||'plain',Object.entries(ZONE_TERRAINS))+(a.zoneTerrain&&a.zoneTerrain!=='plain'?F.range('terrainDensity','Detail density',a.terrainDensity??1,.3,2,.1,x=>x.toFixed(1)+'×')+F.range('terrainScale','Trees / terrain size',a.terrainScale??1,.5,2.5,.1,x=>x.toFixed(1)+'×')+F.range('terrainOpacity','Landscape opacity',a.terrainOpacity??.92,0,1,.05,x=>Math.round(x*100)+'%')+F.num('terrainSeed','Landscape seed',a.terrainSeed??0,0,9999,1)+'<p class="mini-label">Draw at least three corners for a filled landscape. Change the seed to rearrange details. Use a River path for a narrow waterway, or a river zone for a wider water area.</p>':''):'')
         + (measurement?shapeMeasurementFields(a):'')
         + F.color('color', 'Color', a.color)
         + (!measurement||a.showDistanceArrow||a.showAreaBoundary?F.range('width', 'Line width', a.width, 1, 16, .5):'')
@@ -960,6 +965,8 @@ function bindInspector(it) {
       if (key === '__cameraTrack') { cameraProperty = v; renderTimeline(); renderInspector(); return; }
       if (key === '__keyProperty') return;
       if (key === '__objectTrack') { objectProperty=v;renderTimeline();return; }
+      if (key === 'zoneTerrain') { it.zoneTerrain=v;changed();renderInspector();return; }
+      if (key === 'objectView') { it.objectView=v;changed();renderInspector();return; }
       if (key.includes('.')) { const [endpoint, property] = key.split('.'); if (!Number.isFinite(v)) { renderInspector(); return; } it[endpoint][property] = clamp(v, +el.min, +el.max); previewCamera = null; changed(); renderInspector(); return; }
       if (key === 'name') { it.name = String(v).slice(0, 100) || 'Untitled'; changed(); const n = $('#mInspName'); if (n) n.textContent = it.name; return; }
       if (key === 'preset') { const old = PRESETS[it.preset].label, { dur, ...rest } = PRESETS[v].def; if (v === 'keyframed' && !it.cameraFrom) { it.cameraFrom = captureCamera(); it.cameraTo = { ...it.cameraFrom }; } if (v === 'keyframed') it.cameraKeys ??= []; it.preset = v; Object.assign(it, rest); if (it.name === old) it.name = PRESETS[v].label; if (PRESETS[v].fields.includes('planeId') && !it.planeId) it.planeId = planes()[0]?.id || ''; changed(); renderInspector(); return; }
@@ -1018,7 +1025,7 @@ function bindInspector(it) {
         v = clamp(Number.isFinite(v) ? v : lo, lo, hi);
         el.value = v;
       }
-      if (['count','startYear','endYear'].includes(key)) v = Math.round(v);
+      if (['count','startYear','endYear','terrainSeed'].includes(key)) v = Math.round(v);
       if (key === 'moveStart') v = Math.min(Math.round(v), it.moveEnd - 1);
       if (key === 'moveEnd') v = Math.max(Math.round(v), it.moveStart + 1);
       if (key === 'formationCols' && v === 0) { delete it.formationCols; changed(); return; }

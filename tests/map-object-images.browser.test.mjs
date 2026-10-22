@@ -108,14 +108,20 @@ try {
     const overlap=JSON.stringify(pixel(mixed,2,48))===JSON.stringify(pixel(only,2,48));
     const unaffected=JSON.stringify(pixel(mixed,8,50))===JSON.stringify(pixel(groupOnly,8,50));
     p.actions=[old,{...newer,dur:30}];E.drawMap(x,1280,720,p,100,geo);const expired=x.getImageData(0,0,1280,720).data;p.actions=[old];E.drawMap(x,1280,720,p,100,geo);const resumes=equal(expired,x.getImageData(0,0,1280,720).data);
+    const captureAt=(actions,frame)=>{E.drawMap(x,1280,720,{...p,actions},frame,geo);return new Uint8ClampedArray(x.getImageData(0,0,1280,720).data);};
+    const arriving={...newer,animDur:80,highlightOrigin:{kind:'point',name:'Reveal origin',lon:2,lat:46}};
+    const under=captureAt([old],20),start=captureAt([old,arriving],20),noGapAtStart=equal(under,start);
+    const during=captureAt([old,arriving],21),noGapDuring=equal(pixel(during,-3,48),pixel(under,-3,48));
+    const dimmed=captureAt([old,{...arriving,dim:.4}],21),noGapWithDim=equal(pixel(dimmed,-3,48),pixel(under,-3,48));
+    const labelOnly=captureAt([old,{...arriving,showFill:false}],100),labelLeavesFill=equal(labelOnly,captureAt([old],100));
     p.actions=[a];const png=await new Promise(r=>c.toBlob(r,'image/png'));
     let rejected=false;try{await I.importObjectImage(new File(['<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>'],'bad.svg',{type:'image/svg+xml'}));}catch{rejected=true;}
     window.reviewProject=p;
-    return {sizes,transparency,width:img.width,height:img.height,precedence,overlap,unaffected,resumes,png:png.size,rejected};
+    return {sizes,transparency,width:img.width,height:img.height,precedence,overlap,unaffected,resumes,noGapAtStart,noGapDuring,noGapWithDim,labelLeavesFill,png:png.size,rejected};
   })()`);
   assert.equal(result.width,1024);assert.equal(result.height,512);assert.deepEqual(result.transparency,[0,255]);
   assert.equal(result.sizes.length,4);assert.equal(result.sizes[1][0],result.sizes[0][0]*2);assert.equal(result.sizes[2][0],result.sizes[3][0]);assert.equal(result.sizes[0][0]/result.sizes[0][1],2);
-  for(const key of ['precedence','overlap','unaffected','resumes','rejected'])assert.equal(result[key],true,key);
+  for(const key of ['precedence','overlap','unaffected','resumes','rejected','noGapAtStart','noGapDuring','noGapWithDim','labelLeavesFill'])assert.equal(result[key],true,key);
   assert.ok(result.png>1000);
   // Grouped image/trade objects, portrait uploads and plaque text controls.
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);

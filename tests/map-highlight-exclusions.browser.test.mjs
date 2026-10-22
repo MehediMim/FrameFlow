@@ -99,7 +99,7 @@ try {
   const render=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));
     p.camera.init={lon:2,lat:46,zoom:5,bearing:0,pitch:0};p.area.detailCountries=[];p.actions=[E.makeAction('highlight',0,{id:'render',target:{kind:'country',name:'France'},color:'#ff2020',dim:0,pulse:false,showLabel:false,dur:240,animDur:1,highlightExclude:[{kind:'polygon',name:'Mask',path:[{lon:1,lat:45},{lon:3,lat:45},{lon:3,lat:47},{lon:1,lat:47}]}]})];
-    p.texture={type:'none'};p.atlasLabels={countries:false,oceans:false};p.actions[0].dim=0;p.actions[0].showLabel=false;
+    p.shots=[];p.area={...E.DEFAULT_AREA,mode:'world'};p.texture={type:'none'};p.atlasLabels={countries:false,oceans:false};p.actions[0].dim=0;p.actions[0].showLabel=false;
     const canvas=document.createElement('canvas');canvas.width=960;canvas.height=600;const ctx=canvas.getContext('2d');
     const sample=actions=>{const v=E.drawMap(ctx,960,600,{...p,actions},120,geo);return [[2,46],[-1,46],[2.5,46]].map(([lon,lat])=>{const q=E.project(v,E.lonToX(lon),E.latToY(lat));return [...ctx.getImageData(Math.round(q.x),Math.round(q.y),1,1).data];});};
     const a=p.actions[0],base=sample([]),cut=sample([a]),full=sample([{...a,highlightExclude:[]}]);

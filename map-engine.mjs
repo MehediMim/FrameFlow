@@ -23,6 +23,8 @@ import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=path-flow-1';
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
+import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
+import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
 export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=path-flow-1';
 
@@ -44,6 +46,7 @@ export const yToLat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / RAD;
 
 // ---------------------------------------------------------------- Themes
 export const THEMES = {
+  kingdom: { label:'Kingdom strategy · illustrated', strategy:true, void:'#293d35', ocean:'#4a8f9f', land:['#85a350','#8baa56','#97a75b','#7f9b4b','#a0ad60'], border:'#4c663d', borderA:.4, bw:.7, grat:'#e1e4af', gratA:.12, dim:'#182c24', vignette:.14, pill:'rgba(47,49,32,.94)', pillText:'#f6ecd1' },
   documentary: { label: 'War documentary · colored terrain', relief: true, terrain: DOCUMENTARY_TERRAIN, territoryTint: .72, void: '#263d4a', ocean: '#345772', land: ['#4a9c91', '#866083', '#bf643c', '#b39a4d', '#537d94'], border: '#303d36', borderA: .42, bw: .75, grat: '#c8d4ca', gratA: .12, dim: '#192c30', vignette: .24, pill: 'rgba(38,49,43,.94)', pillText: '#eee6cf' },
   relief: { label: 'Cartographic Relief', relief: true, void: '#263f4b', ocean: '#246c93', land: ['#596653', '#596653', '#596653', '#596653', '#596653'], border: '#45534a', borderA: .42, bw: .65, grat: '#dce5da', gratA: .12, dim: '#14242a', vignette: .12, pill: 'rgba(31,43,42,.9)', pillText: '#f5f0dc' },
   earth: { label: 'Earth vector', void: '#0b1620', ocean: '#a8d5ee', land: ['#e3ebc6', '#dbe7bc', '#e8e8c8', '#d8e5c3', '#e5e1c1'], border: '#ffffff', borderA: .9, bw: 1.1, grat: '#ffffff', gratA: .28, dim: '#06121c', vignette: .16, pill: 'rgba(12,28,40,.9)', pillText: '#ffffff' },
@@ -904,6 +907,14 @@ function drawAttribution(ctx, v, text) {
 // ---------------------------------------------------------------- Base map
 const baseMapCache = new WeakMap();
 const mapForegroundCache = new WeakMap();
+const highlightBaseCache = new WeakMap();
+function highlightBaseSurface(ctx,W,H){
+  if(typeof OffscreenCanvas==='undefined'&&typeof document==='undefined')return null;
+  let surface=highlightBaseCache.get(ctx);
+  if(!surface){surface=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(W,H):document.createElement('canvas');highlightBaseCache.set(ctx,surface);}
+  if(surface.width!==W)surface.width=W;if(surface.height!==H)surface.height=H;
+  return {surface,context:surface.getContext('2d')};
+}
 function mapForeground(ctx,W,H){
   if(typeof OffscreenCanvas==='undefined'&&typeof document==='undefined')return null;
   let surface=mapForegroundCache.get(ctx);
@@ -939,6 +950,7 @@ function drawBase(ctx, v, geo, th, proj) {
   const k0 = Math.round(v.cx);
   ctx.beginPath(); loadXY(v, new Float64Array([k0 - 4, 0, k0 + 5, 0, k0 + 5, 1, k0 - 4, 1]), 4, 0); emit(ctx, v, 4, true);
   ctx.fillStyle = th.ocean; ctx.fill();
+  if(th.strategy){ctx.fillStyle=strategyGroundPattern(ctx,th.ocean,true);ctx.fill();}
   if (v.img) drawImagery(ctx, v, v.img.im, v.img.id);
   else if (proj.theme === 'realistic') naturalWater(ctx, v);
   if (proj.graticule) {
@@ -964,7 +976,7 @@ function drawBase(ctx, v, geo, th, proj) {
     } else if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
     ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;
   };
-  const fillOf = (f, k) => (v.img ? null : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
+  const fillOf = (f, k) => (v.img ? null : th.strategy ? strategyGroundPattern(ctx,th.land[f.tint]||th.land[0]) : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
   for (let k = k0 - 1; k <= k0 + 1; k++) for (const f of set.features) {
     if (focus && (f.name === focus.name || (neighbors === 'hide' && !v.img))) continue; // the chosen country is drawn last, on top
     if (!bboxVisible(v, f.bbox, k)) continue;
@@ -1191,14 +1203,6 @@ export function drawHighlightExtentHandles(ctx, v, geo, a) {
   }
   ctx.beginPath(); ctx.arc(center.x, center.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
 }
-// Orient rings for a nonzero clip: outer cutouts subtract from the viewport,
-// while excluded areas add the underlying map/highlights back into that clip.
-function emitHighlightRing(ctx,v,ring,off,positive){
-  let signed=0;for(let i=0;i<ring.n-1;i++)signed+=ring.xy[2*i]*ring.xy[2*i+3]-ring.xy[2*i+2]*ring.xy[2*i+1];
-  let xy=ring.xy;
-  if((signed>=0)!==positive){xy=new Float64Array(ring.n*2);for(let i=0;i<ring.n;i++){xy[2*i]=ring.xy[2*(ring.n-1-i)];xy[2*i+1]=ring.xy[2*(ring.n-1-i)+1];}}
-  loadXY(v,xy,ring.n,off);emit(ctx,v,ring.n,true);
-}
 function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   const alpha = actAlpha(a, frame); if (alpha <= 0) return;
   const t0 = actionProgress(a, frame), t = a.invert ? 1 - t0 : t0, p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), age = Math.max(0, frame - a.start), pop = ease('backOut', clamp01((t - .45) / .3)); // invert: the same grow played backwards
@@ -1216,9 +1220,14 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
       for(const ring of cut.rings){loadXY(v,ring.xy,ring.n,cutOff);emit(ctx,v,ring.n,true);}
       ctx.clip('evenodd');
     }
-    if (a.showFill !== false && a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); ctx.globalAlpha = 1; path(); if (v.img) { ctx.save(); ctx.clip('evenodd'); drawImagery(ctx, v, v.img.im, v.img.id); ctx.restore(); } else { ctx.fillStyle = th.land[f.tint]; ctx.fill('evenodd'); } }
+    if (a.showFill !== false && a.dim > 0) {
+      // Dim around the region without clearing earlier paint inside it.
+      ctx.save();path();ctx.rect(0,0,v.W,v.H);ctx.clip('evenodd');
+      ctx.globalAlpha=a.dim*p*alpha;ctx.fillStyle=th.dim;ctx.fillRect(0,0,v.W,v.H);ctx.restore();
+    }
     if (a.showFill !== false && rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
       ctx.save(); ctx.beginPath(); groundCircle(ctx, v, x, y, rad, off); ctx.clip();
+      if(v.highlightBase){ctx.save();path();ctx.clip('evenodd');ctx.globalAlpha=1;ctx.drawImage(v.highlightBase,0,0);ctx.restore();}
       path(); ctx.globalAlpha = alpha * (th.relief ? (a.reliefOpacity ?? v.terrain.highlightOpacity) : (a.reliefOpacity ?? .78));
       ctx.fillStyle = th.relief ? (a.reliefColor || v.terrain.highlightColor) : a.color;
       // Hard-light can lift dark green terrain into warm gold while retaining
@@ -1263,6 +1272,7 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
   if (a.dim > 0) { ctx.globalAlpha = a.dim * p * alpha * .8; ctx.fillStyle = th.dim; ctx.fillRect(0, 0, v.W, v.H); }
   ctx.globalAlpha = 1;
   ctx.beginPath(); groundCircle(ctx, v, r.X, r.Y, rad * p);
+  if(v.highlightBase){ctx.save();ctx.clip();ctx.globalAlpha=1;ctx.drawImage(v.highlightBase,0,0);ctx.restore();}
   ctx.globalAlpha = alpha * .28; ctx.fillStyle = a.color; ctx.fill();
   glowStroke(ctx, a.color, 2.4 * v.unit, alpha, true);
   if (a.pulse) for (let i = 0; i < 3; i++) {
@@ -1582,6 +1592,7 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
   const reach = stem ? st.badgeStemLen * v.unit * a.size * k : 0, cx = g.x, cy = g.y - (stem ? r + reach : 0);
   const baseAlpha = alpha * clamp01(pop * 1.5) * fade;
   drawPinTrail(ctx, v, loc, a, baseAlpha);
+  const paintBadge = (ctx) => {
   ctx.save(); ctx.globalAlpha = baseAlpha; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if(a.type==='object'&&a.objectAngle){ctx.translate(g.x,g.y);ctx.rotate(a.objectAngle*RAD);ctx.translate(-g.x,-g.y);}
   if (stem) { // pointer from the badge down to the exact location
@@ -1604,6 +1615,13 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
   }
   if (st.badgeBorderW > 0) { badgePath(ctx, cx, cy, r, st); ctx.lineWidth = st.badgeBorderW * v.unit; ctx.strokeStyle = st.badgeBorder; ctx.stroke(); }
   ctx.restore();
+  };
+  if(a.type==='object'&&a.objectView==='isometric'){
+    const entry=a.image?badgeEntry(a.image):null;
+    ctx.save();ctx.globalAlpha=baseAlpha;ctx.translate(g.x,g.y);
+    if(st.badgeShadow)drawIsometricShadow(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{angle:(a.objectAngle||0)*RAD});
+    ctx.rotate((a.objectAngle||0)*RAD);drawIsometricObject(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{shadows:false});ctx.restore();
+  }else paintBadge(ctx);
   if (a.showLabel) {
     const lp = ease('backOut', (t - .3) / .3);
     if (lp > 0) { const y = cy + R * (.9 + st.badgeLabelY / 100) * grow; labels.push({ x: cx, y, ground: { X: loc.X, Y: loc.Y }, groundOffset: { y: y - g.y }, text: pinName(a, loc), alpha: alpha * clamp01(lp * 1.5) * fade, scale: (.9 + .2 * lp) * Math.max(.05, grow) }); }
@@ -1719,29 +1737,16 @@ export function drawMap(ctx, W, H, proj, frame, geo, previewCamera = null, { cac
   labels.push(...atlasMapLabels(proj, geo, v));
   drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
-  // Later starts take precedence; list order breaks ties. Clip older paint out
-  // of each newer boundary so translucent fills never accumulate there.
+  // Reveal new fills over existing paint. Restore the base only within the
+  // currently revealed area so completed fills retain their original opacity.
   const highlights = proj.actions.filter(a => a.type === 'highlight' && actAlpha(a,frame)>0)
     .map((a,index)=>({a,index})).sort((x,y)=>x.a.start-y.a.start||x.index-y.index).map(x=>x.a);
+  if(highlights.length>1){const base=highlightBaseSurface(ctx,W,H);if(base){base.context.clearRect(0,0,W,H);base.context.drawImage(ctx.canvas,0,0);v.highlightBase=base.surface;}}
   for (let i=0;i<highlights.length;i++) {
-    const a=highlights[i], newer=highlights.slice(i+1);
-    if(newer.some(b=>!b.highlightExclude?.length&&JSON.stringify(b.target)===JSON.stringify(a.target)))continue;
-    ctx.save();
-    for(const b of newer) {
-      if(b.showFill===false||!['country','region','regions','polygon'].includes(b.target?.kind))continue;
-      const f=featureForTarget(geo,b.target);
-      if(!f)continue;
-      ctx.beginPath();ctx.rect(0,0,W,H);
-      const off=Math.round(v.cx-f.cx);
-      for(const r of f.rings)emitHighlightRing(ctx,v,r,off,!!r.hole);
-      for(const excluded of b.highlightExclude||[]){
-        const cut=featureForTarget(geo,excluded);if(!cut)continue;
-        const cutOff=Math.round(v.cx-cut.cx);
-        for(const ring of cut.rings)emitHighlightRing(ctx,v,ring,cutOff,!ring.hole);
-      }
-      ctx.clip('nonzero');
-    }
-    tag(a,()=>drawHighlight(ctx,v,geo,th,a,frame,labels));ctx.restore();
+    const a=highlights[i];
+    const covered=highlights.slice(i+1).some(b=>b.showFill!==false&&['country','region','regions','polygon'].includes(b.target?.kind)&&!b.highlightExclude?.length&&(!b.highlightExtent||b.highlightExtent==='full'||b.highlightExtent==='percentage'&&(b.highlightPercent??100)>=100)&&JSON.stringify(b.target)===JSON.stringify(a.target)&&(b.invert?1-ease(b.easing,actionProgress(b,frame)):ease(b.easing,actionProgress(b,frame)))>=1);
+    if(covered)continue;
+    ctx.save();tag(a,()=>drawHighlight(ctx,v,geo,th,a,frame,labels));ctx.restore();
   }
   // Composite texture over country highlights, underneath borders and labels.
   drawTexture(ctx, W, H, proj.texture);
@@ -2015,7 +2020,7 @@ export function validateMapProject(p) {
       if (a.battleIntensity !== undefined && (!Number.isInteger(a.battleIntensity) || !num(a.battleIntensity,1,12))) throw Error('Invalid battle intensity.');
     }
     if (a.type === 'effect' && (!Object.hasOwn(EFFECTS, a.fx) || !isLoc(a.place) || (a.fx === 'strike' && !isLoc(a.from)) || (a.repeat !== undefined && !(Number.isInteger(a.repeat) && a.repeat >= 1 && a.repeat <= 10)))) throw Error('Invalid effect.');
-    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); validatePathAnimation(a); validateShapeMeasurement(a); }
+    if (a.type === 'shape') { if (!Object.hasOwn(SHAPES, a.shape)) throw Error('Invalid shape.'); checkPath(a); validatePathAnimation(a); validateShapeMeasurement(a); validateZoneTerrain(a); }
     if (['object', 'effect', 'shape'].includes(a.type) && a.label !== undefined && (typeof a.label !== 'string' || a.label.length > 100)) throw Error('Invalid label.');
     if (((a.type !== 'label' || a.color !== undefined) && !col(a.color)) || (a.type === 'plane' && !col(a.planeColor))) throw Error('Invalid color.');
     if (a.opacity !== undefined && !num(a.opacity,0,1)) throw Error('Invalid opacity.');

@@ -2,6 +2,7 @@ import { LESSONS } from './guide-lessons.mjs';
 import { interfaceIcon } from './interface-icons.mjs';
 import { OBJECT_ICONS } from './map-objects.mjs';
 import { drawDamage, drawDestruction } from './map-damage.mjs';
+import { drawTerrainMotif, strategyGroundPattern } from './map-strategy-terrain.mjs';
 
 const $ = selector => document.querySelector(selector);
 const canvas = $('#featureCanvas'), c = canvas.getContext('2d');
@@ -96,7 +97,16 @@ function timeline(p,top=330,kind='timeline') {
 function drawDemo(p) {
   backdrop(p);
   const stage=Math.min(2,Math.floor(p*3)), t=ease(p), local=(p*3)%1, id=current.demo;
-  if(['workspace','selection'].includes(id)) {
+  if(id==='kingdom'||id==='landscapes') {
+    c.fillStyle=strategyGroundPattern(c,'#8faa53');c.fillRect(60,75,840,335);
+    const kind=id==='landscapes'?['jungle','mountains','farmland'][stage]:'woodland';
+    c.save();c.beginPath();c.roundRect(95,100,270,285,16);c.clip();c.fillStyle=kind==='mountains'?'#9b9c86':'#698d45';c.fillRect(95,100,270,285);
+    for(let row=0;row<4;row++)for(let col=0;col<4;col++){c.save();c.translate(130+col*65+(row%2)*15,170+row*62);drawTerrainMotif(c,kind,25+(col%2)*4,col/4,p*12);c.restore();}c.restore();
+    icon(id==='kingdom'?'kingdomTownCenter':'kingdomWindmill',535,235,70);
+    icon(id==='kingdom'?'kingdomCastle':'kingdomFarm',740,260,60);
+    if(stage>0)icon('kingdomVillager',410+t*160,325,30);
+    tag(id==='kingdom'?'KINGDOM STRATEGY · ORIGINAL MINIATURES':['JUNGLE ZONE','MOUNTAIN ZONE','FARMLAND ZONE'][stage],360,100);
+  } else if(['workspace','selection'].includes(id)) {
     box(75,90,140,222,'#f6f2e6');text('ADD A LAYER',92,114,10,ink,'700');
     ['Pin / label','Object','Highlight','Arrow / zone','Effect'].forEach((name,i)=>{box(87,130+i*31,116,26,i===1?'#d4e0bc':'#e9e6d9',null,3);text(name,98,148+i*31,11);});
     icon('tank',490,220,48,stage===2?t*.2:0);pin(655,210,'Location');

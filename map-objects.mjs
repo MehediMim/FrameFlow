@@ -12,6 +12,9 @@ import { LANDMARK_OBJECTS } from './map-landmark-objects.mjs';
 import { PEOPLE_OBJECTS } from './map-people-objects.mjs';
 import { MEDIEVAL_OBJECTS, drawPortrait } from './map-medieval-objects.mjs';
 import { TRADE_OBJECTS } from './map-trade-objects.mjs';
+import { STRATEGY_OBJECTS } from './map-strategy-objects.mjs';
+import { drawZoneLandscape } from './map-strategy-terrain.mjs';
+import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
@@ -39,6 +42,7 @@ export const OBJECT_ICONS = {
   ...PEOPLE_OBJECTS,
   ...MEDIEVAL_OBJECTS,
   ...TRADE_OBJECTS,
+  ...STRATEGY_OBJECTS,
   flag: { label: 'Flag', color: '#e63946', draw: (c, s, col, t) => { const top = [], bot = []; for (let i = 0; i <= 10; i++) { const x = .03 + i / 10 * .9, w = Math.sin(t * .2 + i * .6) * .05 * (i / 10 + .3); top.push([x, -.98 + w]); bot.push([x, -.45 + w]); } poly(c, [...top, ...bot.reverse()], col, s); rect(c, -.05, -1, .08, 1.4, light, s, .03); } },
   checkpoint: { label: 'Checkpoint', color: '#c9a227', draw: (c, s, col) => { rect(c, -.9, -.1, .5, .5, metal, s); rect(c, -.4, .08, 1.3, .12, '#e63946', s, .02); rect(c, -.05, .08, .2, .12, light, s, .01); rect(c, .4, .08, .2, .12, light, s, .01); rect(c, .85, -.1, .12, .5, dark, s, .02); } },
   storm: { label: 'Storm', color: '#7aa0c4', draw: (c, s, col) => { rect(c, -.75, -.2, 1.5, .35, col, s, .15); circ(c, -.4, -.2, .35, col, s); circ(c, 0, -.4, .45, col, s); circ(c, .4, -.2, .35, col, s); poly(c, [[0, .05], [-.25, .55], [0, .5], [-.1, 1], [.3, .35], [.05, .4]], '#ffd166', s); } },
@@ -91,16 +95,27 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   const lift = ic.air ? 38 * size * u : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
   if (g.z < v.near) return;
   c.save();
+  const isometric=a.objectView==='isometric',angle=rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180;
+  const movingAngle=ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;
+  if(isometric){
+    const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
+    c.save();c.globalAlpha=alpha;c.translate(g0.x+dx,g0.y);c.scale(sc,sc);
+    drawIsometricShadow(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{angle:angle+(movingAngle!==null&&ic.rot?movingAngle:0),mirror:movingAngle!==null&&!ic.rot&&Math.cos(movingAngle)<0,height:Math.max(0,(lift-dy)/(s*sc)),flatten:1-collapse*.94});c.restore();
+  }
   // A small feathered contact shadow separates the illustration from the map.
+  if(!isometric){
   c.save();c.translate(g0.x+s*.08*sc,g0.y+s*.06*sc);c.scale(s*.85*sc,s*.24*sc);
   const shadow=c.createRadialGradient(0,0,0,0,0,1);
   shadow.addColorStop(0,'rgba(0,0,0,.24)');shadow.addColorStop(.55,'rgba(0,0,0,.12)');shadow.addColorStop(1,'rgba(0,0,0,0)');
   c.globalAlpha=alpha;c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
-  c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
+  }
+  c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (isometric || ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && !['banner','portrait'].includes(a.glyph)) { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
-  c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);
-  const drawIntact = () => {
-    if(a.glyph==='portrait')drawPortrait(c,s,a.color,a,H.objectImage?.(a.image));
+  c.rotate(angle); c.scale(sc, sc);
+  let isometricBounds;
+  const drawIntact = (c) => {
+    if(isometric)isometricBounds=drawIsometricObject(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{shadows:false});
+    else if(a.glyph==='portrait')drawPortrait(c,s,a.color,a,H.objectImage?.(a.image));
     else if(a.glyph==='banner')drawBanner(c,s,a.color,a,t/(v.fps||30),H.objectImage?.(a.image));
     else if(a.glyph==='artwork') {
       const img=H.objectImage?.(a.image);
@@ -111,12 +126,12 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   };
   if(a.damageState==='destroyed'){
     const ship=['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph);
-    drawDestruction(c,s,ship,destructionProgress(a,frame,v.fps||30),drawIntact);
+    drawDestruction(c,s,ship,destructionProgress(a,frame,v.fps||30),()=>drawIntact(c));
   } else {
-    drawIntact();drawDamage(c,s,a.damageState,t/(v.fps||30));
+    drawIntact(c);drawDamage(c,s,a.damageState,t/(v.fps||30));
   }
   c.restore();
-  if (a.showLabel && a.glyph!=='portrait') { const off = -s * (ic.labelOffset ?? (a.glyph==='banner'?6:ic.historic?2.8:1.5)) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
+  if (a.showLabel && a.glyph!=='portrait') { const off = (isometricBounds?s*(isometricBounds.top-.35):-s * (ic.labelOffset ?? (a.glyph==='banner'?6:ic.historic?2.8:1.5))) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
 }
 
 // ---------------------------------------------------------------- effects
@@ -223,14 +238,16 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     const pts = P.filter(Boolean); if (pts.length < 3) { c.restore(); return; }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
     c.globalAlpha = (a.fillAlpha ?? .28) * p; c.fillStyle = a.color; c.fill();
-    if (a.shape === 'noFly'||flow) {
+    const landscape=a.shape==='zone'&&a.zoneTerrain&&a.zoneTerrain!=='plain';
+    if(landscape)drawZoneLandscape(c,H,v,a,r,k,p,seconds);
+    if (a.shape === 'noFly'||flow&&!landscape) {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (const q of pts) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
       x0=Math.max(-40*u,x0);x1=Math.min(v.W+40*u,x1);y0=Math.max(-40*u,y0);y1=Math.min(v.H+40*u,y1);
       const gap=(a.shape==='noFly'?12:20)*u,offset=flow?((phase%gap)+gap)%gap:0;
       c.save(); c.clip(); c.beginPath(); for (let x = x0 - (y1 - y0)+offset; x < x1; x += gap) { c.moveTo(x, y1); c.lineTo(x + (y1 - y0), y0); } c.globalAlpha = (a.shape==='noFly'?.55:Math.min(.35,(a.fillAlpha??.28)*.6)) * p; c.strokeStyle = a.shape==='noFly'?a.color:'#fff2d8'; c.lineWidth = 1.6 * u; c.stroke(); c.restore();
     }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
-    c.globalAlpha = .95 * p; c.strokeStyle = a.color; c.lineWidth = w * .6; c.setLineDash(a.shape === 'noFly'||flow ? [10 * u, 7 * u] : []); c.lineDashOffset=flow?-phase:0;c.stroke();
+    c.globalAlpha = .95 * p; c.strokeStyle = a.color; c.lineWidth = w * .6; c.setLineDash(a.shape === 'noFly'||flow&&!landscape ? [10 * u, 7 * u] : []); c.lineDashOffset=flow&&!landscape?-phase:0;c.stroke();
     text = { x: pts.reduce((s, q) => s + q.x, 0) / pts.length, y: pts.reduce((s, q) => s + q.y, 0) / pts.length };
   } else {
     const e = p * (r.n - 1), L = []; let i = 0;

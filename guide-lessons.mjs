@@ -1,6 +1,16 @@
 // Keep lesson content independent of playback so the whole guide is searchable.
 const lesson = (id, category, title, description, steps, coverage, demo = id) => ({id, category, title, description, steps, coverage, demo});
 export const LESSONS = [
+  lesson('kingdom','Map & geography','Build a kingdom strategy map','Use an illustrated grass-and-water map with original settlement buildings, resource camps and units.',[
+    ['Choose the map style','Open Canvas settings → Appearance and select Kingdom strategy · illustrated.'],
+    ['Place your settlement','Add an Object and open Kingdom strategy · settlements & resources. Choose town centers, cottages, barracks, markets, castles, workers and more.'],
+    ['Bring the map to life','Add working windmills, units and resources. Use the usual movement, size, rotation, damage and timeline controls.']
+  ],['Illustrated ground','Town centers','Castles','Barracks','Markets','Windmills','Workers','Resource camps']),
+  lesson('landscapes','Map & geography','Paint a landscape zone','Fill a custom area with forests, mountains, farmland or water without placing every detail by hand.',[
+    ['Draw the zone','Add Arrow / zone, choose Zone / occupied area, then draw at least three corners on the map.'],
+    ['Choose a landscape','In Properties → Landscape, choose Jungle, Woodland, Pine forest, Mountains, Hills, River, Lake, Desert, Snow, Marsh or Farmland.'],
+    ['Tune the scenery','Adjust detail density, terrain size and landscape opacity. Change the seed to rearrange details; the same seed stays consistent when replayed or exported.']
+  ],['Jungle','Woodland','Pine forest','Mountains','Hills','Rivers','Lakes','Desert','Snow','Marsh','Farmland','Seeded scenery']),
   lesson('workspace','Getting started','Meet your map studio','Build a story with layers on a map, then decide when each moment appears on the timeline.',[
     ['Add a layer','Choose a tool in the left panel. Objects, pins, highlights, shapes and effects each become a layer.'],
     ['Place it on the map','Click the map to place your new item. Select it to reveal its controls in Properties.'],
@@ -38,7 +48,7 @@ export const LESSONS = [
   ],['Country outlines','World border sweep','Partial segments','Start / end picking','Reverse direction','Glow','Fill']),
   lesson('highlights','Map & geography','Highlight what matters','Use color, flags or a radius to lead attention to a place or territory.',[
     ['Add a Highlight','Choose a country, several regions, a custom area or a place radius.'],
-    ['Choose the emphasis','Set the fill color or flag image. Adjust coverage, exclusions, labels and the fill origin where available.'],
+    ['Choose the emphasis','Set the fill color or flag image. Adjust coverage, exclusions, labels and the fill origin. Overlap two highlight bars to reveal the newer fill over the previous one.'],
     ['Focus the audience','Add a pulse or dim the surrounding map. Fill and region text can be controlled independently.']
   ],['Color fill','Flag fill','Percentage coverage','Radius','Excluded areas','Fill origin','Region labels','Pulse','Surrounding dim']),
   lesson('pins','Map & geography','Place a pin or picture marker','Make a location recognizable with an icon, a name or your own image.',[
@@ -63,7 +73,7 @@ export const LESSONS = [
   ],['Roads','Railways','Rivers','Editable points','Progressive reveal','Moving flow','Speed','Reverse flow']),
   lesson('objects','Movement','Bring objects into the story','Populate the map with people, landmarks, vehicles, infrastructure and historical units.',[
     ['Choose an object','Add an Object and browse the type menu for troops, vehicles, ships, people, landmarks and more.'],
-    ['Make it fit','Set color, size and rotation. Drag the anchor to move it, or use the size and direction handles.'],
+    ['Make it fit','Choose Normal or Isometric in Object view, then set color, size and rotation. Drag the anchor to move it, or use the size and direction handles.'],
     ['Animate its presence','Choose an entrance, idle and exit animation. Keep it still, move it to a place, or draw a path.']
   ],['Historic units','Modern vehicles','Ships & aircraft','Landmarks','People & occupations','Civilian infrastructure','Time props','Enter / idle / exit']),
   lesson('artwork','Movement','Use your own images & flags','Bring custom visuals into your map through artwork, image badges, portraits and hanging flags.',[

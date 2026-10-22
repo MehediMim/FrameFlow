@@ -159,7 +159,11 @@ body.ff-unified{--bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border
 .ff-unified #mInspector :is(.m-chk,.color-row){min-height:28px;align-items:center}
 .ff-unified #mInspector .ff-inspector-content input[type=color]{height:28px;min-height:28px;width:36px}
 .ff-unified #mInspector .ff-inspector-content input[type=checkbox]{width:14px;height:14px;flex:none}
-.ff-unified #mInspector .ff-inspector-content>label:has(>input[type=color]),.ff-unified #mInspector .ff-inspector-content>label.m-chk{grid-column:span 1}
+.ff-unified #mInspector .ff-inspector-content>label:has(>input[type=color]),.ff-unified #mInspector .ff-inspector-content>label.m-chk{grid-column:1/-1}
+.ff-unified #mInspector .ff-inspector-content label.color-row{display:grid;grid-template-columns:minmax(0,1fr) 36px;align-items:center;gap:6px 8px}
+.ff-unified #mInspector .ff-inspector-content label>.ff-palette{grid-column:1/-1;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:5px;width:100%;max-width:200px;margin:2px 0 4px}
+.ff-unified #mInspector .ff-inspector-content .ff-palette>.ff-color-chip{width:100%!important;min-width:0!important;max-width:20px;height:20px!important;min-height:20px!important;border-radius:4px!important}
+.ff-unified #mInspector .ff-inspector-content label.m-chk{display:flex;align-items:center;gap:7px;min-height:24px;margin:0}
 .ff-unified #mInspector .ff-inspector-content .two{gap:8px}
 .ff-unified #mInspector .ff-inspector-content :is(button,input,select,textarea){box-sizing:border-box}
 

@@ -23,6 +23,7 @@
     "test:map-cartography:browser": "node tests/map-cartography.browser.test.mjs",
     "test:map-scene-panel": "node tests/map-scene-panel.test.mjs",
     "test:map-scene-panel:browser": "node tests/map-scene-panel.browser.test.mjs",
+    "test:map-animation-defaults": "node tests/map-animation-defaults.test.mjs",
     "test:map-object-sizing": "node tests/map-object-sizing.test.mjs",
     "test:map-object-workflows": "node tests/map-object-workflows.test.mjs",
     "test:map-formations": "node tests/map-formations.test.mjs",

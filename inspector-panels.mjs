@@ -72,8 +72,11 @@ function arrange(panel) {
       continue;
     }
     if (isSectionHeading(node)) {
+      // Label visibility, text and typography belong to the same property section.
+      const nextTitle=labelFromHeading(node);
+      if(nextTitle==='LABEL STYLE'&&currentTitle==='LABEL')continue;
       flush();
-      currentTitle = labelFromHeading(node);
+      currentTitle = nextTitle==='LABEL STYLE'?'LABEL':nextTitle;
       hasHeading = true;
       // Keep heading buttons, if any, in content instead of losing their action.
       if (node.querySelector('button, input, select')) group.push(node);

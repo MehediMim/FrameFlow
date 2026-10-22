@@ -87,7 +87,11 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   const lift = ic.air ? 38 * size * u : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
   if (g.z < v.near) return;
   c.save();
-  if(a.glyph!=='artwork'){c.globalAlpha = alpha * .28; c.fillStyle = '#000'; c.beginPath(); c.ellipse(g0.x, g0.y, s * .7 * sc, s * .18 * sc, 0, 0, TAU); c.fill();}
+  // A small feathered contact shadow separates the illustration from the map.
+  c.save();c.translate(g0.x+s*.08*sc,g0.y+s*.06*sc);c.scale(s*.85*sc,s*.24*sc);
+  const shadow=c.createRadialGradient(0,0,0,0,0,1);
+  shadow.addColorStop(0,'rgba(0,0,0,.24)');shadow.addColorStop(.55,'rgba(0,0,0,.12)');shadow.addColorStop(1,'rgba(0,0,0,0)');
+  c.globalAlpha=alpha;c.fillStyle=shadow;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();
   c.globalAlpha = alpha; c.translate(g.x + dx, g.y - (ic.air || a._wallSegment ? 0 : s * .5 * sc) + dy);
   if (ang !== null && a.glyph !== 'banner') { if (ic.rot) c.rotate(ang); else if (Math.cos(ang) < 0) c.scale(-1, 1); }
   c.rotate(rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180); c.scale(sc, sc);

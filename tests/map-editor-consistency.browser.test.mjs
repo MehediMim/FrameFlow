@@ -167,6 +167,13 @@ try {
   await change('#mMapContext [data-direct-land="label"]','Edited second');
   const regions=(await stored()).actions.filter(a=>['region-a','region-b'].includes(a.id));
   assert.deepEqual(regions.map(a=>a.label),['First','Edited second'],'the new controls edit only the selected layer');
+  const trimBefore=(await stored()).actions.find(a=>a.id==='region-b');
+  assert.ok(trimBefore.animDur<trimBefore.dur,'new layers leave a hold after their animation');
+  const trimPoint=await evaluate(`(()=>{const r=document.querySelector('[data-mclip="region-b"] [data-h=r]').getBoundingClientRect();return{x:r.right-2,y:r.y+r.height/2};})()`);
+  await drag(trimPoint,{x:trimPoint.x+30,y:trimPoint.y});
+  const trimAfter=(await stored()).actions.find(a=>a.id==='region-b');
+  assert.ok(trimAfter.dur>trimBefore.dur,'the bar edge can be extended directly');
+  assert.equal(trimAfter.animDur,trimBefore.animDur,'trimming the bar does not move the animation diamond');
   await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').focus();document.querySelector('[data-mid="pin"]').click();`);
   assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="__pinDisplay"]')&&!document.querySelector('#mMapContext [data-direct-land]')`),'layer-list selection changes the control type while the old field is focused');
   await evaluate(`document.querySelector('#mapStudio [data-zoom="fit"]').click();for(let i=0;i<4;i++)document.querySelector('#mapStudio [data-zoom="out"]').click();`);
@@ -193,6 +200,13 @@ try {
   assert.ok(await evaluate(`!!document.activeElement.closest('[data-object-category-panel="transport"]')`),'keyboard navigation enters the adjacent object list');
   await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));`);
   assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-menu]').open`),false,'Escape closes the nested menu');
+  await waitFor(`!!document.querySelector('#mInspector [data-mf="__lscustom"]')?.closest('.ff-inspector-section')`);
+  assert.ok(await evaluate(`document.querySelector('#mInspector [data-mf="showLabel"]').closest('.ff-inspector-section')===document.querySelector('#mInspector [data-mf="__lscustom"]').closest('.ff-inspector-section')`),'label visibility and label style share one section');
+  assert.equal(await evaluate(`[...document.querySelectorAll('#mInspector .ff-inspector-summary-label')].filter(el=>el.textContent==='LABEL').length`),1,'only one Label section is shown');
+  assert.ok(await evaluate(`(()=>{const input=document.querySelector('#mInspector [data-mf="color"]'),row=input.closest('label'),palette=row.querySelector('.ff-palette'),content=row.closest('.ff-inspector-content'),r=row.getBoundingClientRect(),p=palette.getBoundingClientRect(),c=content.getBoundingClientRect(),chips=[...palette.children].map(el=>el.getBoundingClientRect());return r.width>c.width*.8&&p.width>c.width*.7&&chips.slice(0,8).every(el=>Math.abs(el.top-chips[0].top)<1)&&chips.every(el=>el.right<=c.right);})()`),'color swatches use the available inspector width without overflow');
+  assert.ok(await evaluate(`(()=>{const el=document.querySelector('#mInspector [data-mf="__lscustom"]').closest('label'),c=el.closest('.ff-inspector-content');return el.getBoundingClientRect().width>c.getBoundingClientRect().width*.8;})()`),'label checkboxes occupy a full row');
+  await evaluate(`document.querySelector('#mInspector [data-mf="__lscustom"]').scrollIntoView({block:'nearest'})`);
+  await writeFile(join(tmpdir(),'frameflow-inspector-label-layout.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await evaluate(`document.querySelector('#mSettingsButton').click()`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#mSettingsPanel .ff-settings-body')).display`),'grid','desktop categories and settings use a two-column layout');
   assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tab]').length`),4,'settings have four categories without Starting view');

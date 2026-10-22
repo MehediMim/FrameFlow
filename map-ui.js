@@ -6,7 +6,7 @@ import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs?v=typed-lanes-1';
-import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=paired-camera-1';
+import { installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=animation-gap-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, featureForTarget, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -15,7 +15,7 @@ import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=expanded-settings
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=motion-media-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=paired-camera-1';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=animation-gap-1';
 import { CITIES } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './fonts.mjs';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
@@ -23,13 +23,13 @@ import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.m
 import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { applyDocumentaryLook, DOCUMENTARY_LABEL } from './map-documentary.mjs';
-import { terrainSettingsOf } from './map-engine.mjs?v=paired-camera-1';
+import { terrainSettingsOf } from './map-engine.mjs?v=animation-gap-1';
 import { FORMATIONS, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
-import { resolveLoc } from './map-engine.mjs?v=paired-camera-1';
+import { resolveLoc } from './map-engine.mjs?v=animation-gap-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
-import { sampleCameraPreset, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=paired-camera-1';
+import { sampleCameraPreset, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=animation-gap-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs?v=paired-camera-1';
 import { syncCameraTimeline, cameraKeyAt, addCameraPair, cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
 import { trimMapHistory } from './map-history.mjs';
@@ -38,7 +38,7 @@ import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
-import { planeRoute } from './map-engine.mjs?v=paired-camera-1';
+import { planeRoute } from './map-engine.mjs?v=animation-gap-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const OBJECT_CATEGORIES = [

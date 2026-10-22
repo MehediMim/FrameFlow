@@ -54,10 +54,10 @@ body.mode-map #mapStudio{display:flex}
 .m-clip.t-highlight{background:#ffd16655;border-color:#ffd166}
 .m-clip.t-pin{background:#ef476f55;border-color:#ef476f}
 .m-clip.t-shot{background:#4cc9f055;border-color:#4cc9f0}
-.m-h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
+.m-h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize;z-index:6}
 .m-h.l{left:0}.m-h.r{right:0}
 .m-key{position:absolute;top:50%;transform:translate(-50%,-50%);width:22px;height:24px;padding:0;border:0;background:transparent;cursor:ew-resize;z-index:2;touch-action:none}
-.m-key::before{content:'';position:absolute;width:13px;height:13px;left:4px;top:5px;transform:rotate(45deg);background:var(--accent);border:1px solid #d0ebae;box-shadow:0 0 3px #000}
+.m-key::before{content:'';position:absolute;box-sizing:border-box;width:8px;height:8px;left:50%;top:50%;transform:translate(-50%,-50%) rotate(45deg);background:var(--key-fill,var(--accent));border:1px solid var(--key-border,#d0ebae);box-shadow:0 0 2px #000}
 .m-key:hover::before,.m-key:focus-visible::before{background:#fff;box-shadow:0 0 0 2px #4cc9f0}
 .m-key.current::before{background:#fff;box-shadow:0 0 0 2px var(--accent)}
 .m-camera-keybar{display:grid;grid-template-columns:26px minmax(0,1fr) 26px;gap:5px;align-items:stretch;margin-bottom:8px;min-width:0;width:100%}
@@ -131,7 +131,7 @@ body.mode-map #mapStudio{display:flex}
 .m-object-key-buttons{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
 .m-object-key-buttons button{font-size:10px;padding:7px}
 .m-object-key-buttons button.current{border-color:var(--accent);color:var(--accent)}
-.m-key.m-object-key{background:#e2bb70;border-color:#fff0c9}
+.m-key.m-object-key{--key-fill:#e2bb70;--key-border:#fff0c9}
 .m-army-row{display:grid;grid-template-columns:minmax(0,1fr) 48px 32px;gap:5px;margin:9px 0;align-items:center}
 .m-army-row select,.m-army-row input{min-width:0;max-width:100%;padding:5px;font-size:10px}
 .m-army-row input[type=color]{width:32px}
@@ -154,7 +154,7 @@ body.mode-map #mapStudio{display:flex}
 .m-area-tools .two{margin:7px 0}
 .m-area-tools button{min-width:0;white-space:normal;font-size:10px}
 .m-group-tools button:disabled{opacity:.45}
-#mapStudio .m-campaign-key{background:#e9cc75;border-color:#f9e7b1;z-index:5}
+#mapStudio .m-campaign-key{--key-fill:#e9cc75;--key-border:#f9e7b1;z-index:5}
 #mapStudio .t-group{background:#63814b55;border-color:#a7b887}
 
 .m-object-picker{margin-bottom:14px;position:relative}
@@ -224,11 +224,10 @@ body.mode-map #mapStudio{display:flex}
 .m-stage-viewport{position:relative;flex:1 1 0;min-width:0;min-height:0;overflow:hidden}
 .m-stage-viewport>.stage-area{width:100%;height:100%}
 
-.m-key.m-camera-paired::before{background:#86ccef;border-color:#d3f0ff}
+.m-key.m-camera-paired{--key-fill:#86ccef;--key-border:#d3f0ff}
 #mInspector [data-camera-delete]{width:100%;margin-top:6px;color:#ffada4;font-size:11px}
 
 .m-key.m-camera-key{width:18px;height:16px}
-.m-key.m-camera-key::before{left:2px;top:1px}
 
 /* Object types reveal their illustrated choices beside the hovered category. */
 body.ff-unified .m-object-cascade{position:fixed;z-index:10000;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);padding:0;background:var(--ff-surface);border:1px solid var(--ff-border);border-radius:6px;box-shadow:0 10px 32px #0009;overflow:hidden;color:var(--ff-text)}

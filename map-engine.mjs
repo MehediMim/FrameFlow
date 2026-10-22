@@ -19,10 +19,10 @@ import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayo
 import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
-import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs';
+import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=object-shadow-1';
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
-export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
+export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=object-shadow-1';
 
 const RAD = Math.PI / 180, MAX_LAT = 85.0511287798, BASE_PX = 512, FOV = 45 * RAD;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -1800,7 +1800,8 @@ export function makeAction(type, start, extra = {}) {
     label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
   }[type];
   const a = { ...base, ...own, ...(type==='shape'&&['distance','area'].includes(extra.shape)?{curve:'straight'}:{}), ...extra };
-  a.animDur ??= a.dur;
+  // Leave a short hold after the animation so its final diamond clears the trim edge.
+  a.animDur ??= Math.max(1,a.dur-Math.max(1,Math.ceil(a.dur*.15)));
   return a;
 }
 export function makeShot(preset, start, extra = {}) {

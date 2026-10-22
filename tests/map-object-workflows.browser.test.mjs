@@ -86,9 +86,12 @@ try {
   await evaluate(`document.querySelector('#mItems [data-mid]').click();document.querySelector('[data-mpick="place"]').click()`);
   await placeObjectAt(-3,49);
   assert.notDeepEqual((await saved()).actions[0].place,firstPosition,'the existing Position button allows repositioning');
-  assert.deepEqual(await evaluate(`[...document.querySelector('[data-mf="objectView"]').options].map(o=>[o.value,o.textContent])`),[['side','Side view'],['isometric','Isometric view']]);
+  assert.deepEqual(await evaluate(`[...document.querySelector('[data-mf="objectView"]').options].map(o=>[o.value,o.textContent])`),[['side','Side view'],['isometric','Isometric view'],['isometricBack','Back isometric view']]);
   await change('#mInspector [data-mf="objectView"]','isometric');
   assert.equal((await saved()).actions[0].objectView,'isometric');
+  await change('#mInspector [data-mf="objectView"]','isometricBack');
+  assert.equal((await saved()).actions[0].objectView,'isometricBack');
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-preview]').dataset.objectView`),'isometricBack','picker follows the rear view');
   await change('#mInspector [data-mf="objectView"]','side');
   assert.equal((await saved()).actions[0].objectView,'side');
   const previews=await evaluate(`(async()=>{
@@ -96,8 +99,9 @@ try {
     const {objectPreview}=await import('./map-object-preview.mjs');
     const failures=[];
     for(const glyph of Object.keys(OBJECT_ICONS)){
-      const urls=['side','isometric'].map(view=>objectPreview(glyph,view));
+      const urls=['side','isometric','isometricBack'].map(view=>objectPreview(glyph,view));
       if(urls[0]===urls[1])failures.push(glyph+': identical views');
+      if(['house','doctor','tank','portrait'].includes(glyph)&&urls[1]===urls[2])failures.push(glyph+': rear repeats front');
       for(const url of urls){
         const img=new Image();img.src=url;await img.decode();
         const c=document.createElement('canvas');c.width=c.height=112;const x=c.getContext('2d');x.drawImage(img,0,0);
@@ -109,14 +113,14 @@ try {
   assert.deepEqual(previews,[],'every object has distinct, visible side and isometric previews');
   const review=await evaluate(`(async()=>{
     const {OBJECT_ICONS}=await import('./map-objects.mjs'),{objectPreview}=await import('./map-object-preview.mjs');
-    const c=document.createElement('canvas');c.width=1200;c.height=660;const x=c.getContext('2d');x.fillStyle='#eee9df';x.fillRect(0,0,c.width,c.height);
+    const c=document.createElement('canvas');c.width=1440;c.height=660;const x=c.getContext('2d');x.fillStyle='#eee9df';x.fillRect(0,0,c.width,c.height);
     const samples=['doctor','kingdomVillager','house','kingdomHouse','medievalCastle','eiffelTower','car','tank','galleon','airliner','tree','clock'];
     for(let i=0;i<samples.length;i++){
-      const glyph=samples[i],left=(i%4)*300,top=Math.floor(i/4)*220;
+      const glyph=samples[i],left=(i%4)*360,top=Math.floor(i/4)*220;
       x.fillStyle='#263a3d';x.font='14px sans-serif';x.fillText(OBJECT_ICONS[glyph].label,left+12,top+22);
-      for(const [j,view]of ['side','isometric'].entries()){
-        const image=new Image();image.src=objectPreview(glyph,view);await image.decode();x.drawImage(image,left+12+j*145,top+35,128,128);
-        x.fillText(view==='side'?'Side view':'Isometric view',left+18+j*145,top+188);
+      for(const [j,view]of ['side','isometric','isometricBack'].entries()){
+        const image=new Image();image.src=objectPreview(glyph,view);await image.decode();x.drawImage(image,left+12+j*116,top+35,108,128);
+        x.fillText(view==='side'?'Side view':view==='isometric'?'Isometric':'Back isometric',left+18+j*116,top+188);
       }
     }
     return c.toDataURL().split(',')[1];
@@ -197,7 +201,9 @@ try {
   assert.equal((await saved()).actions.at(-1).glyph,'ferry','the nested menu selects an object');
   await change('#mInspector [data-mf="glyph"]','calendar');
   assert.ok((await evaluate(`document.querySelectorAll('#mInspector [data-mf="glyph"] option').length`))>50,'the complete catalog remains available');
+  await change('#mInspector [data-mf="objectView"]','isometricBack');
   await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  assert.equal((await saved()).actions.at(-1).objectView,'isometricBack','rear view survives reload');
   assert.deepEqual((await saved()).actions.slice(-4).map(a=>a.glyph),['clock','stopwatch','hourglass','calendar'],'time props survive reload');
   const render=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs');const topo=await fetch('map-data/countries-50m.json').then(r=>r.json()),geo=E.buildGeo(topo),p=JSON.parse(localStorage.getItem('frameflow-map-v1'));

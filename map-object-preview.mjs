@@ -1,5 +1,6 @@
 import { OBJECT_ICONS } from './map-objects.mjs';
 import { drawIsometricObject, drawSideObject } from './map-isometric-objects.mjs';
+import { isIsometricView } from './map-object-view.mjs';
 
 // Cache a static frame of the actual vector artwork, including tall masts/tools.
 const previews = new Map();
@@ -12,8 +13,8 @@ export function objectPreview(glyph,view='side') {
   canvas.width = canvas.height = W;
   const c = canvas.getContext('2d');
   c.translate(W/2,300);
-  const draw=view==='isometric'?drawIsometricObject:drawSideObject;
-  draw(c,glyph,26,icon?.color);
+  const draw=isIsometricView({objectView:view})?drawIsometricObject:drawSideObject;
+  draw(c,glyph,26,icon?.color,0,{objectView:view});
   // Fit the visible silhouette so a person, a wide vehicle, and a tall ship
   // share the same readable thumbnail size without cutting off their details.
   const pixels = c.getImageData(0, 0, W, H).data;

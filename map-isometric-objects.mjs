@@ -1,6 +1,7 @@
 import { IsoScene } from './map-isometric-geometry.mjs';
 import { drawModelShadow } from './map-isometric-shadow.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
+import { objectViewOf } from './map-object-view.mjs';
 
 // Explicit recipes for the complete catalog. No normal-view drawing function is
 // used here: these miniatures are built from world-space volumes and surfaces.
@@ -176,7 +177,7 @@ function vehicle(m,o,col,t){
   const train=o.kind==='train',bus=o.kind==='bus',truck=o.kind==='truck',tank=o.kind==='tank',wagon=o.kind==='wagon';
   const L=bus||train?2.35:2,W=tank?1.05:.85;
   if(tank){
-    for(const y of[-.65,.43]){m.box(-1.08,y,.08,2.16,.24,.4,'#343c35');for(let i=0;i<6;i++)m.wheel(-.88+i*.35,y+.12,.28,.14,.14,IRON);}
+    for(const y of[-.65,.43]){m.box(-1.08,y,.08,2.16,.24,.4,'#343c35');for(let i=0;i<6;i++)m.wheel(-.88+i*.35,y+.12,.28,.14,.14,IRON,true);}
     m.bevelBox(-1,-.52,.4,2,1.04,.35,col,.13);m.bevelBox(-.5,-.35,.73,.95,.7,.32,col,.1);m.cylinder(-.08,0,1.05,.18,.045,IRON,16);
     m.tube([.25,0,.9],[1.48,0,.94],.062,.045,IRON,10);m.tube([1.38,0,.936],[1.55,0,.944],.072,.068,IRON,10);
     m.face([[1.552,-.045,.9],[1.552,.045,.9],[1.552,.045,.98],[1.552,-.045,.98]],'#1d2626',1,false);
@@ -185,7 +186,7 @@ function vehicle(m,o,col,t){
     m.box(-.32,.36,.78,.42,.025,.17,'#817f61');m.beam([-.32,-.2,1.08],[-.4,-.23,1.65],.009,IRON);
     for(const x of[-.72,.63])m.box(x,.53,.56,.22,.025,.09,'#b6b58d');return;
   }
-  for(const x of[-L*.34,L*.34])for(const y of[-W/2-.06,W/2-.02])m.wheel(x,y,.24,wagon?.31:.23,.14);
+  for(const x of[-L*.34,L*.34])for(const y of[-W/2-.06,W/2-.02])m.wheel(x,y,.24,wagon?.31:.23,.14,'#30383c',true);
   m.bevelBox(-L/2,-W/2,.28,L,W,.24,col,.055);
   if(wagon){m.box(-.9,-.4,.54,1.8,.8,.34,WOOD);crates(m,-.65,-.22);for(const x of[-.7,-.1,.5])m.box(x,.425,.54,.045,.04,.42,WOOD);m.beam([.9,0,.4],[1.5,0,.35],.05,WOOD);return;}
   if(truck){m.bevelBox(-1,-.43,.53,1.24,.86,.88,col,.035);m.bevelBox(.25,-.4,.53,.75,.8,.6,col,.075);m.box(.7,-.41,.8,.22,.82,.23,GLASS);m.box(.99,-.3,.6,.035,.6,.18,IRON);for(let z=.68;z<1.36;z+=.12)m.box(-.96,.435,z,1.16,.009,.01,'#939e94');m.box(.4,.414,.73,.3,.025,.22,GLASS);}
@@ -197,6 +198,7 @@ function vehicle(m,o,col,t){
     m.face([[-.72,-.34,.6],[-.72,.34,.6],[-.52,.28,.93],[-.52,-.28,.93]],GLASS,1,false);
     m.bevelBox(-.53,-.3,.9,.8,.6,.065,col,.02);
     for(const [a,b]of[[-.57,-.18],[-.13,.39]])m.face([[a,.345,.65],[b,.345,.65],[b-.13,.295,.89],[a+.045,.295,.89]],GLASS,1,false);
+    if(m.view==='isometricBack')for(const [a,b]of[[-.57,-.18],[-.13,.39]])m.face([[a,-.345,.65],[b,-.345,.65],[b-.13,-.295,.89],[a+.045,-.295,.89]],GLASS,1,false);
     m.box(-.14,.36,.53,.018,.015,.35,'#454e4d');m.box(-.02,.37,.59,.09,.018,.015,IRON);
   }
   else{
@@ -213,7 +215,7 @@ function vehicle(m,o,col,t){
 }
 register('vehicle',{tank:{kind:'tank'},car:{kind:'car'},bus:{kind:'bus'},train:{kind:'train'},deliveryTruck:{kind:'truck'},ambulance:{kind:'ambulance'},supplyWagon:{kind:'wagon'},bullockCart:{kind:'wagon',animal:true}});
 function gun(m,o,col){
-  for(const y of[-.45,.32])m.wheel(-.1,y,.38,.36,.15,WOOD);
+  for(const y of[-.45,.32])m.wheel(-.1,y,.38,.36,.15,WOOD,true);
   for(const y of[-.16,.16])m.beam([-.9,y,.12],[.35,y,.54],.055,WOOD);
   m.box(-.23,-.27,.33,.3,.54,.22,WOOD);m.tube([-.4,0,.6],[1.12,0,.95],o.heavy?.145:.105,o.heavy?.12:.085,col,14);
   m.tube([.96,0,.914],[1.14,0,.955],o.heavy?.16:.12,o.heavy?.16:.12,IRON,14);m.tube([1.145,0,.956],[1.153,0,.958],o.heavy?.1:.075,o.heavy?.1:.075,'#232b2b',12);
@@ -540,7 +542,7 @@ function accessory(m,o,col,t){
   if(k==='stepwell'){for(let i=0;i<5;i++){const w=1.9-i*.27,z=.5-i*.1;m.box(-w/2,-w/2,0,w,.14,z,STONE);m.box(-w/2,w/2-.14,0,w,.14,z,STONE);m.box(-w/2,-w/2,0,.14,w,z,STONE);m.box(w/2-.14,-w/2,0,.14,w,z,STONE);}m.box(-.25,-.25,.01,.5,.5,.03,'#679c9f');return;}
   if(k==='palanquin'){m.box(-.6,-.4,.45,1.2,.8,.55,col);m.roof(-.75,-.5,1,1.5,1,.35,WOOD);for(const y of[-.3,.3])m.beam([-1.2,y,.55],[1.2,y,.55],.045,WOOD);m.box(-.2,.41,.45,.4,.025,.5,WHITE);return;}
   if(k==='bicycle'){
-    for(const x of[-.7,.7]){m.wheel(x,0,.38,.37,.05,IRON);for(let i=0;i<6;i++){const a=i*Math.PI/3;m.beam([x,.06,.38],[x+Math.cos(a)*.34,.06,.38+Math.sin(a)*.34],.008,WHITE);}}
+    for(const x of[-.7,.7]){m.wheel(x,0,.38,.37,.05,IRON,true);for(let i=0;i<6;i++){const a=i*Math.PI/3;m.beam([x,.06,.38],[x+Math.cos(a)*.34,.06,.38+Math.sin(a)*.34],.008,WHITE);}}
     for(const [a,b]of[[[-.7,0,.38],[-.2,0,.95]],[[-.2,0,.95],[.12,0,.38]],[[.12,0,.38],[-.7,0,.38]],[[.12,0,.38],[.55,0,.95]],[[.55,0,.95],[-.2,0,.95]],[[.55,0,.95],[.7,0,.38]]])m.beam(a,b,.025,col);m.box(-.37,-.14,.98,.32,.28,.05,WOOD);m.beam([.55,0,.95],[.55,0,1.2],.025,IRON);m.beam([.55,-.2,1.2],[.55,.2,1.2],.025,IRON);return;
   }
   if(k==='checkpoint'){m.box(-.9,-.22,0,.4,.44,.65,IRON);m.box(-.65,-.05,.58,1.65,.1,.12,col);for(let i=0;i<4;i++)m.box(-.5+i*.4,.055,.58,.17,.012,.12,WHITE);m.box(.8,-.15,0,.12,.3,.6,IRON);return;}
@@ -561,7 +563,7 @@ const families={
     if(!o.battery){gun(m,o,c);return;}
     slab(m);
     for(const y of[-.5,.45]){
-      const sub=new IsoScene();gun(sub,o,c);
+      const sub=new IsoScene(m.view);gun(sub,o,c);
       for(const f of sub.faces){f.points=f.points.map(([x,Y,z])=>[x*.75,Y*.75+y,z*.75]);f.depth=f.points.reduce((s,[x,Y,z])=>s+x+Y+z,0)/f.points.length;m.faces.push(f);}
     }
   },
@@ -570,7 +572,16 @@ export const ISOMETRIC_MODELS=Object.freeze(models);
 export function createIsometricModel(glyph,color,t=0,action={},image,view='isometric'){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
   const scene=new IsoScene(view);scene.material=({person:'cloth',mounted:'cloth',formation:'cloth',vehicle:'paint',ship:'paint',aircraft:'paint',fort:'stone',building:'plaster',landmark:'stone',bridge:'metal',nature:'earth',goods:'wood',image:'wood',time:'metal',accessory:'metal'})[recipe.family]||'matte';
-  families[recipe.family](scene,recipe.options,color||'#919c72',t,action,image);return scene;
+  families[recipe.family](scene,recipe.options,color||'#919c72',t,action,image);
+  if(view==='isometricBack'){
+    // Turn the model around its vertical axis before projection and occlusion.
+    // Shadows use these turned vertices with the same world-space sun.
+    for(const face of scene.faces){
+      face.points=face.points.map(([x,y,z])=>[-x,-y,z]);
+      face.depth=face.points.reduce((sum,[x,y,z])=>sum+x+y+z,0)/face.points.length;
+    }
+  }
+  return scene;
 }
 function modelFor(glyph,color,t,action,image,view='isometric'){
   const recipe=models[glyph];if(!recipe)throw Error(`Missing isometric model: ${glyph}`);
@@ -588,7 +599,7 @@ function modelFor(glyph,color,t,action,image,view='isometric'){
   return {scene,key,animated:false};
 }
 export function drawIsometricObject(c,glyph,size,color,t=0,action={},image,{shadows=true}={}){
-  const model=modelFor(glyph,color,t,action,image);
+  const model=modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric');
   return model.animated?model.scene.draw(c,size,{shadows}):drawStaticModel(c,model.scene,size,model.key,shadows);
 }
 export function drawSideObject(c,glyph,size,color,t=0,action={},image){
@@ -596,7 +607,7 @@ export function drawSideObject(c,glyph,size,color,t=0,action={},image){
   return model.animated?model.scene.draw(c,size,{shadows:false}):drawStaticModel(c,model.scene,size,model.key,false);
 }
 export function drawIsometricShadow(c,glyph,size,color,t=0,action={},image,pose={}){
-  return drawModelShadow(c,modelFor(glyph,color,t,action,image).scene,size,pose);
+  return drawModelShadow(c,modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric').scene,size,pose);
 }
 const modelCache=new Map(),animatedModels=new Map(),imageIds=new WeakMap();let imageSerial=0;
 // Rasterize completed static geometry at the actual output scale. This avoids

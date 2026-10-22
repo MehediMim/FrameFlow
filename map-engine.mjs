@@ -25,6 +25,7 @@ import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, 
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
 import { drawIsometricObject, drawIsometricShadow } from './map-isometric-objects.mjs';
+import { isIsometricView } from './map-object-view.mjs';
 import { sceneLightingAt, validateLightingEffect } from './map-lighting-keys.mjs';
 import { lightingPreset } from './map-lighting.mjs';
 import { lightingOf, validateLighting, withSceneLighting, applySceneLighting } from './map-lighting.mjs';
@@ -1619,7 +1620,7 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
   if (st.badgeBorderW > 0) { badgePath(ctx, cx, cy, r, st); ctx.lineWidth = st.badgeBorderW * v.unit; ctx.strokeStyle = st.badgeBorder; ctx.stroke(); }
   ctx.restore();
   };
-  if(a.type==='object'&&a.objectView==='isometric'){
+  if(a.type==='object'&&isIsometricView(a)){
     const entry=a.image?badgeEntry(a.image):null;
     ctx.save();ctx.globalAlpha=baseAlpha;ctx.translate(g.x,g.y);
     if(st.badgeShadow)drawIsometricShadow(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{angle:(a.objectAngle||0)*RAD});

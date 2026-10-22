@@ -13,7 +13,7 @@ for(const [glyph,icon]of Object.entries(STRATEGY_OBJECTS)){
 }
 for(const zoneTerrain of Object.keys(ZONE_TERRAINS))p.actions.push(makeAction('shape',0,{shape:'zone',path,zoneTerrain,terrainDensity:1.2,terrainScale:1.5,terrainOpacity:.9,terrainSeed:42}));
 validateMapProject(JSON.parse(JSON.stringify(p)));
-for(const objectView of ['side','normal','isometric']){const copy=structuredClone(p);for(const a of copy.actions)if(a.type==='object')a.objectView=objectView;validateMapProject(JSON.parse(JSON.stringify(copy)));}
+for(const objectView of ['side','normal','isometric','isometricBack']){const copy=structuredClone(p);for(const a of copy.actions)if(a.type==='object')a.objectView=objectView;validateMapProject(JSON.parse(JSON.stringify(copy)));}
 assert.throws(()=>validateMapProject({...p,actions:[{...p.actions[0],objectView:'invalid'}]}),/object view/);
 assert.deepEqual(JSON.parse(JSON.stringify(p)).actions,p.actions,'landscapes and strategy objects survive project serialization');
 for(const invalid of [{zoneTerrain:'lava'},{terrainDensity:0},{terrainDensity:3},{terrainScale:NaN},{terrainOpacity:1.1},{terrainSeed:1.5},{terrainSeed:-1}]){

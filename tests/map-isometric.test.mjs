@@ -10,9 +10,11 @@ assert.deepEqual(Object.keys(ISOMETRIC_MODELS).sort(),Object.keys(OBJECT_ICONS).
 assert.deepEqual(projectIso([0,0,1]),[0,-1],'height stays vertical');
 assert.deepEqual(projectIso([1,1,0]),[0,1],'ground axes have equal foreshortening');
 assert.deepEqual(projectSide([2,8,3]),[2,-3],'side elevation keeps width and height without ground foreshortening');
-assert.deepEqual(Object.keys(OBJECT_VIEWS),['side','isometric']);
+assert.deepEqual(Object.keys(OBJECT_VIEWS),['side','isometric','isometricBack']);
 const legacy={objectView:'normal'};validateObjectView(legacy);assert.equal(legacy.objectView,'side');
 assert.equal(objectViewOf({}),'side');
+const rearView={objectView:'isometricBack'};validateObjectView(rearView);assert.equal(objectViewOf(rearView),'isometricBack');
+const rearBox=new IsoScene('isometricBack');rearBox.box(0,0,0,1,1,1,'#112233');assert.equal(rearBox.faces.length,5,'rear geometry includes both back walls');
 assert.throws(()=>validateObjectView({objectView:'unknown'}),/Invalid object view/);
 const catalog=OBJECT_CATEGORIES.flatMap(([group])=>objectEntries(group).map(([glyph])=>glyph));
 assert.deepEqual(catalog.toSorted(),Object.keys(OBJECT_ICONS).sort(),'every object appears in exactly one category');
@@ -24,6 +26,14 @@ assert.equal((artwork.faces[0].points[1][0]-artwork.faces[0].points[0][0])/artwo
 for(const [glyph,icon]of Object.entries(OBJECT_ICONS)){
   const scene=createIsometricModel(glyph,icon.color,2,{}),points=scene.faces.flatMap(f=>f.points);
   const side=createIsometricModel(glyph,icon.color,2,{},undefined,'side');
+  const rear=createIsometricModel(glyph,icon.color,2,{},undefined,'isometricBack');
+  const rearPoints=new Set(rear.faces.flatMap(f=>f.points).map(p=>JSON.stringify(p)));
+  for(const [x,y,z]of points)assert.ok(rearPoints.has(JSON.stringify([-x,-y,z])),glyph+' rear view turns the same model by 180 degrees');
+  const rearBounds=rear.bounds(false);
+  assert.ok(Object.values(rearBounds).every(Number.isFinite)&&rearBounds.right>rearBounds.left&&rearBounds.bottom>rearBounds.top,glyph+' has a complete rear silhouette');
+  assert.ok(Object.values(shadowGeometry(rear).bounds).every(Number.isFinite),glyph+' has finite rear shadow bounds');
+  assert.deepEqual(createIsometricModel(glyph,icon.color,2,{},undefined,'isometricBack').faces,rear.faces,glyph+' rear view scrubs deterministically');
+
   assert.deepEqual(side.faces,scene.faces,glyph+' shares exactly the same geometry, colors and materials in both views');
   const bounds=side.bounds(false);
   assert.ok(Object.values(bounds).every(Number.isFinite)&&bounds.right>bounds.left&&bounds.bottom>bounds.top,glyph+' has a visible side elevation');

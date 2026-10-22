@@ -116,14 +116,19 @@ export class IsoScene{
     this.face([[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]],color,1.18);
     this.face([[x+w,y,z],[x+w,y+d,z],[x+w,y+d,z+h],[x+w,y,z+h]],color,.72);
     this.face([[x,y+d,z],[x+w,y+d,z],[x+w,y+d,z+h],[x,y+d,z+h]],color,.95);
+    if(this.view==='isometricBack'){
+      this.face([[x,y,z],[x,y+d,z],[x,y+d,z+h],[x,y,z+h]],color,.72);
+      this.face([[x,y,z],[x+w,y,z],[x+w,y,z+h],[x,y,z+h]],color,.95);
+    }
   }
   prism(points,z,h,color){
     this.face(points.map(([x,y])=>[x,y,z+h]),color,1.16);
-    points.forEach(([x,y],i)=>{const [X,Y]=points[(i+1)%points.length];if(Y>=y||X<=x)this.face([[x,y,z],[X,Y,z],[X,Y,z+h],[x,y,z+h]],color,.7+.22*(i%3));});
+    points.forEach(([x,y],i)=>{const [X,Y]=points[(i+1)%points.length];if(this.view==='isometricBack'||Y>=y||X<=x)this.face([[x,y,z],[X,Y,z],[X,Y,z+h],[x,y,z+h]],color,.7+.22*(i%3));});
   }
   roof(x,y,z,w,d,h,color){
     const a=[x,y,z],b=[x+w,y,z],c=[x+w,y+d,z],e=[x,y+d,z],r=[x,y+d/2,z+h],s=[x+w,y+d/2,z+h];
     this.face([a,b,s,r],color,.8);this.face([r,s,c,e],color,1.13);this.face([b,c,s],color,.66);
+    if(this.view==='isometricBack')this.face([a,e,r],color,.66);
   }
   cone(x,y,z,r,h,color,n=8){
     for(let i=0;i<n;i++){const a=i*TAU/n,b=(i+1)*TAU/n;this.face([[x+Math.cos(a)*r,y+Math.sin(a)*r,z],[x+Math.cos(b)*r,y+Math.sin(b)*r,z],[x,y,z+h]],color,.8+.25*Math.cos(a-2));}
@@ -149,6 +154,7 @@ export class IsoScene{
     const w=[v[1]*u[2]-v[2]*u[1],v[2]*u[0]-v[0]*u[2],v[0]*u[1]-v[1]*u[0]].map(q=>q/l);
     const ring=(p,r)=>Array.from({length:n},(_,j)=>p.map((q,i)=>q+r*(u[i]*Math.cos(j*TAU/n)+w[i]*Math.sin(j*TAU/n))));
     const A=ring(a,r0),B=ring(b,r1);this.face(B,color,1,false);for(let i=0;i<n;i++)this.face([A[i],A[(i+1)%n],B[(i+1)%n],B[i]],color,1,false);
+    if(this.view==='isometricBack')this.face(A,color,1,false);
   }
   bevelBox(x,y,z,w,d,h,color,r=.06){
     r=Math.min(r,w/3,d/3,h/3);
@@ -161,16 +167,21 @@ export class IsoScene{
     const w=[v[1]*u[2]-v[2]*u[1],v[2]*u[0]-v[0]*u[2],v[0]*u[1]-v[1]*u[0]].map(q=>q/l);
     const ring=p=>[[1,1],[-1,1],[-1,-1],[1,-1]].map(([k,j])=>p.map((q,i)=>q+k*u[i]+j*w[i]));
     const A=ring(a),B=ring(b);this.face(B,color,1.2);for(let i=0;i<4;i++)this.face([A[i],A[(i+1)%4],B[(i+1)%4],B[i]],color,.7+i*.13);
+    if(this.view==='isometricBack')this.face(A,color,1.2);
   }
   // A wheel has a real axle and a visible circular side in the Y plane.
-  wheel(x,y,z,r,width=.12,color='#30383c'){
+  wheel(x,y,z,r,width=.12,color='#30383c',backHub=false){
     const n=16,points=Array.from({length:n},(_,i)=>[x+Math.cos(i*TAU/n)*r,y,z+Math.sin(i*TAU/n)*r]);
     this.face(points,color,.75,false);this.face(points.map(([X,Y,Z])=>[X,Y+width,Z]),color,1.02,false,'rubber');
     for(let i=0;i<n;i++){const a=points[i],b=points[(i+1)%n];this.face([a,b,[b[0],b[1]+width,b[2]],[a[0],a[1]+width,a[2]]],color,i%2?.85:1,false,'rubber');}
-    const metal=color==='#30383c',R=r*(metal?.56:.78),Y=y+width+.003;
+    const hubStart=this.faces.length,metal=color==='#30383c',R=r*(metal?.56:.78),Y=y+width+.003;
     this.face(Array.from({length:n},(_,i)=>[x+Math.cos(i*TAU/n)*R,Y,z+Math.sin(i*TAU/n)*R]),metal?'#9da5a0':'#544b3a',1,false,'metal');
     for(let i=0;i<6;i++){const a=i*TAU/6,b=a+.16;this.face([[x,Y+.003,z],[x+Math.cos(a)*R*.9,Y+.003,z+Math.sin(a)*R*.9],[x+Math.cos(b)*R*.9,Y+.003,z+Math.sin(b)*R*.9]],metal?'#485050':'#b89962',1,false);}
     this.beam([x,Y,z],[x,Y+.012,z],r*.17,metal?'#c4c8bf':'#88734f');
+    if(backHub&&this.view==='isometricBack')for(const face of this.faces.slice(hubStart)){
+      const points=face.points.map(([X,Y,Z])=>[X,2*y+width-Y,Z]);
+      this.faces.push({...face,points,depth:points.reduce((sum,[X,Y,Z])=>sum+X+Y+Z,0)/points.length});
+    }
   }
   texture(points,image,color='#e6d4ab',crop={}){
     this.face(points,color,1);if(image)this.faces.push({points,image,crop,depth:points.reduce((s,[x,y,z])=>s+x+y+z,0)/points.length+.0001});

@@ -80,3 +80,13 @@ assert.throws(()=>validateObjectView({objectFacing:'invalid'}),/facing/);
 assert.equal(objectPoseAt({...facing,objectFacing:'path',objectKeys:[{frame:30,values:{objectView:'side'}}]},80).objectView,'isometric','automatic facing ignores manual view keys until explicitly selected');
 const automaticProject=newMapProject();automaticProject.actions=[makeAction('object',0,{...movingIso,objectFacing:'path'})];validateMapProject(JSON.parse(JSON.stringify(automaticProject)));
 console.log('Automatic facing: all diagonals, cardinal directions, stationary fallback, manual override and validation passed');
+for(const objectView of ['side','isometric','isometricBack']){
+  assert.deepEqual(pathViewFacing({mode:'stay',objectView,objectDirection:'left'},0,0),{objectView,mirror:true},'static '+objectView+' can face left');
+  assert.deepEqual(pathViewFacing({mode:'stay',objectView,objectDirection:'right'},0,0),{objectView,mirror:false},'static '+objectView+' can face right');
+}
+assert.deepEqual(pathViewFacing({...movingIso,objectDirection:'left'},1,1),{objectView:'isometric',mirror:false},'automatic path direction overrides the static preference');
+assert.deepEqual(pathViewFacing({...movingIso,objectView:'side',objectDirection:'left'},1,1),{objectView:'side',mirror:false},'side-view path heading also overrides the static preference');
+assert.deepEqual(pathViewFacing({...movingIso,objectFacing:'manual',objectDirection:'left'},1,1),{objectView:'isometric',mirror:true},'manual facing retains the direction preference');
+assert.throws(()=>validateObjectView({objectDirection:'up'}),/direction/);
+const leftProject=newMapProject();leftProject.actions=[makeAction('object',0,{objectDirection:'left'})];validateMapProject(JSON.parse(JSON.stringify(leftProject)));
+console.log('Static left/right facing, default direction, automatic path priority and saved direction validation passed');

@@ -17,6 +17,7 @@ import { networkMargin } from './map-network-style.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
 import { drawIsometricObject, drawIsometricShadow, drawSideObject } from './map-isometric-objects.mjs';
 import { isIsometricView, pathViewFacing } from './map-object-view.mjs';
+import { movementTrailKind, drawMovementTrail } from './map-object-trails.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
@@ -72,7 +73,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if (!H.actAlpha(a, frame)) return;
   if (a.glyph === 'image') { H.drawBadge(c, v, geo, a, frame, labels); return; }
   const ic = OBJECT_ICONS[a.glyph] || OBJECT_ICONS.tank, u = v.unit, size = a.size || 1, s = 26 * size * u, t = frame - a.start;
-  let X, Y, ang = null,facing={objectView:a.objectView,mirror:false};
+  let X, Y, ang = null,facing=pathViewFacing(a,0,0);
   if (a.mode === 'path' || a.mode === 'move') {
     const r = H.planeRoute(geo, a.mode === 'move' ? { ...a, mode: 'direct', from: a.place } : a); if (!r) return;
     const p = H.ease(a.easing, H.actionProgress(a, frame)), pt = H.routeAt(r, p), k = Math.round(v.cx - pt.X);
@@ -86,7 +87,8 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
       if(Math.hypot(dx,dy)<1e-8){const q=H.project(v,X,Y);dx=q1.x-q.x;dy=q1.y-q.y;if(Math.hypot(dx,dy)<1e-8){dx=q.x-q0.x;dy=q.y-q0.y;}}
       facing=pathViewFacing(a,dx,dy);
     }
-    if (a.trail !== false && pt.i > 0) {
+    if(a.trail!==false&&p>0&&movementTrailKind(a)!=='route')drawMovementTrail(H,c,v,r,a,frame,p,k,s);
+    else if (a.trail !== false && pt.i > 0) {
       c.save(); c.beginPath(); let on = false;
       for (let i = 0; i <= pt.i; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); if (q.z < v.near) { on = false; continue; } if (on) c.lineTo(q.x, q.y); else { c.moveTo(q.x, q.y); on = true; } }
       const e = H.project(v, X, Y); if (on) c.lineTo(e.x, e.y);
@@ -110,7 +112,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if(Number.isFinite(v.W)&&Number.isFinite(v.H)&&(g.x < -margin||g.x > v.W+margin||g.y < -margin||g.y > v.H+margin))return;
   c.save();
   const isometric=isIsometricView(a),angle=rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180;
-  const movingAngle=!isometric&&ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;
+  const movingAngle=!isometric&&a.objectFacing!=='manual'&&ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;
   if(isometric){
     const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
     c.save();c.globalAlpha=alpha;c.translate(g0.x+dx,g0.y);c.scale(sc,sc);

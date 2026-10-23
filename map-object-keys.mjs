@@ -1,6 +1,7 @@
 import { easings } from './easings.mjs';
 import { validateObjectView, objectViewOf, OBJECT_VIEWS } from './map-object-view.mjs';
 import { validateObjectAnimation } from './map-object-animation.mjs';
+import { validateObjectTrail } from './map-object-trails.mjs';
 export const OBJECT_KEY_FIELDS={size:[.2,8],objectAngle:[-3600,3600]};
 export const DAMAGE_STATES={intact:'Intact',damaged:'Damaged',burning:'Burning',destroyed:'Destroyed'};
 export function objectPoseAt(a,frame){
@@ -41,6 +42,7 @@ export function moveObjectKey(a,from,to,fields){
 export function validateObjectKeys(a){
   validateObjectView(a);
   validateObjectAnimation(a);
+  validateObjectTrail(a);
   const bad=()=>{throw Error('Invalid object animation keyframes.');};
   if(a.damageState!==undefined&&!Object.hasOwn(DAMAGE_STATES,a.damageState))bad();
   if(a.autoObjectKey!==undefined&&typeof a.autoObjectKey!=='boolean')bad();

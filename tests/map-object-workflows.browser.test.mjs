@@ -144,6 +144,32 @@ try {
     return failures;
   })()`);
   assert.deepEqual(autoFacing,[],'path and destination movement automatically face all four diagonals, including turns, endpoints, seeking and equal FPS time');
+  assert.equal(await evaluate(`document.querySelector('[data-mf="trailStyle"]').value`),'auto','vehicles use tire tracks automatically');
+  await change('#mInspector [data-mf="trailStyle"]','route');assert.equal((await saved()).actions[0].trailStyle,'route');
+  await change('#mInspector [data-mf="trailStyle"]','auto');
+  await change('#mInspector [data-mf="glyph"]','ferry');
+  assert.ok(await evaluate(`document.querySelector('[data-mf="trailStyle"]').selectedOptions[0].textContent.includes('Water wake')`),'boats use a water wake');
+  await change('#mInspector [data-mf="glyph"]','tank');
+  const groundTrails=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json()));
+    const c=document.createElement('canvas');c.width=640;c.height=360;const x=c.getContext('2d'),sheet=document.createElement('canvas');sheet.width=1280;sheet.height=720;const g=sheet.getContext('2d'),failures=[];
+    for(const [i,glyph]of ['car','tank','ferry','galleon'].entries()){
+      const boat=i>1,p=E.newMapProject(),lon=boat?-25:2,lat=boat?30:46;
+      p.camera.init={lon,lat,zoom:5,pitch:0,bearing:0};p.shots=[];p.atlasLabels={countries:false,oceans:false};
+      const a=E.makeAction('object',0,{glyph,color:E.OBJECT_ICONS[glyph].color,size:3,mode:'path',objectView:'isometric',objectAnimation:'none',curve:'smooth',easing:'linear',path:[{lon:lon-3,lat:lat+1},{lon:lon-1,lat:lat-1},{lon:lon+3,lat:lat}],dur:360,animDur:120,enter:'none',exit:'none'});
+      const capture=(trail,frame=90,trailStyle='auto')=>{E.drawMap(x,640,360,{...p,actions:[{...a,trail,trailStyle}]},frame,geo);return c.toDataURL();};
+      const withTrail=capture(true),noTrail=capture(false);
+      if(withTrail===noTrail)failures.push(glyph+': missing natural trail');
+      if(withTrail!==capture(true))failures.push(glyph+': unstable trail');
+      if(withTrail===capture(true,90,'route'))failures.push(glyph+': same as route line');
+      const stopped=capture(true,240),stoppedWithout=capture(false,240);
+      if(stopped!==stoppedWithout)failures.push(glyph+': natural trail did not fade after stopping');
+      capture(true);g.drawImage(c,(i%2)*640,Math.floor(i/2)*360);g.fillStyle='#18242d';g.fillRect((i%2)*640,Math.floor(i/2)*360,640,30);g.fillStyle='#ffffff';g.font='16px sans-serif';g.fillText(E.OBJECT_ICONS[glyph].label+' ? '+(boat?'water wake':'tire tracks'),(i%2)*640+12,Math.floor(i/2)*360+21);
+    }
+    return{failures,png:sheet.toDataURL().split(',')[1]};
+  })()`);
+  assert.deepEqual(groundTrails.failures,[],'tracks and wakes render, scrub, and stop correctly');
+  await writeFile(join(tmpdir(),'frameflow-object-trails-review.png'),Buffer.from(groundTrails.png,'base64'));
   await change('#mInspector [data-mf="objectFacing"]','manual');
   await change('#mFrame','1');await change('#mInspector [data-mf="objectView"]','isometricBack');
   await change('#mFrame','2');await change('#mInspector [data-mf="objectView"]','isometric');
@@ -171,6 +197,26 @@ try {
   assert.equal(keyedViews,true,'rendered path objects use the selected view at the exact switch frame');
   await evaluate(`(()=>{const p=JSON.parse(localStorage.getItem('frameflow-map-v1'));Object.assign(p.actions[0],{mode:'stay',path:[],objectView:'side',objectKeys:[]});localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
   await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);await evaluate(`document.querySelector('#mItems [data-mid]').click()`);await change('#mFrame','0');
+  assert.equal(await evaluate(`document.querySelector('[data-mf="objectDirection"]').value`),'right','static objects default to facing right');
+  await change('#mInspector [data-mf="objectDirection"]','left');
+  assert.equal((await saved()).actions[0].objectDirection,'left');
+  assert.equal(await evaluate(`document.querySelector('#mInspector [data-object-preview]').style.transform`),'scaleX(-1)','left facing is reflected in the picker');
+  await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);await evaluate(`document.querySelector('#mItems [data-mid]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-mf="objectDirection"]').value`),'left','static facing survives reload');
+  const staticDirections=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),geo=E.buildGeo(await fetch('map-data/countries-110m.json').then(r=>r.json())),p=E.newMapProject();
+    p.camera.init={lon:0,lat:45,zoom:4,pitch:0,bearing:0};p.shots=[];
+    const c=document.createElement('canvas');c.width=640;c.height=360;const x=c.getContext('2d');
+    return ['side','isometric','isometricBack'].every(objectView=>{
+      const a=E.makeAction('object',0,{glyph:'car',objectView,size:3,objectAnimation:'none',place:{kind:'point',name:'Car',lon:0,lat:45},enter:'none',exit:'none'});
+      const capture=objectDirection=>{const v=E.drawMap(x,640,360,{...p,actions:[{...a,objectDirection}]},30,geo);return{png:c.toDataURL(),mirror:v.objectFacings.get(a.id).mirror};};
+      const left=capture('left'),right=capture('right');return left.png!==right.png&&left.mirror&&!right.mirror&&left.png===capture('left').png;
+    });
+  })()`);
+  assert.equal(staticDirections,true,'left and right render distinctly and deterministically in all views');
+  assert.equal(await evaluate(`document.querySelectorAll('#mMapContext [data-direct-field="objectDirection"]').length`),0,'facing direction stays out of the canvas toolbar');
+  await change('#mInspector [data-mf="objectDirection"]','right');
+  assert.equal((await saved()).actions[0].objectDirection,'right','Properties changes facing direction');
   assert.deepEqual(await evaluate(`[...document.querySelector('[data-mf="objectView"]').options].map(o=>[o.value,o.textContent])`),[['side','Side view'],['isometric','Isometric view'],['isometricBack','Back isometric view']]);
   await change('#mInspector [data-mf="objectView"]','isometric');
   assert.equal((await saved()).actions[0].objectView,'isometric');

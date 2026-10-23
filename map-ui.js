@@ -44,6 +44,7 @@ import { ZONE_TERRAINS } from './map-strategy-terrain.mjs';
 import { OBJECT_CATEGORIES, objectEntries } from './map-object-catalog.mjs';
 import { objectViewOf, OBJECT_VIEWS } from './map-object-view.mjs';
 import { objectAnimationOptions } from './map-isometric-objects.mjs';
+import { naturalTrailKind } from './map-object-trails.mjs';
 import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs';
 import { lightingAt, LIGHTING_FIELDS as SUN_FIELDS, putLightingKey, removeLightingKey, moveLightingKey } from './map-lighting-keys.mjs';
 import { lightingOf, lightingPreset } from './map-lighting.mjs';
@@ -410,7 +411,7 @@ function captureCamera() {
 function renderItems() {
   const its = displayItems();
   $('#mItemCount').textContent = its.length;
-  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(objectPoseAt(it,frame).objectView)}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
+  $('#mItems').innerHTML = its.length ? its.map(it => `<div class="m-item ${it.id === sel ? 'selected' : ''}" data-mid="${esc(it.id)}"><span class="type c-${clsOf(it)}">${it.type === 'object' ? `<img class="m-object-thumb" data-object-preview="${esc(it.glyph)}" data-object-view="${esc(objectPoseAt(it,frame).objectView)}" style="${it.objectDirection==='left'?'transform:scaleX(-1)':''}" alt="">` : iconOf(it)}</span><span class="name">${esc(it.name)}</span><span class="when">${it.start}</span></div>`).join('') : '<p class="muted m-empty">Add a layer above, or right-click the map to place one.</p>';
   paintObjectPreviews($('#mItems'));
   $$('[data-mid]').forEach(el => el.onclick = e => selectFromList(el.dataset.mid,e));
   $('#mDuplicate').disabled = $('#mDelete').disabled = !current() || !!current().fullTimelineCamera;
@@ -591,20 +592,22 @@ function artworkFields(a) {
   return `<div class="m-badge"><span class="mini-label">SVG / PNG artwork</span><div class="two"><button type="button" data-badgeimg>${a.image ? 'Change image?' : 'Choose image?'}</button><button type="button" data-badgeclear ${a.image ? '' : 'disabled'}>Remove</button></div><input type="file" accept="image/*,.svg,.png" data-badgefile hidden><p class="mini-label">Transparent artwork keeps its proportions, without a badge or frame. SVG is embedded as a high-resolution image for saving and export.</p></div>`;
 }
 function objectFields(a) {
-  const pose={...objectPoseAt(a,frame),...lastView?.objectFacings?.get(a.id)},wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
+  const pose={mirror:a.objectDirection==='left',...objectPoseAt(a,frame),...lastView?.objectFacings?.get(a.id)},wall=a.mode==='wallPath',units=a.armyUnits||ARMY_PRESETS.pikeShot.units,total=units.reduce((n,u)=>n+u.count,0);
   const imageObject=['portrait','image','artwork','banner'].includes(a.glyph);
+  const naturalTrail=naturalTrailKind(a.glyph),trailLabel=naturalTrail==='tracks'?'Leave tire tracks':naturalTrail==='wake'?'Leave water wake':'Draw a trail';
   const animations=objectAnimationOptions(a.glyph),animation=animations.some(([key])=>key===a.objectAnimation)?a.objectAnimation:'auto';
   const artwork=()=>a.glyph==='portrait'?portraitFields(a):a.glyph==='image'?badgeFields(a):a.glyph==='artwork'?artworkFields(a):bannerFields(a);
   const positionOptions=[...Object.entries(PIN_MODES),...(WALL_GLYPHS.includes(a.glyph)?[['wallPath','Walls along a drawn path']]:[])];
   return '<div class="section-title">OBJECT TYPE</div>'+objectPicker(a.glyph,pose.objectView)
     +F.sel('objectView','Object view',pose.objectView,Object.entries(OBJECT_VIEWS))
+    +(!['path','move'].includes(a.mode)||a.objectFacing==='manual'?F.sel('objectDirection','Facing direction',a.objectDirection||'right',[['right','Right'],['left','Left']]):'')
     +(['path','move'].includes(a.mode)?F.sel('objectFacing','Facing',a.objectFacing||'path',[['path','Automatic - follow path'],['manual','Manual view keyframes']])+'<p class="mini-label">Automatic facing shows the front when moving down the screen, the back when moving up, and turns left or right with the path.</p>':'')
     +(imageObject?'<div class="section-title">YOUR IMAGE &amp; STYLE</div>'+artwork():'')
     +'<div class="section-title">MOVEMENT</div>'
     +F.sel('__pinMove','Movement',a.mode||'stay',positionOptions)
     +(a.mode==='move'?F.loc('to','Destination',a.to,'place'):'')
     +(['path','wallPath'].includes(a.mode)?pathFields(a):F.loc('place',a.mode==='move'?'Start position':'Location',a.place,'place'))
-    +(['move','path'].includes(a.mode)?F.chk('trail','Draw a trail',a.trail!==false):'')
+    +(['move','path'].includes(a.mode)?F.chk('trail',a.trailStyle==='route'?'Draw route line':trailLabel,a.trail!==false)+(naturalTrail!=='route'?F.sel('trailStyle','Trail appearance',a.trailStyle||'auto',[['auto',naturalTrail==='tracks'?'Tire tracks':'Water wake'],['route','Route line']]):''):'')
     +'<div class="section-title">APPEARANCE</div>'
     +F.range('opacity','Opacity',a.opacity??1,0,1,.05,x=>Math.round(x*100)+'%')
     +(a.glyph==='image'?'':F.sel('damageState','Damage state',pose.damageState,Object.entries(DAMAGE_STATES)))
@@ -639,7 +642,7 @@ function bindObjectKeys(a) {
   });
 }
 function updateObjectInspector(a) {
-  const pose={...objectPoseAt(a,frame),...lastView?.objectFacings?.get(a.id)},outside=frame<a.start||frame>a.start+a.dur;
+  const pose={mirror:a.objectDirection==='left',...objectPoseAt(a,frame),...lastView?.objectFacings?.get(a.id)},outside=frame<a.start||frame>a.start+a.dur;
   for(const field of ['size','objectAngle','objectView','damageState']){
     const el=$(`#mInspector [data-mf="${field}"]`);if(!el)continue;
     if(document.activeElement!==el){el.value=pose[field];const out=el.parentElement.querySelector('.m-val');if(out)out.textContent=field==='size'?pose.size.toFixed(2)+'x':pose[field];}
@@ -1017,6 +1020,8 @@ function bindInspector(it) {
         else writeObjectValue(it,'objectView',v);
         changed();renderInspector();return;
       }
+      if (key === 'objectDirection') { it.objectDirection=v;changed();renderInspector();return; }
+      if (key === 'trailStyle') { it.trailStyle=v;changed();renderInspector();return; }
       if (key === 'objectFacing') { it.objectFacing=v;changed();renderInspector();return; }
       if (key === 'objectAnimation') { it.objectAnimation=v;changed();renderInspector();return; }
       if (key.includes('.')) { const [endpoint, property] = key.split('.'); if (!Number.isFinite(v)) { renderInspector(); return; } it[endpoint][property] = clamp(v, +el.min, +el.max); previewCamera = null; changed(); renderInspector(); return; }

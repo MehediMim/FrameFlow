@@ -26,6 +26,7 @@ import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
 import { drawIsometricObject, drawIsometricShadow, withObjectPreview } from './map-isometric-objects.mjs';
 import { isIsometricView } from './map-object-view.mjs';
+import { movementTrailKind } from './map-object-trails.mjs';
 import { sceneLightingAt, validateLightingEffect } from './map-lighting-keys.mjs';
 import { lightingPreset } from './map-lighting.mjs';
 import { lightingOf, validateLighting, withSceneLighting, applySceneLighting } from './map-lighting.mjs';
@@ -1623,9 +1624,11 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
   if(a.type==='object'&&isIsometricView(a)){
     const entry=a.image?badgeEntry(a.image):null;
     ctx.save();ctx.globalAlpha=baseAlpha;ctx.translate(g.x,g.y);
-    if(st.badgeShadow)drawIsometricShadow(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{angle:(a.objectAngle||0)*RAD});
+    if(st.badgeShadow)drawIsometricShadow(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{angle:(a.objectAngle||0)*RAD,mirror:a.objectDirection==='left'});
+    if(a.objectDirection==='left')ctx.scale(-1,1);
     ctx.rotate((a.objectAngle||0)*RAD);drawIsometricObject(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{shadows:false});ctx.restore();
-  }else paintBadge(ctx);
+  }else if(a.type==='object'&&a.objectDirection==='left'){ctx.save();ctx.translate(g.x*2,0);ctx.scale(-1,1);paintBadge(ctx);ctx.restore();}
+  else paintBadge(ctx);
   if (a.showLabel) {
     const lp = ease('backOut', (t - .3) / .3);
     if (lp > 0) { const y = cy + R * (.9 + st.badgeLabelY / 100) * grow; labels.push({ x: cx, y, ground: { X: loc.X, Y: loc.Y }, groundOffset: { y: y - g.y }, text: pinName(a, loc), alpha: alpha * clamp01(lp * 1.5) * fade, scale: (.9 + .2 * lp) * Math.max(.05, grow) }); }
@@ -1781,7 +1784,8 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
       for (let i = 0; i < offsets.length; i++) {
         const dx = offsets[i].x * scale, dy = offsets[i].y * scale;
         ctx.save(); ctx.translate(dx, dy);
-        const itemLabels = []; drawObject(OBJ_H, ctx, v, geo, { ...item, ...(troops?.[i]||{}), trail:item.trail!==false&&i===0, showLabel: item.showLabel && i === 0 }, frame, itemLabels);
+        const copy={...item,...(troops?.[i]||{})};
+        const itemLabels = []; drawObject(OBJ_H, ctx, v, geo, { ...copy, trail:item.trail!==false&&(i===0||movementTrailKind(copy)!=='route'), showLabel: item.showLabel && i === 0 }, frame, itemLabels);
         ctx.restore(); labels.push(...itemLabels.map(l => ({ ...l, x: l.x + dx, y: l.y + dy, groundOffset: { x: (l.groundOffset?.x || 0) + dx, y: (l.groundOffset?.y || 0) + dy } })));
       }
     });

@@ -51,7 +51,7 @@ export function registerAudioStudio(studio, host) {
   function split(){const l=current(),t=time();if(!l||t<=l.start+1e-6||t>=l.start+l.duration-1e-6){notify('Move the playhead inside the selected audio layer.');return;}
     host.pause();checkpoint();const left=t-l.start,c={...l,id:crypto.randomUUID(),name:l.name+' · part 2',start:t,source:l.source+left,duration:l.duration-left};l.duration=left;state.layers.splice(state.layers.indexOf(l)+1,0,c);refresh(c.id);
   }
-  const input=document.createElement('input');input.type='file';input.accept='audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac';input.hidden=true;document.body.append(input);
+  const input=document.createElement('input');input.type='file';input.dataset.audioInput=studio;input.accept='audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac';input.hidden=true;document.body.append(input);
   const slot=document.querySelector(`[data-audio-studio="${studio}"]`);if(slot)slot.hidden=true;
   const add=document.createElement('button');add.type='button';add.innerHTML=`<b>${interfaceIcon('audio')}</b>Audio`;add.title='Add an audio layer';$(host.addGrid).append(add);
   add.onclick=()=>{pendingReplace=null;input.click();};
@@ -128,6 +128,8 @@ export function registerAudioStudio(studio, host) {
   for(const type of ['ff-play','ff-frame'])window.addEventListener(type,e=>{if(e.detail.studio!==studio)return;playing=e.detail.playing;sync(type==='ff-play');});
   window.addEventListener('blur',()=>{if(drag){drag=null;refresh();}});
   return {add:()=>add.click(),renderList,renderTimeline,renderInspector,remove,duplicate,move,canMove,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
+    copySelection:()=>current()?{...current()}:null,
+    pasteLayer(layer){host.pause();checkpoint();const pasted={...layer,id:crypto.randomUUID(),name:layer.name+' copy',start:time()};state.layers.push(pasted);refresh(pasted.id);},
     item: id => state.layers.find(l => l.id === id),
     rowEnabled(id, action) { const i = state.layers.findIndex(l => l.id === id); return i >= 0 && (action === 'up' ? i > 0 : action === 'down' ? i < state.layers.length - 1 : true); },
     rowAction(id, action) { host.pause(); host.select(id); if(action === 'visibility') { checkpoint(); const l=current(); l.muted=!l.muted; refresh(id); } else if(action === 'up' || action === 'down') move(action === 'up' ? -1 : 1); else if(action === 'duplicate') duplicate(); else if(action === 'delete') remove(); },

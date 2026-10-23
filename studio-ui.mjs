@@ -30,6 +30,7 @@ function arrangeSettings(panel, prefix) {
     const timing = document.getElementById(`${prefix}Fps`)?.closest('.two');
     const pages=[section('Document', [size, timing])];
     if(prefix === 'm') {
+      pages.push(section('Base map',[document.getElementById('mBaseMapSettings')]));
       pages.push(section('Appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSlot'), document.getElementById('mTerrainBox')]));
       pages.push(section('Labels', [document.getElementById('mAtlasLabels'), document.getElementById('mLabelStyle')]));
       pages.push(section('Country details', [document.getElementById('mAreaBox')]));

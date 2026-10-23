@@ -227,12 +227,13 @@ try {
   assert.equal((await saved()).actions[0].objectView,'side');
   const previews=await evaluate(`(async()=>{
     const {OBJECT_ICONS}=await import('./map-objects.mjs');
-    const {objectPreview}=await import('./map-object-preview.mjs');
+    const {objectPreview}=await import('./map-object-preview.mjs'),{isFrontArtwork}=await import('./map-object-view.mjs');
     const failures=[];
     for(const glyph of Object.keys(OBJECT_ICONS)){
       const urls=['side','isometric','isometricBack'].map(view=>objectPreview(glyph,view));
-      if(urls[0]===urls[1])failures.push(glyph+': identical views');
-      if(['house','doctor','tank','portrait'].includes(glyph)&&urls[1]===urls[2])failures.push(glyph+': rear repeats front');
+      if(isFrontArtwork(glyph)){if(!urls.every(url=>url===urls[0]))failures.push(glyph+': artwork changes view');}
+      else if(urls[0]===urls[1])failures.push(glyph+': identical views');
+      if(['house','doctor','tank'].includes(glyph)&&urls[1]===urls[2])failures.push(glyph+': rear repeats front');
       for(const url of urls){
         const img=new Image();img.src=url;await img.decode();
         const c=document.createElement('canvas');c.width=c.height=112;const x=c.getContext('2d');x.drawImage(img,0,0);
@@ -259,12 +260,14 @@ try {
   await writeFile(join(tmpdir(),'frameflow-object-view-pairs.png'),Buffer.from(review,'base64'));
 
   await change('#mInspector [data-mf="glyph"]','stoneFort');
-  assert.equal(await evaluate(`document.querySelectorAll('[data-object-search], .m-object-library').length`),0,'object selection uses a compact nested picker');
+  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-object-search]').length`),1,'object selection has one search field inside its compact picker');
+  assert.equal(await evaluate(`document.querySelectorAll('.m-object-library').length`),0,'object selection does not expand the full catalog inline');
   await evaluate(`document.querySelector('[data-object-menu]').open=true`);
   await waitFor(`!!document.querySelector('body > .m-object-cascade')`);
   await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category="vehicles"]').dispatchEvent(new PointerEvent('pointerenter'))`);
-  await waitFor(`document.querySelector('[data-object-choice="tank"] img').complete&&document.querySelector('[data-object-choice="tank"] img').naturalWidth>0`);
-  await evaluate(`document.querySelector('[data-object-choice="tank"]').click()`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="vehicles"] [data-object-choice="tank"]').scrollIntoView({block:'nearest'})`);
+  await waitFor(`document.querySelector('body > .m-object-cascade [data-object-category-panel="vehicles"] [data-object-choice="tank"] img').complete&&document.querySelector('body > .m-object-cascade [data-object-category-panel="vehicles"] [data-object-choice="tank"] img').naturalWidth>0`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="vehicles"] [data-object-choice="tank"]').click()`);
   assert.equal((await saved()).actions[0].glyph,'tank','icon dropdown selects an object');
   assert.ok(await evaluate(`!!document.querySelector('#mItems img[data-object-preview="tank"]')`),'selected object keeps its layer preview');
   await change('#mInspector [data-mf="glyph"]','stoneFort');

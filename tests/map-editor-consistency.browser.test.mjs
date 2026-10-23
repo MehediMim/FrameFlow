@@ -87,10 +87,49 @@ try {
   const drag=async(a,b)=>{await mouse('mousePressed',a);await mouse('mouseMoved',b);await mouse('mouseReleased',b);};
   const rightClick=async p=>{await cdp('Input.dispatchMouseEvent',{type:'mousePressed',...p,button:'right',buttons:2,clickCount:1});await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',...p,button:'right',buttons:0,clickCount:1});};
   const primary=()=>evaluate(`document.querySelector('#mItems .selected')?.dataset.mid`);
-  for(const [id,lon,lat,field] of [['pin',-5,47,'__pinDisplay'],['effect',3,47,'fx'],['label',11,47,'text'],['shape',-8,39,'shape']]){
+  const openEdit=async()=>{
+    const p=await evaluate(`(()=>{const r=document.querySelector('#mCanvas').getBoundingClientRect();return{x:r.left+6,y:r.top+6};})()`);
+    await rightClick(p);await evaluate(`document.querySelector('[data-direct-edit]').click()`);
+  };
+  await evaluate(`document.querySelector('[data-mid="object"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('.m-stage-viewport > #mMapContext')`),null,'selecting an object does not create a top overlay');
+  await openEdit();
+  await evaluate(`document.querySelector('[data-direct-sizing]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-direct-sizing-screen]').getAttribute('aria-checked')`),'true','right-click sizing marks the current mode');
+  await writeFile(join(tmpdir(),'frameflow-context-sizing-review.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await evaluate(`document.querySelector('[data-direct-sizing-map]').click()`);
+  assert.equal((await stored()).actions.find(a=>a.id==='object').sizeMode,'map','right-click sizing changes the object');
+  assert.equal((await stored()).actions.find(a=>a.id==='object').sizeZoom,4,'map sizing captures the current zoom');
+  await evaluate(`document.querySelector('#mUndo').click()`);
+  const shortcut=key=>evaluate(`document.activeElement?.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},ctrlKey:true,bubbles:true,cancelable:true}))`);
+  await evaluate(`document.querySelector('[data-mid="object"]').click()`);
+  const copiedObject=(await stored()).actions.find(a=>a.id==='object');
+  await shortcut('c');
+  const nativeCopy=await evaluate(`(()=>{const input=document.querySelector('#mInspector [data-mf="place"]');input.focus();const event=new KeyboardEvent('keydown',{key:'c',ctrlKey:true,bubbles:true,cancelable:true});input.dispatchEvent(event);return !event.defaultPrevented;})()`);
+  assert.equal(nativeCopy,true,'Ctrl+C in a text/property field retains native behavior');
+  await change('#mFrame',6);await shortcut('v');
+  const pastedObject=(await stored()).actions.at(-1);
+  assert.equal(pastedObject.start,180,'Ctrl+V pastes at the timeline playhead');
+  assert.notEqual(pastedObject.id,copiedObject.id);assert.equal(pastedObject.dur,copiedObject.dur);assert.deepEqual(pastedObject.place,copiedObject.place);
+  await shortcut('z');assert.equal((await stored()).actions.length,7,'paste is one undo step');
+  await change('#mFrame',245/30);
+  await rightClick(await point(-12,47));
+  assert.equal(await evaluate(`document.querySelector('[data-direct-context-paste]').disabled`),false,'right-click paste is enabled after copying');
+  await evaluate(`document.querySelector('[data-direct-context-paste]').click()`);
+  assert.equal((await stored()).actions.at(-1).start,245,'right-click paste also uses the playhead');
+  await shortcut('z');
+  await evaluate(`document.querySelector('[data-mid="pin"]').click();document.querySelector('[data-mid="effect"]').dispatchEvent(new MouseEvent('click',{shiftKey:true,bubbles:true}));`);
+  await shortcut('c');await change('#mFrame',10);await shortcut('v');
+  assert.equal((await stored()).actions.length,9,'Ctrl+C and Ctrl+V copy a mixed selection');
+  assert.ok((await stored()).actions.slice(-2).every(a=>a.start===300));
+  await shortcut('z');await change('#mFrame',1);
+
+  for(const [id,lon,lat,field] of [['pin',-5,47,'color'],['effect',3,47,'color'],['label',11,47,'text'],['shape',-8,39,'color']]){
     const p=await point(lon,lat);await click(p);
     assert.equal(await primary(),id,`${id} selects directly on the map`);
+    await openEdit();
     assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="${field}"]')`),`${id} has compact canvas controls`);
+    assert.ok(await evaluate(`(()=>{const bar=document.querySelector('#mMapContext'),r=bar.getBoundingClientRect(),form=bar.querySelector('.m-map-object-controls').getBoundingClientRect();return r.width<=300&&!!bar.closest('[data-direct-edit-menu]')&&r.left>=0&&r.right<=innerWidth;})()`),`${id} toolbar fits its controls without a wide empty bar`);
     const before=(await stored()).actions.find(a=>a.id===id);
     await drag(p,{x:p.x+20,y:p.y+12});
     const after=(await stored()).actions.find(a=>a.id===id);
@@ -118,6 +157,7 @@ try {
   await evaluate(`document.querySelector('#mUndo').click()`);
   // A mixed Shift-selection uses shared fields without converting its layers.
   await click(await point(-12,47));await click(await point(-5,47),true);
+  await openEdit();
   assert.equal(await evaluate(`document.querySelector('#mMapContext').dataset.selectionCount`),'2');
   await change('#mMapContext [data-direct-field="color"]','#559977');
   assert.ok((await stored()).actions.filter(a=>['object','pin'].includes(a.id)).every(a=>a.color==='#559977'));
@@ -130,6 +170,7 @@ try {
   await evaluate(`document.querySelector('#mUndo').click()`);assert.equal((await stored()).actions.length,7,'batch duplication is one undo step');
   // Shift in the layer list follows the same selection model as Shift on the canvas.
   await evaluate(`document.querySelector('[data-mid="pin"]').click();document.querySelector('[data-mid="effect"]').dispatchEvent(new MouseEvent('click',{shiftKey:true,bubbles:true}));`);
+  await openEdit();
   assert.equal(await evaluate(`document.querySelector('#mMapContext').dataset.selectionCount`),'2');
   await change('#mMapContext [data-direct-field="color"]','#aa7744');
   assert.ok((await stored()).actions.filter(a=>['pin','effect'].includes(a.id)).every(a=>a.color==='#aa7744'));
@@ -138,7 +179,7 @@ try {
   await evaluate(`document.querySelector('#mUndo').click()`);
   // Preview controls and the camera capture stay fixed under magnification.
   await evaluate(`document.querySelector('[data-mid="label"]').click();document.querySelector('#mapStudio [data-zoom="actual"]').click();for(let i=0;i<5;i++)document.querySelector('#mapStudio [data-zoom="in"]').click();const area=document.querySelector('#mCanvas').closest('.stage-area');area.scrollLeft=area.scrollWidth;area.scrollTop=area.scrollHeight;`);
-  assert.ok(await evaluate(`(()=>{const b=document.querySelector('#mMapContext').getBoundingClientRect(),v=document.querySelector('.m-stage-viewport').getBoundingClientRect(),c=document.querySelector('#mCaptureView').getBoundingClientRect();return Math.abs(b.top-v.top-12)<2&&Math.abs(v.bottom-c.bottom-12)<2;})()`));
+  assert.equal(await evaluate(`document.querySelector('.m-stage-viewport > #mMapContext')`),null,'no selection toolbar is mounted over the canvas');
   await evaluate(`document.querySelector('#mapStudio [data-zoom="fit"]').click()`);
   await writeFile(join(tmpdir(),'frameflow-consistent-editor.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   assert.equal(await evaluate(`document.querySelectorAll('#mMapContext .ff-palette').length`),0,'compact controls do not inherit full sidebar palettes');
@@ -158,10 +199,13 @@ try {
   const laneTop=id=>evaluate(`document.querySelector('[data-mrow="${id}"]').style.top`);
   assert.ok([await laneTop('region-a'),await laneTop('region-b')].includes(await laneTop('region-border')),'non-overlapping fill and border can share a lane');
   assert.notEqual(await laneTop('object'),await laneTop('region-border'),'land and objects cannot share a lane even when their times do not overlap');
-  await evaluate(`document.querySelector('[data-mclip="region-b"]').scrollIntoView({block:'nearest'});document.querySelector('[data-mid="region-a"]').click();document.querySelector('#mMapContext [data-direct-land="label"]').focus();`);
+  await evaluate(`document.querySelector('[data-mclip="region-b"]').scrollIntoView({block:'nearest'});document.querySelector('[data-mid="region-a"]').click();`);
+  await openEdit();
+  await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').focus()`);
   const clip=await evaluate(`(()=>{const r=document.querySelector('[data-mclip="region-b"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await click(clip);
   assert.equal(await primary(),'region-b');
+  await openEdit();
   assert.equal(await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').value`),'Second','timeline selection replaces focused controls from the old layer');
   assert.equal(await evaluate(`document.querySelector('#mMapContext [data-direct-land="color"]').value`),'#3388aa');
   await change('#mMapContext [data-direct-land="label"]','Edited second');
@@ -175,20 +219,41 @@ try {
   assert.ok(trimAfter.dur>trimBefore.dur,'the bar edge can be extended directly');
   assert.equal(trimAfter.animDur,trimBefore.animDur,'trimming the bar does not move the animation diamond');
   await evaluate(`document.querySelector('#mMapContext [data-direct-land="label"]').focus();document.querySelector('[data-mid="pin"]').click();`);
-  assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="__pinDisplay"]')&&!document.querySelector('#mMapContext [data-direct-land]')`),'layer-list selection changes the control type while the old field is focused');
+  await openEdit();
+  assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="color"]')&&!document.querySelector('#mMapContext [data-direct-land]')`),'layer-list selection changes the control type while the old field is focused');
   await evaluate(`document.querySelector('#mapStudio [data-zoom="fit"]').click();for(let i=0;i<4;i++)document.querySelector('#mapStudio [data-zoom="out"]').click();`);
   const empty=await evaluate(`(()=>{const r=document.querySelector('.m-stage-viewport .stage-area').getBoundingClientRect();return{x:r.left+8,y:r.top+80};})()`);
   assert.ok(await evaluate(`document.elementFromPoint(${empty.x},${empty.y}).matches('.stage-area,.canvas-wrap')`),'dismissal is tested on empty workspace outside the map');
   await click(empty);
   assert.equal(await primary(),undefined,'empty workspace clears selection');
-  assert.ok(await evaluate(`document.querySelector('#mMapContext').hidden&&document.querySelector('#mMapContext').childElementCount===0`),'empty workspace dismisses and clears the bar');
-  await evaluate(`document.querySelector('[data-mid="object"]').click();document.querySelector('#mMapContext summary').click()`);
+  assert.ok(await evaluate(`!document.querySelector('#mMapContext')||document.querySelector('#mMapContext').hidden`),'empty workspace dismisses and clears the bar');
+  await evaluate(`document.querySelector('[data-mid="object"]').click()`);
+  await openEdit();
+  await openEdit();
+  await evaluate(`document.querySelector('#mMapContext summary').click()`);
+  await waitFor(`!!document.querySelector('body > .m-object-cascade:not([hidden])')`);
+  assert.equal(await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="recent"]').hidden`),false,'object chooser opens on recent choices');
+  await evaluate(`(()=>{const input=document.querySelector('body > .m-object-cascade [data-object-search]');input.value='nothing-matches-xyz';input.dispatchEvent(new Event('input'));})()`);
+  assert.ok(await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="search"]').textContent.includes('No matching objects')`),'search has a clear empty state');
+  await evaluate(`(()=>{const input=document.querySelector('body > .m-object-cascade [data-object-search]');input.value='tank';input.dispatchEvent(new Event('input'));})()`);
+  await waitFor(`!!document.querySelector('body > .m-object-cascade [data-object-category-panel="search"] [data-direct-object-choice="tank"]')`);
+  await evaluate(`document.querySelector('body > .m-object-cascade [data-object-category-panel="search"] [data-direct-object-choice="tank"]').click()`);
+  assert.equal((await stored()).actions.find(a=>a.id==='object').glyph,'tank','search result changes the object');
+  assert.equal(await evaluate(`JSON.parse(localStorage.getItem('frameflow-recent-objects'))[0]`),'tank','recent choices persist locally');
+  await openEdit();
+  await evaluate(`document.querySelector('#mMapContext summary').click()`);
   await waitFor(`!!document.querySelector('body > .m-object-cascade:not([hidden])')`);
   const categoryPoint=await evaluate(`(()=>{const r=document.querySelector('body > .m-object-cascade [data-object-category="people"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',...categoryPoint,button:'none',buttons:0});
   await waitFor(`!document.querySelector('body > .m-object-cascade [data-object-category-panel="people"]').hidden`);
   assert.equal(await evaluate(`document.querySelectorAll('body > .m-object-cascade [data-object-category-panel]:not([hidden])').length`),1,'hover shows only the category beside its name');
-  await waitFor(`[...document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="people"] img')].every(img=>img.complete&&img.naturalWidth>0)`);
+  await waitFor(`(()=>{const p=document.querySelector('body > .m-object-cascade .m-object-submenus'),r=p.getBoundingClientRect();return [...p.querySelectorAll('[data-object-category-panel="people"] img')].filter(img=>{const q=img.getBoundingClientRect();return q.bottom>r.top&&q.top<r.bottom;}).every(img=>img.complete&&img.naturalWidth>0);})()`);
+  assert.equal(await evaluate(`document.querySelectorAll('body > .m-object-cascade [data-object-category-panel="ships"] img[src]').length`),0,'unopened categories do not generate previews');
+  const lazyRows=await evaluate(`(()=>{const p=document.querySelector('body > .m-object-cascade .m-object-submenus'),r=p.getBoundingClientRect(),imgs=[...p.querySelectorAll('[data-object-category-panel="people"] img')];return{offscreen:imgs.filter(img=>img.getBoundingClientRect().top>=r.bottom&&!img.hasAttribute('src')).length,total:imgs.length,loaded:imgs.filter(img=>img.hasAttribute('src')).length};})()`);
+  assert.ok(lazyRows.offscreen>0&&lazyRows.loaded<lazyRows.total,'offscreen object rows remain unloaded');
+  await evaluate(`document.querySelector('body > .m-object-cascade .m-object-submenus').scrollTop=10000`);
+  await waitFor(`(()=>{const img=document.querySelector('body > .m-object-cascade [data-object-category-panel="people"] button:last-child img');return img.complete&&img.naturalWidth>0;})()`);
+  await evaluate(`document.querySelector('body > .m-object-cascade .m-object-submenus').scrollTop=0`);
   await writeFile(join(tmpdir(),'frameflow-nested-object-picker.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   const chosen=await evaluate(`(()=>{const el=document.querySelector('body > .m-object-cascade [data-object-category-panel="people"] [data-direct-object-choice]'),r=el.getBoundingClientRect();return{id:el.dataset.directObjectChoice,x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   await click({x:chosen.x,y:chosen.y});
@@ -301,17 +366,17 @@ try {
   await writeFile(join(tmpdir(),'frameflow-interface-editor.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await evaluate(`document.querySelector('#mSettingsButton').click()`);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#mSettingsPanel .ff-settings-body')).display`),'grid','desktop categories and settings use a two-column layout');
-  assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tab]').length`),5,'settings include the project-wide Sunlight category');
+  assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tab]').length`),6,'settings include Base map and project-wide Sunlight categories');
   assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel [role=tabpanel]:not([hidden])').length`),1,'only one settings category is shown');
   assert.ok(await evaluate(`document.querySelector('#mSize').closest('[role=tabpanel]').hidden===false`),'document settings open first');
   await change('#mDuration',130);
   assert.equal((await stored()).frames,(await stored()).fps*130,'reorganized controls retain their bindings');
-  await evaluate(`document.querySelector('#mSettingsTab1').click()`);
+  await evaluate(`document.querySelector('#mSettingsTab2').click()`);
   assert.ok(await evaluate(`!document.querySelector('#mTheme').closest('[role=tabpanel]').hidden&&document.querySelector('#mSize').closest('[role=tabpanel]').hidden&&document.querySelector('#mTexture').offsetParent!==null`),'appearance controls are revealed without expanding a section');
   assert.equal(await evaluate(`document.querySelectorAll('#mSettingsPanel details').length`),0,'settings contain no collapsed subsections');
   assert.equal(await evaluate(`!!document.querySelector('#mRegion,#mStartZoom,#mStartPitch,#mStartBearing')`),false,'starting-view controls are removed');
-  await evaluate(`document.querySelector('#mSettingsTab1').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))`);
-  assert.equal(await evaluate(`document.activeElement.id`),'mSettingsTab2','category navigation supports the keyboard');
+  await evaluate(`document.querySelector('#mSettingsTab2').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))`);
+  assert.equal(await evaluate(`document.activeElement.id`),'mSettingsTab3','category navigation supports the keyboard');
   assert.ok(await evaluate(`!document.querySelector('#mLabelStyle').closest('[role=tabpanel]').hidden`),'label controls have their own category');
   assert.ok(await evaluate(`document.querySelector('#mAtlasLabels [data-atlas=countries]').offsetParent!==null&&document.querySelector('#mLabelStyle [data-ls=size]').offsetParent!==null`),'country labels and label style are both revealed');
   await change('#mAtlasLabels [data-atlas=countries]',false);
@@ -362,6 +427,18 @@ try {
     })()`),width+'px: playback icons and timeline tools fit their bars');
     await writeFile(join(tmpdir(),'frameflow-playback-'+width+'.png'),Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
   }
+  await change('#mFrame',0);
+  await evaluate(`(()=>{
+    const samples=800,buffer=new ArrayBuffer(44+samples*2),v=new DataView(buffer),str=(at,s)=>[...s].forEach((ch,i)=>v.setUint8(at+i,ch.charCodeAt(0)));
+    str(0,'RIFF');v.setUint32(4,36+samples*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,16000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,samples*2,true);
+    const transfer=new DataTransfer();transfer.items.add(new File([buffer],'clipboard-test.wav',{type:'audio/wav'}));const input=document.querySelector('[data-audio-input="map"]');input.files=transfer.files;input.dispatchEvent(new Event('change'));
+  })()`);
+  await waitFor(`document.querySelector('#mItems')?.textContent.includes('clipboard-test.wav')`);
+  await shortcut('c');await change('#mFrame',2);await shortcut('v');
+  const audioPaste=await evaluate(`(async()=>{const {getAudioSnapshot}=await import('./audio-reference.mjs?v=add-submenu-1');return getAudioSnapshot('map').layers.map(a=>({id:a.id,start:a.start,duration:a.duration}));})()`);
+  assert.equal(audioPaste.length,2,'audio layers support copy and paste');assert.equal(audioPaste[1].start,2);assert.equal(audioPaste[1].duration,audioPaste[0].duration);assert.notEqual(audioPaste[1].id,audioPaste[0].id);
+  await shortcut('z');
+  assert.equal(await evaluate(`(async()=>{const {getAudioSnapshot}=await import('./audio-reference.mjs?v=add-submenu-1');return getAudioSnapshot('map').layers.length;})()`),1,'audio paste is one undo step');
   assert.deepEqual(errors,[]);
   console.log('Editor consistency: spatial layer selection, dragging, shared controls and context actions, mixed Shift-selection, batch actions, undo and pinned overlays passed');
 } finally {

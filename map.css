@@ -172,21 +172,20 @@ body.mode-map #mapStudio{display:flex}
 #mInspector .m-object-options [aria-selected="true"]{background:#303e2b;box-shadow:inset 3px 0 var(--accent)}
 .m-object-picker summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-/* One fixed selection bar, shared by objects, regions and other spatial layers. */
-#mMapContext{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:20;display:flex;align-items:stretch;gap:8px;max-width:calc(100% - 24px);padding:8px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:#1b241ff5;box-shadow:0 4px 18px #0007;color:var(--ff-text);box-sizing:border-box}
+/* Selection controls appear only inside the right-click Edit selection menu. */
+#mMapContext{display:flex;align-items:stretch;gap:8px;max-width:100%;padding:8px;color:var(--ff-text);box-sizing:border-box}
 #mMapContext[hidden],.m-map-add-context[hidden]{display:none}
-#mMapContext.m-map-object-context{width:min(520px,calc(100% - 24px))}
-#mMapContext.m-map-group-context{width:min(280px,calc(100% - 24px))}
-#mMapContext .m-map-object-controls{width:100%;display:grid;grid-template-columns:minmax(160px,1.5fr) 42px minmax(108px,1fr);gap:8px;align-items:end}
-#mMapContext .m-map-group-controls{grid-template-columns:42px minmax(130px,1fr)}
-#mMapContext .m-map-layer-controls{grid-template-columns:repeat(auto-fit,minmax(78px,1fr))}
+#mMapContext.m-map-object-context{width:max-content}
+#mMapContext .m-map-object-controls{width:max-content;max-width:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:end;min-width:0}
+#mMapContext .m-map-object-controls>.m-object-picker{width:220px;max-width:100%;flex:0 1 220px}
+#mMapContext .m-map-object-controls>label{flex:0 1 auto;max-width:100%}
 #mMapContext .m-map-land-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px}
 #mMapContext .m-map-land-controls>span{align-self:center;font-size:10px;color:var(--ff-muted);padding:0 3px}
 #mMapContext label,#mMapContext .m-object-picker{display:flex;flex-direction:column;gap:4px;margin:0;min-width:0;font-size:9px;line-height:12px;color:var(--ff-muted)}
 #mMapContext :is(select,input:not([type=checkbox]),.m-object-picker summary){width:100%;height:28px;min-height:28px;margin:0;padding:3px 6px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:var(--ff-control);color:var(--ff-text);font-size:10px;box-sizing:border-box}
 #mMapContext input[type=color]{width:34px;padding:2px}
 #mMapContext input[type=checkbox]{width:14px;height:14px;margin:7px 0;accent-color:var(--ff-accent)}
-#mMapContext input[type=text]{min-width:80px}
+#mMapContext input[type=text]{width:160px;max-width:100%;min-width:80px}
 #mMapContext .m-map-land-controls input[type=text]{width:130px}
 #mMapContext .m-map-land-controls input[type=number]{width:58px}
 #mMapContext .m-object-picker>.mini-label{font-size:9px;line-height:12px;margin:0;color:var(--ff-muted)}
@@ -201,10 +200,16 @@ body.mode-map #mapStudio{display:flex}
 .m-map-add-context button{display:block;width:100%;min-height:32px;padding:7px 10px;border:0;border-radius:4px;background:transparent;color:var(--ff-text);text-align:left;font-size:11px}
 .m-map-add-context button:hover,.m-map-add-context button:focus-visible{background:#36492b;outline:2px solid var(--ff-accent);outline-offset:-2px}
 .m-map-add-context [data-direct-context-delete]{color:#ffada3}
+.m-map-add-context button[data-shortcut]{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.m-map-add-context button[data-shortcut]::after{content:attr(data-shortcut);color:var(--ff-muted);font-size:10px}
 .m-map-submenu>[data-direct-submenu]{display:flex;align-items:center;justify-content:space-between;gap:18px}
 .m-map-submenu-panel{position:fixed;z-index:1001;width:190px;max-height:calc(100dvh - 16px);overflow-y:auto;padding:4px;border:1px solid var(--ff-border);border-radius:var(--ff-radius);background:var(--ff-surface);box-shadow:0 5px 18px #0008}
 .m-map-submenu-panel[hidden]{display:none}
-@media(max-width:650px){#mMapContext .m-map-object-controls{grid-template-columns:repeat(2,minmax(80px,1fr))}}
+.m-map-submenu-panel.m-map-edit-panel{width:290px;max-width:calc(100vw - 16px)}
+.m-map-context-title{max-width:220px;padding:7px 10px 9px;margin-bottom:4px;border-bottom:1px solid var(--ff-border);color:var(--ff-muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-map-add-context [role=menuitemradio]{display:flex;align-items:center;gap:8px}
+.m-map-add-context [role=menuitemradio]::before{content:'';width:12px;flex:none}
+.m-map-add-context [role=menuitemradio][aria-checked=true]::before{content:'\2713';color:var(--ff-accent)}
 
 #mInspector.ff-inspector-accordion{padding-top:8px!important}
 #mInspector .ff-inspector-section{margin-bottom:6px;border-radius:6px}
@@ -249,3 +254,45 @@ body.ff-unified .m-object-cascade [data-object-category-panel][hidden]{display:n
 
 .m-map-add-context button:disabled{opacity:.4;cursor:default}
 .m-portrait-image-preview{display:block;width:100%;height:120px;object-fit:contain;margin:8px 0;border-radius:8px;background:rgba(0,0,0,.16)}
+
+/* Arrow and zone tools share a compact vector type chooser and geometry editor. */
+#mInspector .m-shape-picker{margin-bottom:14px;min-width:0;max-width:100%}
+#mInspector .m-shape-picker>label[hidden]{display:none}
+#mInspector .m-shape-picker details{padding:0;border:1px solid var(--ff-border,#3b454b);border-radius:7px;background:var(--ff-control,#20292f);overflow:hidden}
+#mInspector .m-shape-picker summary{display:flex;align-items:center;gap:10px;min-height:64px;padding:10px;cursor:pointer;list-style:none;margin:0}
+#mInspector .m-shape-picker summary::-webkit-details-marker{display:none}
+#mInspector .m-shape-picker summary strong{display:block;font-size:12px;font-weight:600;line-height:1.4}
+#mInspector .m-shape-picker summary>span:nth-child(2){min-width:0;flex:1}
+#mInspector .m-shape-picker summary small{display:block;margin-top:3px;font-size:10px;color:var(--ff-muted,#a1adb5)}
+#mInspector .m-shape-symbol{display:flex;align-items:center;justify-content:center;flex:none;width:42px;height:36px;border-radius:5px;background:#ffffff06}
+#mInspector .m-shape-symbol svg{width:36px;height:29px}
+#mInspector .m-shape-caret{margin-left:auto;color:var(--ff-muted,#a1adb5);font-size:10px}
+#mInspector [data-shape-menu][open] .m-shape-caret{transform:rotate(180deg)}
+#mInspector .m-shape-options{padding:0 6px 8px;max-height:360px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-gutter:stable;border-top:1px solid var(--ff-border,#3b454b)}
+#mInspector .m-shape-group h4{margin:12px 2px 7px;font-size:10px;font-weight:600;color:var(--ff-muted,#a1adb5)}
+#mInspector .m-shape-group>div{display:grid;grid-template-columns:minmax(0,1fr);gap:3px}
+#mInspector [data-shape-choice]{display:flex;flex-direction:row;align-items:center;gap:9px;width:100%;min-width:0;min-height:43px;padding:5px 7px;border:1px solid transparent;border-radius:5px;background:transparent;text-align:left;font-size:11px;line-height:1.4;white-space:normal}
+#mInspector [data-shape-choice] .m-shape-symbol{width:32px;height:30px;background:transparent}
+#mInspector [data-shape-choice] .m-shape-symbol svg{width:30px;height:25px}
+#mInspector [data-shape-choice]>span:last-child{min-width:0;flex:1;overflow-wrap:normal;word-break:normal}
+#mInspector [data-shape-choice]:hover{background:#ffffff0c}
+#mInspector [data-shape-choice][aria-pressed=true]{border-color:var(--ff-accent,#b6cd8c);background:#a5bd7515}
+#mInspector .m-shape-picker :is(summary,button):focus-visible{outline:2px solid var(--ff-accent,#b6cd8c);outline-offset:-2px}
+#mInspector .m-shape-description{margin:8px 1px 0;line-height:1.6}
+#mInspector .m-shape-path-status{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;font-size:10px;color:var(--ff-muted,#a1adb5)}
+#mInspector .m-shape-path-status>span:last-child{padding:3px 7px;border-radius:10px;background:#ffffff08;font-variant-numeric:tabular-nums}
+#mInspector .m-shape-path-status .ready{color:var(--ff-accent,#b6cd8c)}
+#mInspector .m-shape-geometry .m-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+#mInspector .m-shape-geometry .m-path-actions button{min-width:0;font-size:10px;padding:7px 4px}
+#mInspector .m-shape-geometry .m-path-actions .m-shape-draw{grid-column:1/-1;padding:10px;font-size:11px;font-weight:600;border-color:var(--ff-accent,#b6cd8c);background:#a5bd7515}
+#mInspector .m-shape-geometry .m-shape-draw.active{background:#a5bd7530}
+#mInspector .m-shape-geometry .m-wps{max-height:145px;overflow-y:auto;scrollbar-width:thin;margin-bottom:12px}
+
+#mInspector .m-advanced-controls{margin:10px 0;padding:0 9px 9px;border:1px solid var(--ff-border,#3b454b);border-radius:5px;background:transparent}
+#mInspector .m-advanced-controls>summary{padding:10px 0;font-size:10px;color:var(--ff-muted,#a1adb5);cursor:pointer}
+#mInspector .m-advanced-controls:not([open]){padding-bottom:0}
+body.ff-unified .m-object-cascade{grid-template-rows:auto minmax(0,1fr)}
+body.ff-unified .m-object-search{grid-column:1/-1;padding:8px;border-bottom:1px solid var(--ff-border)}
+body.ff-unified .m-object-search input{box-sizing:border-box;width:100%;min-width:0;padding:9px;border:1px solid var(--ff-border);border-radius:4px;background:var(--ff-control);color:var(--ff-text);font:inherit;font-size:12px}
+body.ff-unified .m-object-cascade [data-object-category][hidden]{display:none}
+body.ff-unified .m-object-empty{padding:12px;color:var(--ff-muted);font-size:11px}

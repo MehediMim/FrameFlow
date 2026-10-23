@@ -1,7 +1,7 @@
 import { fontStack } from './fonts.mjs';
 
 export function plaqueStyle(a) {
-  return {font:a.plaqueFont||'Georgia',size:a.plaqueSize??(a.glyph==='banner'?6.5:7.8),weight:a.plaqueWeight??700,italic:a.plaqueItalic??false,color:a.plaqueColor||(a.glyph==='banner'?'#242323':'#fff0d5'),fit:a.plaqueFit!==false};
+  return {font:a.plaqueFont||'Georgia',size:a.plaqueSize??(a.glyph==='banner'?6.5:7.8),weight:a.plaqueWeight??700,italic:a.plaqueItalic??false,color:a.plaqueColor||(['banner','portrait'].includes(a.glyph)?'#29251f':'#fff0d5'),fit:a.plaqueFit!==false};
 }
 // Size is measured at object scale 1. Automatic fitting can be disabled to
 // retain a precise size; overflowing text is clipped to its plaque or ribbon.

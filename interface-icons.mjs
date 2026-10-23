@@ -29,6 +29,7 @@ const paths = {
   object:'<path d="m12 3 8 5v8l-8 5-8-5V8Zm0 9 8-4M4 8l8 4v9"/>',
   effect:'<path d="m13 2-8 12h6l-1 8 9-13h-7Z"/>',
   shape:'<path d="M3 19c5 0 4-11 10-11h7m-5-5 5 5-5 5"/>',
+  measure:'<path d="m3 15 12-12 6 6L9 21Zm4-4 3 3m1-7 3 3m1-7 3 3"/>',
   keyframed:'<path d="m12 3 8 9-8 9-8-9Z"/>',
   flyTo:'<path d="M4 5c11 0 4 14 15 14m-5-5 5 5 2-7"/>',
   swoop:'<path d="M4 17C1 5 19 1 20 11c0 6-8 9-10 4m5 0h-5v5"/>',

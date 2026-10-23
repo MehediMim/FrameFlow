@@ -1,5 +1,6 @@
 import { curvedGlyphs, flagImageCrop, flagFeatureParts } from './map-label-curve.mjs';
 import { mapStackOrder } from './map-layer-actions.mjs?v=map-order-1';
+import { mapBackgroundOf, validateMapBackground } from './map-background.mjs';
 import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-scene-panel.mjs';
 // FrameFlow Map Studio engine: vector world map, camera presets and map animations.
 // Pure JavaScript with no DOM access, so it can be unit tested and rendered headlessly.
@@ -25,7 +26,7 @@ import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, 
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
 import { drawIsometricObject, drawIsometricShadow, withObjectPreview } from './map-isometric-objects.mjs';
-import { isIsometricView } from './map-object-view.mjs';
+import { isIsometricView, isFrontArtwork } from './map-object-view.mjs';
 import { movementTrailKind } from './map-object-trails.mjs';
 import { sceneLightingAt, validateLightingEffect } from './map-lighting-keys.mjs';
 import { lightingPreset } from './map-lighting.mjs';
@@ -842,6 +843,7 @@ function planTiles(v, maxZoom, detail = 0) {
 }
 /** Tiles a frame needs, so an export can wait for them (and prefetch the next frames) before drawing. */
 export function imageryNeeds(proj, geo, W, H, frame) {
+  if(mapBackgroundOf(proj).mode!=='modern')return [];
   const th = THEMES[proj.theme], provider = th?.relief ? geo.relief : geo.imagery;
   if (!(th?.imagery || th?.relief) || !provider) return [];
   if (th.relief) provider.configure(terrainSettingsOf(proj));
@@ -931,8 +933,9 @@ function mapForeground(ctx,W,H){
 function drawPreviewBase(ctx, v, geo, th, proj) {
   // One bounded raster per preview context. Animated overlays and exports keep
   // their normal rendering path; satellite tiles must refresh as they arrive.
-  if (v.img || v.W * v.H > 4_000_000 || (typeof OffscreenCanvas === 'undefined' && typeof document === 'undefined')) { drawBase(ctx, v, geo, th, proj); return; }
-  const key = JSON.stringify([v.W, v.H, v.cx, v.cy, v.cam.zoom, v.cam.pitch, v.cam.bearing, proj.theme, proj.graticule, proj.area, geo.detailRevision || 0]);
+  if (v.img || proj.mapBackground?.mode==='image' || v.W * v.H > 4_000_000 || (typeof OffscreenCanvas === 'undefined' && typeof document === 'undefined')) { drawBase(ctx, v, geo, th, proj); return; }
+  const b=mapBackgroundOf(proj);
+  const key = JSON.stringify([v.W, v.H, v.cx, v.cy, v.cam.zoom, v.cam.pitch, v.cam.bearing, proj.theme, b.mode, b.color, b.west, b.east, b.north, b.south, proj.graticule, proj.area, geo.detailRevision || 0]);
   let cached = baseMapCache.get(ctx);
   if (!cached || cached.geo !== geo || cached.key !== key) {
     baseMapCache.set(ctx, { geo, key, surface: cached?.surface, ready: false });
@@ -951,6 +954,17 @@ function drawPreviewBase(ctx, v, geo, th, proj) {
   ctx.fillStyle = cached.fillStyle; ctx.strokeStyle = cached.strokeStyle; ctx.lineWidth = cached.lineWidth;
 }
 function drawBase(ctx, v, geo, th, proj) {
+  const background=mapBackgroundOf(proj);
+  if(['blank','image'].includes(background.mode)){
+    ctx.fillStyle=background.color;ctx.fillRect(0,0,v.W,v.H);
+    const entry=background.mode==='image'?badgeEntry(background.image):null;
+    if(entry?.ok){
+      const x=lonToX(background.west),y=latToY(background.north),w=lonToX(background.east)-x,h=latToY(background.south)-y,k=Math.round(v.cx-(x+w/2));
+      for(let offset=k-1;offset<=k+1;offset++)tileMesh(ctx,v,entry.img,x+offset,y,w,0,0,1,v.sp<1e-4?1:8,h,1,true);
+    }
+    return;
+  }
+  const coastline=background.mode==='coastline';
   ctx.fillStyle = th.void; ctx.fillRect(0, 0, v.W, v.H);
   const k0 = Math.round(v.cx);
   ctx.beginPath(); loadXY(v, new Float64Array([k0 - 4, 0, k0 + 5, 0, k0 + 5, 1, k0 - 4, 1]), 4, 0); emit(ctx, v, 4, true);
@@ -964,7 +978,7 @@ function drawBase(ctx, v, geo, th, proj) {
     for (const lat of [-60, -30, 0, 30, 60]) { const Y = latToY(lat); loadXY(v, new Float64Array([k0 - 4, Y, k0 + 5, Y]), 2, 0); emit(ctx, v, 2, false); }
     ctx.strokeStyle = th.grat; ctx.globalAlpha = th.gratA; ctx.lineWidth = Math.max(.6, v.unit * .8); ctx.stroke(); ctx.globalAlpha = 1;
   }
-  const focus = focusFeature(proj, geo), neighbors = focus ? areaOf(proj).neighbors : 'show';
+  const focus = coastline?null:focusFeature(proj, geo), neighbors = focus ? areaOf(proj).neighbors : 'show';
   const set = focus ? geo.hi : geo.pick(v.cam.zoom); // a country map always uses the detailed outlines
   ctx.strokeStyle = th.border; ctx.lineWidth = th.bw * v.unit;
   const paint = (f, k, fill, borderA, lw, raised) => {
@@ -979,9 +993,9 @@ function drawBase(ctx, v, geo, th, proj) {
         ctx.fill('evenodd'); ctx.restore();
       }
     } else if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
-    ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;
+    if(!coastline){ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;}
   };
-  const fillOf = (f, k) => (v.img ? null : th.strategy ? strategyGroundPattern(ctx,th.land[f.tint]||th.land[0]) : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
+  const fillOf = (f, k) => (coastline?th.land[0]:v.img ? null : th.strategy ? strategyGroundPattern(ctx,th.land[f.tint]||th.land[0]) : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
   for (let k = k0 - 1; k <= k0 + 1; k++) for (const f of set.features) {
     if (focus && (f.name === focus.name || (neighbors === 'hide' && !v.img))) continue; // the chosen country is drawn last, on top
     if (!bboxVisible(v, f.bbox, k)) continue;
@@ -993,7 +1007,7 @@ function drawBase(ctx, v, geo, th, proj) {
     const f = focus;
     if (f) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, f.bbox, k)) paint(f, k, fillOf(f, k), 1, th.bw * v.unit * 1.7, true);
   }
-  for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
+  if(!coastline)for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
 }
 /** A spot inside the country, as far from its cities as possible, where the country name can sit without covering a city. */
 function nameAnchor(f, cities, midX) {
@@ -1015,6 +1029,7 @@ function nameAnchor(f, cities, midX) {
 }
 /** Country and ocean names share geographic anchors across preview and export. */
 export function atlasMapLabels(proj, geo, v) {
+  if(mapBackgroundOf(proj).mode!=='modern')return [];
   const s = atlasLabelSettings(proj.atlasLabels), out = [], occupied = [];
   if (!s.countries && !s.oceans) return out;
   const style = { font: s.font, weight: 700, shape: 'none', halo: true, haloWidth: s.haloWidth, useTheme: false, text: s.text, bg: s.outline, spacing: s.spacing, placement: s.placement, scaleMode: s.scaleMode, referenceZoom: s.referenceZoom, textPath:s.textPath, curveAngle:s.curveAngle, caps: s.caps, italic: false };
@@ -1537,7 +1552,8 @@ function badgeEntry(src) {
 }
 /** Resolves once every badge picture in the project has loaded, so exports never miss one. */
 export function preloadBadges(proj) {
-  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'highlight' && a.highlightFill === 'flag') || (a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait'].includes(a.glyph))) && a.image).map(a => a.image))];
+  const srcs = [...new Set(proj.actions.filter(a => ((a.type === 'highlight' && a.highlightFill === 'flag') || (a.type === 'pin' && a.badge) || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait', 'flag'].includes(a.glyph))) && a.image).map(a => a.image))];
+  if(proj.mapBackground?.mode==='image'&&proj.mapBackground.image)srcs.push(proj.mapBackground.image);
   return Promise.all(srcs.map(src => new Promise(done => {
     const e = badgeEntry(src); if (!e || e.ok || e.failed) { done(); return; }
     e.img.addEventListener('load', () => done()); e.img.addEventListener('error', () => done());
@@ -1627,7 +1643,7 @@ function drawBadge(ctx, v, geo, a, frame, labels) {
     if(st.badgeShadow)drawIsometricShadow(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{angle:(a.objectAngle||0)*RAD,mirror:a.objectDirection==='left'});
     if(a.objectDirection==='left')ctx.scale(-1,1);
     ctx.rotate((a.objectAngle||0)*RAD);drawIsometricObject(ctx,'image',r,a.color,(frame-a.start)/(v.fps||30),a,entry?.ok?entry.img:null,{shadows:false});ctx.restore();
-  }else if(a.type==='object'&&a.objectDirection==='left'){ctx.save();ctx.translate(g.x*2,0);ctx.scale(-1,1);paintBadge(ctx);ctx.restore();}
+  }else if(a.type==='object'&&!isFrontArtwork(a.glyph)&&a.objectDirection==='left'){ctx.save();ctx.translate(g.x*2,0);ctx.scale(-1,1);paintBadge(ctx);ctx.restore();}
   else paintBadge(ctx);
   if (a.showLabel) {
     const lp = ease('backOut', (t - .3) / .3);
@@ -1728,6 +1744,7 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   })};
   proj = { ...proj, actions: proj.actions.filter(a => a.visible !== false && (a.sourceStart === undefined || (frame >= a.start && frame < a.start + a.dur))).map(mapSourceItem) };
   const th = THEMES[proj.theme] || THEMES.earth, v = makeView(camera, W, H), labels = [];
+  const baseMap=mapBackgroundOf(proj);v.mapBackground=baseMap.mode;
   v.fps = proj.fps; v.objects = new Map(proj.actions.filter(a=>a.type==='object').map(a=>[a.id,a]));
   const area = areaOf(proj), routeNames = new Map(), controlledNames = new Set();
   for (const a of proj.actions) if (a.type === 'plane' && a.showRouteLabels) {
@@ -1736,8 +1753,8 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
     routeNames.set(a, names);
     for (const name of names) controlledNames.add(routeLabelKey(name.text));
   }
-  if (th.imagery && geo.imagery) v.img = { im: geo.imagery, id: proj.imagery || 'gibs' };
-  if (th.relief) {
+  if (baseMap.mode==='modern'&&th.imagery && geo.imagery) v.img = { im: geo.imagery, id: proj.imagery || 'gibs' };
+  if (baseMap.mode==='modern'&&th.relief) {
     v.terrain = terrainSettingsOf(proj);
     if (geo.relief) { geo.relief.configure(v.terrain); v.img = { im: geo.relief, id: 'relief' }; }
     v.tileFade = cacheBase;
@@ -1745,8 +1762,10 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (cacheBase) drawPreviewBase(ctx, v, geo, th, proj); else drawBase(ctx, v, geo, th, proj);
   // Route names belong to their travel clip, including before and after it.
-  labels.push(...atlasMapLabels(proj, geo, v));
-  drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
+  if(baseMap.mode==='modern'){
+    labels.push(...atlasMapLabels(proj, geo, v));
+    drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
+  }
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
   // Reveal new fills over existing paint. Restore the base only within the
   // currently revealed area so completed fills retain their original opacity.
@@ -1796,7 +1815,7 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   if(foreground){ctx.restore();ctx=background;}
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   if(foreground)ctx.drawImage(foreground.surface,0,0);
-  vignette(ctx, v, th);
+  if(!['blank','image'].includes(baseMap.mode))vignette(ctx, v, th);
   for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
   applySceneLighting(ctx,W,H,proj.lighting);
@@ -1920,6 +1939,7 @@ function checkLabelStyle(s) {
 /** Throws a readable Error when a file is not a usable map project. */
 export function validateMapProject(p) {
   if (!p || p.version !== 1 || p.kind !== 'map' || !Array.isArray(p.actions) || !Array.isArray(p.shots)) throw Error('This is not a FrameFlow map project.');
+  validateMapBackground(p);
   if (p.actions.length > 200 || p.shots.length > 200) throw Error('Too many items in this map project.');
   if (![24, 30, 60].includes(p.fps) || !Number.isSafeInteger(p.frames) || p.frames < 2) throw Error('Invalid frame settings.');
   if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || p.width < 100 || p.height < 100 || p.width > 3840 || p.height > 3840) throw Error('Invalid canvas size.');
@@ -1982,7 +2002,7 @@ export function validateMapProject(p) {
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
-    if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait'].includes(a.glyph))) {
+    if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait', 'flag'].includes(a.glyph))) {
       if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');
       if (a.mode !== undefined && !Object.hasOwn(PIN_MODES, a.mode)) throw Error('Invalid pin movement.');
       if (a.mode === 'move' && !isLoc(a.to)) throw Error('Invalid pin destination.');

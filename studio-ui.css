@@ -102,6 +102,7 @@ body.ff-unified :is(#mapStudio,#paperStudio) main.ff-preview:fullscreen .ff-zoom
 body.ff-unified :is(#mapStudio,#paperStudio) main.ff-preview:fullscreen canvas.ff-zoom-canvas{max-width:none!important;max-height:none!important}
 body.ff-unified main.ff-preview:fullscreen .transport{flex:0 0 52px}
 /* Settings share a calm form layout, independent of inspector/sidebar density. */
+#mSettingsPanel .ff-settings-fields>#mBaseMapSettings>h4{display:none}
 body.ff-unified dialog.ff-dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel){width:min(560px,calc(100vw - 32px));max-width:560px;max-height:min(820px,calc(100dvh - 48px));padding:0;overflow:hidden}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel)[open]{display:flex;flex-direction:column}
 body.ff-unified dialog.ff-settings:is(#motionSettingsPanel,#mSettingsPanel,#pSettingsPanel,#scSettingsPanel) > .section-title{flex:0 0 auto;gap:24px;margin:0;padding:22px 24px;border-bottom:1px solid var(--ff-border);background:var(--ff-surface)}

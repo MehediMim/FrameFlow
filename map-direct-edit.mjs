@@ -17,11 +17,10 @@ const rotatable=a=>['object','group'].includes(a?.type);
 const scalable=a=>['object','group','pin','effect','label'].includes(a?.type);
 const key=t=>`${t.kind}:${t.country||''}:${t.name}`;
 export function installDirectMapEditing(api){
-  const {canvas}=api,selected=new Set(),lands=new Map();let drag=null,toolbarKey='',toolbarSelectionKey='';
+  const {canvas}=api,selected=new Set(),lands=new Map();let drag=null,toolbarSelectionKey='';
   const landStyle={color:'#ffb703',showFill:true,showLabel:true,label:''};
   const bar=document.createElement('div');bar.id='mMapContext';bar.className='m-map-context';bar.hidden=true;bar.setAttribute('role','group');bar.setAttribute('aria-label','Selection settings');
   const overlayRoot=canvas.closest('.m-stage-viewport')||canvas.closest('.stage-area');
-  overlayRoot.append(bar);
   const menu=document.createElement('div');menu.id='mMapAddContext';menu.className='m-map-add-context';menu.hidden=true;menu.setAttribute('role','menu');
   menu.innerHTML='<button type="button" role="menuitem" data-direct-add-object>Add object here</button>';overlayRoot.append(menu);
   let contextPoint=null,rightGesture=null,suppressContextUntil=0;
@@ -32,15 +31,17 @@ export function installDirectMapEditing(api){
     const activeLand=regionLayer();
     if(lands.size||activeLand&&!found){
       menu.replaceChildren();addMenu(true);
-      if(activeLand&&!lands.size)appendLayerActions([activeLand.id]);
+      if(activeLand&&!lands.size){appendContextControls(activeLand);appendLayerActions([activeLand.id]);}
       positionMenu(x,y);return;
     }
     if(found&&!selected.has(found.id)){lands.clear();selected.clear();selected.add(found.id);api.select(found.id);}
     menu.replaceChildren();
+    if(selected.size&&api.current())appendContextControls(api.current());
     if(canGroup())menuButton('Group selected','directGroup',groupSelected);
     const group=found?.type==='group'?found:api.current()?.type==='group'?api.current():null;
     if(group)menuButton('Ungroup','directUngroup',()=>{selected.clear();selected.add(group.id);api.select(group.id);document.querySelector('#mInspector [data-group-ungroup]')?.click();});
     if(selected.size)appendLayerActions([...selected]);
+    if(api.current())menuButton('Properties','directProperties',()=>{api.renderInspector();document.querySelector('#mInspector')?.scrollIntoView({block:'nearest'});});
     addMenu();
     positionMenu(x,y);
   };
@@ -52,14 +53,34 @@ export function installDirectMapEditing(api){
     const sub=document.createElement('div');sub.className='m-map-submenu-panel';sub.dataset[attribute+'Menu']='';sub.dataset.directSubmenuPanel='';sub.setAttribute('role','menu');sub.setAttribute('aria-label',title);sub.hidden=true;
     build(sub);
     const hide=()=>{sub.hidden=true;trigger.setAttribute('aria-expanded','false');};
-    const show=()=>{for(const other of menu.querySelectorAll('[data-direct-submenu-panel]'))if(other!==sub){other.hidden=true;other.parentElement.querySelector('[data-direct-submenu]').setAttribute('aria-expanded','false');}sub.hidden=false;const r=trigger.getBoundingClientRect(),s=sub.getBoundingClientRect();trigger.setAttribute('aria-expanded','true');sub.style.left=Math.max(8,r.right+s.width+8<=innerWidth?r.right:r.left-s.width)+'px';sub.style.top=Math.max(8,Math.min(innerHeight-s.height-8,r.top))+'px';};
-    trigger.onclick=show;holder.onpointerenter=show;holder.onpointerleave=hide;
-    holder.addEventListener('focusout',e=>{if(!holder.contains(e.relatedTarget))hide();});
+    const show=()=>{for(const other of menu.querySelectorAll('[data-direct-submenu-panel]'))if(other!==sub){other.hidden=true;other.parentElement.querySelector('[data-direct-submenu]').setAttribute('aria-expanded','false');}sub.hidden=false;paintObjectPreviews(sub);const r=trigger.getBoundingClientRect(),s=sub.getBoundingClientRect();trigger.setAttribute('aria-expanded','true');sub.style.left=Math.max(8,r.right+s.width+8<=innerWidth?r.right:r.left-s.width)+'px';sub.style.top=Math.max(8,Math.min(innerHeight-s.height-8,r.top))+'px';};
+    trigger.onclick=show;holder.onpointerenter=show;holder.onpointerleave=()=>{if(!document.querySelector('body > .m-object-cascade:not([hidden])'))hide();};
+    holder.addEventListener('focusout',e=>{if(!holder.contains(e.relatedTarget)&&!e.relatedTarget?.closest('.m-object-cascade'))hide();});
     holder.append(trigger,sub);menu.append(holder);
   }
   function arrangeMenu(ids){
     contextSubmenu('Arrange','directArrange',sub=>{
       for(const [action,title] of [['forward','Bring forward'],['backward','Send backward'],['front','Bring to front'],['back','Send to back']])menuButton(title,'directArrange'+action[0].toUpperCase()+action.slice(1),()=>api.layerAction(ids,action),sub);
+    });
+  }
+  function appendContextControls(a){
+    const heading=document.createElement('div');heading.className='m-map-context-title';heading.setAttribute('role','presentation');heading.textContent=selected.size>1?`${selected.size} layers selected`:a.name||'Selected layer';menu.append(heading);
+    contextSubmenu('Edit selection','directEdit',sub=>{
+      sub.classList.add('m-map-edit-panel');bar.replaceChildren();bar.hidden=false;
+      bar.dataset.layerId=a.id;bar.dataset.selectionCount=String(selected.size||1);
+      bar.className='m-map-context';sub.append(bar);
+      if(['highlight','border'].includes(a.type))landControls(a);
+      else if(['object','group'].includes(a.type))objectControls(a);
+      else layerControls(a);
+    });
+    const objects=[...selected].flatMap(id=>{const a=item(id);return a?.type==='group'?a.memberIds.map(item):[a];}).filter(a=>a?.type==='object');
+    if(objects.length)contextSubmenu('Object sizing','directSizing',sub=>{
+      for(const [value,label]of [['screen','Fixed on screen'],['map','Scale with map']]){
+        const button=menuButton(label,'directSizing'+(value==='map'?'Map':'Screen'),()=>{
+          api.pause();api.checkpoint();applySelection('sizeMode',value);api.changed();api.renderInspector();
+        },sub);
+        button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(objects.every(a=>(a.sizeMode||'screen')===value)));
+      }
     });
   }
   function addMenu(regions=false){
@@ -78,13 +99,17 @@ export function installDirectMapEditing(api){
     if(ids.some(id=>['object','group','pin','plane','effect','shape'].includes(item(id)?.type))){
       arrangeMenu(ids);
     }
+    const copy=menuButton(ids.length>1?'Copy selected':'Copy layer','directContextCopy',()=>api.copy?.());copy.dataset.shortcut='Ctrl+C';
     menuButton(ids.length>1?'Duplicate selected':'Duplicate','directContextDuplicate',()=>api.layerAction(ids,'duplicate'));
     const hidden=ids.some(id=>item(id)?.visible===false);
     menuButton(hidden?'Show selected':'Hide selected','directContextVisibility',()=>api.layerAction(ids,'visibility'));
     menuButton(ids.length>1?'Delete selected':'Delete','directContextDelete',()=>api.layerAction(ids,'delete'));
   }
-  function positionMenu(x,y){menu.hidden=false;const r=menu.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(innerWidth-r.width-8,x))+'px';menu.style.top=Math.max(8,Math.min(innerHeight-r.height-8,y))+'px';menu.querySelector('button').focus({preventScroll:true});}
-  document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target))menu.hidden=true;},true);
+  function positionMenu(x,y){
+    const paste=menuButton('Paste at playhead','directContextPaste',()=>api.paste?.());paste.disabled=!api.canPaste?.();paste.dataset.shortcut='Ctrl+V';
+    menu.hidden=false;const r=menu.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(innerWidth-r.width-8,x))+'px';menu.style.top=Math.max(8,Math.min(innerHeight-r.height-8,y))+'px';menu.querySelector('button').focus({preventScroll:true});
+  }
+  document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&!e.target.closest('.m-object-cascade'))menu.hidden=true;},true);
   overlayRoot.addEventListener('pointerdown',e=>{
     if(e.button!==0||api.busy()||!e.target.matches('.m-stage-viewport,.stage-area,.canvas-wrap,.stage-hint'))return;
     selected.clear();lands.clear();api.select(null);toolbar(true);
@@ -92,8 +117,9 @@ export function installDirectMapEditing(api){
   document.addEventListener('keydown',e=>{
     if(!document.body.classList.contains('mode-map')||document.querySelector('dialog[open]'))return;
     if(e.key==='Escape'&&document.querySelector('body > .m-object-cascade:not([hidden])'))return;
-    const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+    const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable;
     if((e.ctrlKey||e.metaKey)&&!typing&&!api.busy()){
+      if(!e.altKey&&!e.repeat&&['c','v'].includes(e.key.toLowerCase())){e.preventDefault();e.stopImmediatePropagation();if(e.key.toLowerCase()==='c')api.copy?.();else api.paste?.();return;}
       if(e.key.toLowerCase()==='d'){e.preventDefault();e.stopImmediatePropagation();api.layerAction(selected.size?[...selected]:api.current()?[api.current().id]:[],'duplicate');return;}
       if(e.key.toLowerCase()==='g'){
         e.preventDefault();e.stopImmediatePropagation();
@@ -103,6 +129,7 @@ export function installDirectMapEditing(api){
       }
     }
     const sub=menu.querySelector('[data-direct-submenu-panel]:not([hidden])');
+    if(!menu.hidden&&typing&&e.key!=='Escape')return;
     if(!menu.hidden&&e.key==='ArrowRight'&&document.activeElement?.matches('[data-direct-submenu]')){const trigger=document.activeElement;trigger.click();trigger.parentElement.querySelector('[data-direct-submenu-panel] button:not(:disabled)')?.focus();e.preventDefault();e.stopPropagation();return;}
     if(!menu.hidden&&sub&&['ArrowLeft','Escape'].includes(e.key)){sub.hidden=true;const trigger=sub.parentElement.querySelector('[data-direct-submenu]');trigger.setAttribute('aria-expanded','false');trigger.focus();e.preventDefault();e.stopPropagation();return;}
     if(!menu.hidden&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){
@@ -158,7 +185,8 @@ export function installDirectMapEditing(api){
       const size=objectSizeAt(a,api.frame(),v.cam.zoom)*(rendered._groupScale??1),s=26*size*v.unit;
       for(const off of objectOffsets(rendered.glyph==='army'?{...rendered,count:armyCopies(rendered).length}:rendered)){
         const x=q.x+off.x*size*v.unit,y=q.y+off.y*size*v.unit;
-        if(Math.abs(p.x-x)<Math.max(16*v.unit,s*1.25)&&p.y>y-s*2.8&&p.y<y+s*.8){
+        const tall=['portrait','banner','flag'].includes(a.glyph),width=tall?Math.max(1.9,a.glyph==='banner'?1.4*(a.bannerAspect??.75)+.3:a.glyph==='flag'?.825*(a.bannerAspect??1.5)+.3:1.9):1.25;
+        if(Math.abs(p.x-x)<Math.max(16*v.unit,s*width)&&p.y>y-s*(tall?5.85:2.8)&&p.y<y+s*.8){
           return api.project().actions.find(g=>g.type==='group'&&g.memberIds.includes(a.id))||a;
         }
       }
@@ -243,7 +271,7 @@ export function installDirectMapEditing(api){
   function objectControls(a){
     const inspector=document.querySelector('#mInspector'),group=a.type==='group';
     const homogeneous=[...selected].every(id=>item(id)?.type===a.type);
-    const keys=group?['__groupColor','__groupSizeMode']:homogeneous?['color','sizeMode']:['color'];
+    const keys=group?['__groupColor']:['color'];
     const form=document.createElement('div');form.className='m-map-object-controls'+(group?' m-map-group-controls':!homogeneous?' m-map-layer-controls':'');
     const sources=group||!homogeneous?[]:[inspector.querySelector('[data-object-type]')?.closest('label'),inspector.querySelector('.m-object-picker')];
     for(const key of keys){const el=inspector.querySelector(`[data-mf="${key}"]`);if(!el)continue;if(el.type==='color'){const label=document.createElement('label');label.append('Color',el.cloneNode(true));sources.push(label);}else sources.push(el.closest('.m-loc')||el.closest('label'));}
@@ -273,12 +301,12 @@ export function installDirectMapEditing(api){
     bar.append(form);paintObjectPreviews(form);
   }
   function layerControls(a){
-    const fields={pin:['__pinDisplay','color','label'],label:['text','labelPlacement'],effect:['fx','color','repeat'],shape:['shape','color','width','networkAnimation'],plane:['icon','planeColor','color'],scene:['title','color']}[a.type]||[];
+    const fields={pin:['color'],label:['text'],effect:['color'],shape:['color'],plane:['color'],scene:['title']}[a.type]||[];
     const form=document.createElement('div');form.className='m-map-object-controls m-map-layer-controls';
     for(const field of fields){
       if(selected.size>1&&field!=='color'&&![...selected].every(id=>item(id)?.type===a.type))continue;
       const source=document.querySelector(`#mInspector [data-mf="${field}"]`);if(!source)continue;
-      const label=source.closest('label').cloneNode(true),input=label.querySelector('[data-mf]');label.querySelectorAll('.ff-palette').forEach(palette=>palette.remove());input.dataset.directField=field;delete input.dataset.mf;
+      const label=source.closest('label').cloneNode(true),input=label.querySelector('[data-mf]');label.hidden=false;input.value=source.value;label.querySelectorAll('.ff-palette').forEach(palette=>palette.remove());input.dataset.directField=field;delete input.dataset.mf;
       input.removeAttribute('id');
       if(input.type==='range'){input.type='number';label.querySelector('.m-val')?.remove();}
       let editing=false;
@@ -338,25 +366,11 @@ export function installDirectMapEditing(api){
     for(const id of selected)if(!item(id))selected.delete(id);
     const current=api.current(),land=regionLayer(),object=!lands.size&&spatial(current);
     if(object&&!selected.has(current.id)){selected.clear();selected.add(current.id);}else if(!object&&!lands.size)selected.clear();
-    const signature=JSON.stringify([[...lands.values()],[...selected],object||land?current:null,document.querySelector('#mInspector [data-object-type]')?.value]);
     const selectionKey=JSON.stringify([current?.id,[...lands.keys()],[...selected]]);
-    if(!force&&selectionKey===toolbarSelectionKey&&(signature===toolbarKey||bar.contains(document.activeElement)))return;
-    toolbarKey=signature;toolbarSelectionKey=selectionKey;
-    bar.hidden=!!lands.size||(!land&&!object&&selected.size<2);bar.dataset.selectionCount=String(lands.size||selected.size||1);
-    bar.dataset.layerId=land?.id||(object?current.id:'');
-    bar.classList.toggle('m-map-land-context',!lands.size&&!!land);
-    bar.classList.toggle('m-map-object-context',object);bar.classList.toggle('m-map-group-context',object&&current.type==='group');
-    bar.classList.toggle('m-map-layer-context',object&&!['object','group'].includes(current.type));
-
-    if(bar.hidden){
-      bar.replaceChildren();
-    }else if(land){
-      bar.innerHTML='';landControls(land);
-    }else if(object){
-      bar.innerHTML='';
-      if(['object','group'].includes(current.type))objectControls(current);else layerControls(current);
+    if(force||selectionKey!==toolbarSelectionKey){
+      menu.hidden=true;bar.hidden=true;bar.replaceChildren();
     }
-    bar.querySelector('[data-direct-clear]')?.addEventListener('click',()=>{selected.clear();lands.clear();api.select(null);toolbar(true);api.draw();});
+    toolbarSelectionKey=selectionKey;
   }
   function begin(e,a,kind,p){
     api.pause();const v=api.view(),point=ground(v,p);if(!point)return;
@@ -394,7 +408,7 @@ export function installDirectMapEditing(api){
       api.select(e.shiftKey&&!selected.has(found.id)?[...selected].at(-1)||null:found.id);toolbar(true);api.draw();if(!e.shiftKey)begin(e,found,'move',p);return;
     }
     const point=ground(v,p);if(!point)return;
-    const region=regionAt(api.project(),api.geo(),point.lon,point.lat),name=region||countryAt(api.geo(),point.lon,point.lat);
+    const modern=!v.mapBackground||v.mapBackground==='modern',region=modern&&regionAt(api.project(),api.geo(),point.lon,point.lat),name=modern&&(region||countryAt(api.geo(),point.lon,point.lat));
     if(!name){lands.clear();selected.clear();api.select(null);toolbar(true);api.draw();return;}
     e.preventDefault();e.stopImmediatePropagation();api.pause();selected.clear();api.select(null);
     const target=region?{kind:'region',name,country:api.geo().byName.get(name)?.country}:{kind:'country',name};
@@ -478,7 +492,7 @@ export function installDirectMapEditing(api){
   }
   const inspector=document.querySelector('#mInspector');
   if(inspector)new MutationObserver(()=>toolbar()).observe(inspector,{childList:true,subtree:true});
-  function setSelection(ids){selected.clear();for(const id of ids)if(spatial(item(id)))selected.add(id);lands.clear();toolbarKey='';}
+  function setSelection(ids){selected.clear();for(const id of ids)if(spatial(item(id)))selected.add(id);lands.clear();}
   function toggleSelection(id){
     if(!spatial(item(id)))return false;const current=api.current();if(!selected.size&&spatial(current))selected.add(current.id);
     if(selected.has(id))selected.delete(id);else selected.add(id);lands.clear();api.select(selected.has(id)?id:[...selected].at(-1)||null);return true;

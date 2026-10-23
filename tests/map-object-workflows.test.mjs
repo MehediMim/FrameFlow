@@ -90,3 +90,9 @@ assert.deepEqual(pathViewFacing({...movingIso,objectFacing:'manual',objectDirect
 assert.throws(()=>validateObjectView({objectDirection:'up'}),/direction/);
 const leftProject=newMapProject();leftProject.actions=[makeAction('object',0,{objectDirection:'left'})];validateMapProject(JSON.parse(JSON.stringify(leftProject)));
 console.log('Static left/right facing, default direction, automatic path priority and saved direction validation passed');
+for(const glyph of ['image','artwork','portrait','banner','flag']){
+  const a={glyph,mode:'path',objectView:'isometricBack',objectDirection:'left',objectFacing:'manual',objectKeys:[{frame:0,values:{objectView:'isometric'}}]};
+  assert.equal(objectPoseAt(a,10).objectView,'side',glyph+' always has a front view, including saved view keys');
+  assert.deepEqual(pathViewFacing(a,-1,-1),{objectView:'side',mirror:false},glyph+' never mirrors text on a path');
+  validateObjectView(a);assert.equal(a.objectView,'side',glyph+' migrates saved isometric views');
+}

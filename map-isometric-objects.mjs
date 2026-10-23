@@ -1,7 +1,8 @@
 import { IsoScene } from './map-isometric-geometry.mjs';
 import { drawModelShadow } from './map-isometric-shadow.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
-import { objectViewOf } from './map-object-view.mjs';
+import { objectViewOf, isFrontArtwork } from './map-object-view.mjs';
+import { frontArtworkScene } from './map-retro-artwork.mjs';
 import { OBJECT_ANIMATIONS, objectAnimationTime } from './map-object-animation.mjs';
 
 // Explicit recipes for the complete catalog. No normal-view drawing function is
@@ -633,17 +634,19 @@ function modelFor(glyph,color,t,action,image,view='isometric',lowDetail=false){
   // frames. Size, movement, damage and canvas rotation remain outside the model.
   let imageId=0;if(image){if(!imageIds.has(image))imageIds.set(image,++imageSerial);imageId=imageIds.get(image);}
   const animation=objectAnimationOf(glyph,action),key=JSON.stringify([glyph,color,view,lowDetail,imageId,currentSceneLighting().key,animation,action.objectAnimationSpeed??1,...imageSettings.map(k=>action[k])]);
-  if(animation!=='none'&&(animation!=='auto'||animated(recipe))){
+  const makeScene=()=>view==='side'&&isFrontArtwork(glyph)?frontArtworkScene(glyph,color,objectAnimationTime(action,t),action,image):createIsometricModel(glyph,color,t,action,image,view,lowDetail);
+  if(animation!=='none'&&(animation!=='auto'||animated(recipe))&&(!isFrontArtwork(glyph)||action.bannerWind!==false)){
     const frameKey=key+':frame:'+t;
     let scene=animatedModels.get(frameKey);
-    if(!scene){scene=createIsometricModel(glyph,color,t,action,image,view,lowDetail);animatedModels.set(frameKey,scene);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
+    if(!scene){scene=makeScene();animatedModels.set(frameKey,scene);if(animatedModels.size>32)animatedModels.delete(animatedModels.keys().next().value);}
     return {scene,key:frameKey,animated:true};
   }
   let scene=modelCache.get(key);
-  if(!scene){scene=createIsometricModel(glyph,color,t,action,image,view,lowDetail);modelCache.set(key,scene);if(modelCache.size>256)modelCache.delete(modelCache.keys().next().value);}
+  if(!scene){scene=makeScene();modelCache.set(key,scene);if(modelCache.size>256)modelCache.delete(modelCache.keys().next().value);}
   return {scene,key,animated:false};
 }
 export function drawIsometricObject(c,glyph,size,color,t=0,action={},image,{shadows=true}={}){
+  if(isFrontArtwork(glyph))return drawSideObject(c,glyph,size,color,t,action,image);
   const model=modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric',previewDetail(c,size));
   return drawStaticModel(c,model.scene,size,model.key,shadows);
 }
@@ -652,6 +655,7 @@ export function drawSideObject(c,glyph,size,color,t=0,action={},image){
   return drawStaticModel(c,model.scene,size,model.key,false);
 }
 export function drawIsometricShadow(c,glyph,size,color,t=0,action={},image,pose={}){
+  if(isFrontArtwork(glyph))return;
   return drawModelShadow(c,modelFor(glyph,color,t,action,image,objectViewOf(action)==='isometricBack'?'isometricBack':'isometric',previewDetail(c,size)).scene,size,pose);
 }
 const modelCache=new Map(),animatedModels=new Map(),imageIds=new WeakMap();let imageSerial=0;

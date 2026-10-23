@@ -16,7 +16,7 @@ import { drawZoneLandscape } from './map-strategy-terrain.mjs';
 import { networkMargin } from './map-network-style.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
 import { drawIsometricObject, drawIsometricShadow, drawSideObject } from './map-isometric-objects.mjs';
-import { isIsometricView, pathViewFacing } from './map-object-view.mjs';
+import { isIsometricView, pathViewFacing, isFrontArtwork } from './map-object-view.mjs';
 import { movementTrailKind, drawMovementTrail } from './map-object-trails.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
 import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
@@ -112,7 +112,7 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if(Number.isFinite(v.W)&&Number.isFinite(v.H)&&(g.x < -margin||g.x > v.W+margin||g.y < -margin||g.y > v.H+margin))return;
   c.save();
   const isometric=isIsometricView(a),angle=rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180;
-  const movingAngle=!isometric&&a.objectFacing!=='manual'&&ang!==null&&!['banner','portrait'].includes(a.glyph)?ang:null;
+  const movingAngle=!isometric&&a.objectFacing!=='manual'&&ang!==null&&!isFrontArtwork(a.glyph)?ang:null;
   if(isometric){
     const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
     c.save();c.globalAlpha=alpha;c.translate(g0.x+dx,g0.y);c.scale(sc,sc);

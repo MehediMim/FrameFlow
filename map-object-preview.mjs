@@ -1,10 +1,11 @@
 import { OBJECT_ICONS } from './map-objects.mjs';
 import { drawIsometricObject, drawSideObject } from './map-isometric-objects.mjs';
-import { isIsometricView } from './map-object-view.mjs';
+import { isIsometricView, objectViewOf } from './map-object-view.mjs';
 
 // Cache a static frame of the actual vector artwork, including tall masts/tools.
 const previews = new Map();
 export function objectPreview(glyph,view='side') {
+  view=objectViewOf({glyph,objectView:view});
   const key=glyph+':'+view;
   if (previews.has(key)) return previews.get(key);
   const icon = OBJECT_ICONS[glyph];
@@ -32,5 +33,13 @@ export function objectPreview(glyph,view='side') {
   const url = thumb.toDataURL(); previews.set(key, url); return url;
 }
 export function paintObjectPreviews(root) {
-  for (const img of root.querySelectorAll('img[data-object-preview]')) img.src = objectPreview(img.dataset.objectPreview,img.dataset.objectView||'side');
+  for (const img of root.querySelectorAll('img[data-object-preview]')) {
+    if(img.closest('[hidden]')||!img.getClientRects().length)continue;
+    if(img.hasAttribute('data-object-preview-lazy')){
+      const viewport=img.closest('.m-object-submenus')?.getBoundingClientRect(),r=img.getBoundingClientRect();
+      if(viewport&&(r.bottom<=viewport.top||r.top>=viewport.bottom))continue;
+    }
+    const url=objectPreview(img.dataset.objectPreview,img.dataset.objectView||'side');
+    if(img.getAttribute('src')!==url)img.src=url;
+  }
 }

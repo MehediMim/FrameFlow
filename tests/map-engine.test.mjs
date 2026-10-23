@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 import * as E from '../map-engine.mjs';
 const load = f => JSON.parse(readFileSync(new URL('../map-data/' + f, import.meta.url), 'utf8'));
 const geo = E.buildGeo(load('countries-50m.json'), load('countries-110m.json'));
+for(const mode of ['modern','coastline','image','blank']){
+  const backgroundProject=E.newMapProject();backgroundProject.mapBackground={mode};E.validateMapProject(backgroundProject);
+}
+for(const mapBackground of [{mode:'unknown'},{mode:'blank',color:'invalid'},{mode:'image',image:'https://example.com/map.png'},{mode:'image',west:50,east:40},{mode:'image',north:-20,south:20},{mode:'image',north:90}]){
+  const backgroundProject=E.newMapProject();backgroundProject.mapBackground=mapBackground;assert.throws(()=>E.validateMapProject(backgroundProject),/map|background/i);
+}
 
 assert.ok(geo.byName.has('Brazil') && geo.names.length > 200, 'countries loaded');
 assert.equal(E.countryAt(geo, -47, -15), 'Brazil');

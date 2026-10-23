@@ -1,4 +1,41 @@
 // Shared layer operations used by the canvas, keyboard and layer list.
+export function copyLayers(project,ids){
+  const chosen=new Set(ids),all=[...project.shots,...project.actions];
+  const roots=all.filter(a=>chosen.has(a.id)&&!a.fullTimelineCamera&&!project.actions.some(g=>g.type==='group'&&chosen.has(g.id)&&g.memberIds.includes(a.id)));
+  if(!roots.length)return null;
+  const included=new Set(roots.flatMap(a=>[a.id,...(a.type==='group'?a.memberIds:[])]));
+  return structuredClone({roots:roots.map(a=>a.id),start:Math.min(...roots.map(a=>a.start)),shots:project.shots.filter(a=>included.has(a.id)),actions:project.actions.filter(a=>included.has(a.id))});
+}
+export function pasteLayers(project,clipboard,frame,createId=()=>crypto.randomUUID()){
+  if(!clipboard?.roots.length)return [];
+  if(!Number.isSafeInteger(frame)||frame<0)throw Error('Choose a valid timeline frame.');
+  if(project.actions.length+clipboard.actions.length>200)throw Error('A map can contain up to 200 items.');
+  if(project.shots.length+clipboard.shots.length>200)throw Error('A map can contain up to 200 camera layers.');
+  const source=[...clipboard.shots,...clipboard.actions],existing=[...project.shots,...project.actions],ids=new Map(source.map(a=>[a.id,createId()])),delta=frame-clipboard.start;
+  const ranks=new Map(mapStackOrder(clipboard.actions).map((a,i)=>[a.id,i]));
+  let order=Math.max(0,...existing.map((a,i)=>a.createdOrder??i+1));
+  const mapOrder=Math.max(-1,...project.actions.map((a,i)=>a.mapOrder??i))+1;
+  const copies=source.map(original=>{
+    const a=structuredClone(original);a.id=ids.get(original.id);a.name+=' copy';a.createdOrder=++order;
+    if(a.kind!=='shot')a.mapOrder=mapOrder+ranks.get(original.id);
+    // A clipped group can retain members whose source begins before its bar.
+    // Keep that source clock while clipping any negative visible start.
+    const start=a.start+delta;
+    if(start<0){a.sourceStart??=a.start;a.sourceDur??=a.dur;a.dur=Math.max(1,start+a.dur);if(start+original.dur<=0)a.visible=false;}
+    a.start=Math.max(0,start);
+    for(const field of ['sourceStart','animStart','animEnd','moveStart','moveEnd'])if(a[field]!==undefined)a[field]+=delta;
+    for(const field of ['cameraKeys','objectKeys','pathKeys','groupKeys','lightingKeys'])for(const key of a[field]||[])key.frame+=delta;
+    if(a.memberIds)a.memberIds=a.memberIds.map(id=>ids.get(id));
+    for(const field of ['planeId','attackSourceId','attackTargetId'])if(ids.has(a[field]))a[field]=ids.get(a[field]);
+    if(!Number.isSafeInteger(a.start+a.dur))throw Error('Pasted layer exceeds the timeline limit.');
+    return a;
+  });
+  const end=Math.max(...copies.map(a=>a.start+a.dur));
+  if(!Number.isSafeInteger(end+15))throw Error('Pasted layers exceed the timeline limit.');
+  project.shots.push(...copies.filter(a=>a.kind==='shot'));project.actions.push(...copies.filter(a=>a.kind!=='shot'));
+  if(end>project.frames)project.frames=end+15;
+  return clipboard.roots.map(id=>ids.get(id));
+}
 export function mapStackOrder(actions){
   const ranks=new Map(actions.map((a,i)=>[a.id,a.mapOrder??i]));
   const members=new Set(actions.filter(a=>a.type==='group').flatMap(a=>a.memberIds));

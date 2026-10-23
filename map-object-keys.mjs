@@ -18,7 +18,7 @@ export function objectPoseAt(a,frame){
     const t=(easings[a.easing]||easings.easeInOut)((frame-left.frame)/(right.frame-left.frame));
     const [lo,hi]=OBJECT_KEY_FIELDS[field];pose[field]=Math.max(lo,Math.min(hi,left.values[field]+(right.values[field]-left.values[field])*t));
   }
-  return pose;
+  pose.objectView=objectViewOf({...a,objectView:pose.objectView});return pose;
 }
 export function putObjectKey(a,frame,values,seed=true){
   a.objectKeys||=[];

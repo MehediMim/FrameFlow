@@ -126,6 +126,7 @@ try {
   // Grouped image/trade objects, portrait uploads and plaque text controls.
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);
   await change('#mInspector [data-mf="glyph"]','portrait');
+  assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-mf="objectView"],#mInspector [data-mf="objectDirection"],#mInspector [data-advanced-facing]').length`),0,'portraits only expose the normal front view');
   assert.equal(await evaluate(`(()=>{const upload=document.querySelector('[data-badgeimg]'),movement=document.querySelector('[data-mf="__pinMove"]');return !!(upload.compareDocumentPosition(movement)&Node.DOCUMENT_POSITION_FOLLOWING)})()`),true,'portrait upload is above movement settings');
   assert.equal(await evaluate(`(()=>{const file=document.querySelector('[data-badgefile]');let clicked=false;const original=file.click;file.click=()=>{clicked=true};document.querySelector('[data-badgeimg]').click();file.click=original;return clicked})()`),true,'upload button opens the portrait file picker');
   await change('#mInspector [data-mf="label"]','Manuel');
@@ -165,6 +166,17 @@ try {
     return{portraits,stable:first.every((v,i)=>v===second[i]),png:c.toDataURL(),tradeSheet:sheet.toDataURL()};
   })()`);
   assert.equal(medieval.portraits,1,'uploaded portrait texture is cached after preload');assert.equal(medieval.stable,true);
+  const frontArtwork=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),{drawSideObject}=await import('./map-isometric-objects.mjs'),saved=JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.at(-1);await E.preloadBadges({actions:[saved]});
+    const c=document.createElement('canvas');c.width=1100;c.height=650;const x=c.getContext('2d');x.fillStyle='#8d9e7c';x.fillRect(0,0,c.width,c.height);
+    const image=new Image();image.src=saved.image;await image.decode();
+    for(const [i,glyph]of ['portrait','banner','flag'].entries()){
+      x.save();x.translate(190+i*355,570);drawSideObject(x,glyph,78,'#9d4b3f',.6,{...saved,glyph,badgeBorder:'#4c4032',label:'James Knox Polk',plaqueFont:'Georgia',plaqueSize:7.8,plaqueWeight:700,plaqueColor:'#29251f',plaqueItalic:false,plaqueFit:true,bannerTitle:'Historical flag',bannerAspect:glyph==='flag'?1.5:.75},image);x.restore();
+      x.fillStyle='#17211b';x.font='17px Georgia';x.textAlign='center';x.fillText(glyph,190+i*355,610);
+    }
+    return c.toDataURL();
+  })()`);
+  await writeFile(join(tmpdir(),'frameflow-retro-artwork-review.png'),Buffer.from(frontArtwork.split(',')[1],'base64'));
   await writeFile(join(tmpdir(),'frameflow-medieval-objects.png'),Buffer.from(medieval.png.split(',')[1],'base64'));
   await writeFile(join(tmpdir(),'frameflow-trade-objects.png'),Buffer.from(medieval.tradeSheet.split(',')[1],'base64'));
   const video=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),V=await import('./map-video-export.mjs');const p=window.reviewProject;p.width=640;p.height=360;p.frames=2;p.fps=30;p.audioTracks=[];const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));await E.preloadBadges(p);const canvas=document.createElement('canvas');canvas.width=p.width;canvas.height=p.height;const b=await V.exportMapVideo({canvas,fps:p.fps,frames:p.frames,draw:f=>E.drawMap(canvas.getContext('2d'),p.width,p.height,p,f,geo)});return{size:b.size,type:b.type};})()`);

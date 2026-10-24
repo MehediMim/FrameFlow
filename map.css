@@ -285,7 +285,7 @@ body.ff-unified .m-object-cascade [data-object-category-panel][hidden]{display:n
 #mInspector .m-shape-geometry .m-path-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
 #mInspector .m-shape-geometry .m-path-actions button{min-width:0;font-size:10px;padding:7px 4px}
 #mInspector .m-shape-geometry .m-path-actions .m-shape-draw{grid-column:1/-1;padding:10px;font-size:11px;font-weight:600;border-color:var(--ff-accent,#b6cd8c);background:#a5bd7515}
-#mInspector .m-shape-geometry .m-shape-draw.active{background:#a5bd7530}
+#mInspector .m-shape-geometry .m-shape-draw.active{background:var(--ff-accent,#b6f36e);color:var(--ff-on-accent,#192512)}
 #mInspector .m-shape-geometry .m-wps{max-height:145px;overflow-y:auto;scrollbar-width:thin;margin-bottom:12px}
 
 #mInspector .m-advanced-controls{margin:10px 0;padding:0 9px 9px;border:1px solid var(--ff-border,#3b454b);border-radius:5px;background:transparent}

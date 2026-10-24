@@ -453,7 +453,9 @@ function pathWorld(a) {
   }
   return W;
 }
-function densifyPath(W, curve) {
+function densifyPath(W, curve, closed = false) {
+  const corners = W.length;
+  if (closed) W = [...W, W[0]];
   const pts = [], idx = [], n = W.length;
   if (curve === 'straight' || n < 3) {
     for (let i = 0; i < n - 1; i++) {
@@ -464,7 +466,7 @@ function densifyPath(W, curve) {
     return { pts, idx };
   }
   // Centripetal Catmull-Rom through every waypoint: smooth, never overshoots or loops.
-  const ext = [[2 * W[0][0] - W[1][0], 2 * W[0][1] - W[1][1]], ...W, [2 * W[n - 1][0] - W[n - 2][0], 2 * W[n - 1][1] - W[n - 2][1]]];
+  const ext = [closed ? W[corners - 1] : [2 * W[0][0] - W[1][0], 2 * W[0][1] - W[1][1]], ...W, closed ? W[1] : [2 * W[n - 1][0] - W[n - 2][0], 2 * W[n - 1][1] - W[n - 2][1]]];
   const dist = (p, q) => Math.max(1e-6, Math.hypot(q[0] - p[0], q[1] - p[1])) ** .5;
   for (let i = 0; i < n - 1; i++) {
     const P0 = ext[i], P1 = ext[i + 1], P2 = ext[i + 2], P3 = ext[i + 3];
@@ -484,9 +486,12 @@ function pathRoute(a) {
   const W = [];
   for (const p of pathWorld(a)) if (!W.length || Math.hypot(p[0] - W[W.length - 1][0], p[1] - W[W.length - 1][1]) > 1e-7) W.push(p);
   if (W.length < 2) return null;
-  const curve = a.curve === 'straight' ? 'straight' : 'smooth', key = `path|${curve}|${W.map(p => p[0].toFixed(12) + ',' + p[1].toFixed(12)).join(';')}`, hit = routeCache.get(a.id);
+  let closed = a.type === 'shape' && ['zone','noFly','area'].includes(a.shape) && W.length >= 3;
+  if (closed && Math.hypot(W[0][0] - W.at(-1)[0], W[0][1] - W.at(-1)[1]) < 1e-7) W.pop();
+  closed &&= W.length >= 3;
+  const curve = a.curve === 'straight' ? 'straight' : 'smooth', key = `path|${closed}|${curve}|${W.map(p => p[0].toFixed(12) + ',' + p[1].toFixed(12)).join(';')}`, hit = routeCache.get(a.id);
   if (hit && hit.key === key) return hit;
-  const { pts, idx } = densifyPath(W, curve), N = pts.length, X = new Float64Array(N), Y = new Float64Array(N), cum = new Float64Array(N);
+  const { pts, idx } = densifyPath(W, curve, closed), N = pts.length, X = new Float64Array(N), Y = new Float64Array(N), cum = new Float64Array(N);
   let minX = Infinity, maxX = -Infinity;
   for (let i = 0; i < N; i++) {
     X[i] = pts[i][0]; Y[i] = pts[i][1]; minX = Math.min(minX, X[i]); maxX = Math.max(maxX, X[i]);

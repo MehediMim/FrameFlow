@@ -253,9 +253,9 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   if (zone) {
     const pts = P.filter(Boolean); if (pts.length < 3) { c.restore(); return; }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
-    c.globalAlpha = (a.fillAlpha ?? .28) * p; c.fillStyle = a.color; c.fill();
     const landscape=a.shape==='zone'&&a.zoneTerrain&&a.zoneTerrain!=='plain';
     if(landscape)drawZoneLandscape(c,H,v,a,r,k,p,seconds);
+    else{c.globalAlpha = (a.fillAlpha ?? .28) * p; c.fillStyle = a.color; c.fill();}
     if (a.shape === 'noFly'||flow&&!landscape) {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (const q of pts) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
       x0=Math.max(-40*u,x0);x1=Math.min(v.W+40*u,x1);y0=Math.max(-40*u,y0);y1=Math.min(v.H+40*u,y1);
@@ -263,7 +263,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
       c.save(); c.clip(); c.beginPath(); for (let x = x0 - (y1 - y0)+offset; x < x1; x += gap) { c.moveTo(x, y1); c.lineTo(x + (y1 - y0), y0); } c.globalAlpha = (a.shape==='noFly'?.55:Math.min(.35,(a.fillAlpha??.28)*.6)) * p; c.strokeStyle = a.shape==='noFly'?a.color:'#fff2d8'; c.lineWidth = 1.6 * u; c.stroke(); c.restore();
     }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();
-    c.globalAlpha = .95 * p; c.strokeStyle = a.color; c.lineWidth = w * .6; c.setLineDash(a.shape === 'noFly'||flow&&!landscape ? [10 * u, 7 * u] : []); c.lineDashOffset=flow&&!landscape?-phase:0;c.stroke();
+    if(!landscape){c.globalAlpha = .95 * p; c.strokeStyle = a.color; c.lineWidth = w * .6; c.setLineDash(a.shape === 'noFly'||flow ? [10 * u, 7 * u] : []); c.lineDashOffset=flow?-phase:0;c.stroke();}
     text = { x: pts.reduce((s, q) => s + q.x, 0) / pts.length, y: pts.reduce((s, q) => s + q.y, 0) / pts.length };
   } else {
     const e = p * (r.n - 1), L = []; let i = 0;

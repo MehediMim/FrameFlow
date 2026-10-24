@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { newMapProject,makeAction,validateMapProject,THEMES,OBJECT_ICONS } from '../map-engine.mjs';
+import { newMapProject,makeAction,validateMapProject,planeRoute,THEMES,OBJECT_ICONS } from '../map-engine.mjs';
 import { STRATEGY_OBJECTS } from '../map-strategy-objects.mjs';
 import { ZONE_TERRAINS,landscapePlacements } from '../map-strategy-terrain.mjs';
 
@@ -7,6 +7,17 @@ assert.equal(THEMES.kingdom.strategy,true);
 assert.equal(Object.keys(STRATEGY_OBJECTS).length,24);
 const p=newMapProject();p.theme='kingdom';
 const path=[{lon:0,lat:0},{lon:3,lat:0},{lon:3,lat:3},{lon:0,lat:3}];
+// Every zone edge uses the selected connection style, including the closing edge.
+for(const shape of ['zone','noFly','area']){
+  const action=makeAction('shape',0,{id:'boundary',shape,path,curve:'smooth'}),r=planeRoute(null,action);
+  assert.equal(r.X[0],r.X.at(-1));assert.equal(r.Y[0],r.Y.at(-1));
+  const start=[r.X[1]-r.X[0],r.Y[1]-r.Y[0]],end=[r.X.at(-1)-r.X.at(-2),r.Y.at(-1)-r.Y.at(-2)];
+  assert.ok((start[0]*end[0]+start[1]*end[1])/(Math.hypot(...start)*Math.hypot(...end))>.98,'smooth tangent across boundary seam');
+  const repeated=planeRoute(null,{...action,path:[...path,path[0]]});
+  assert.deepEqual(repeated.X,r.X);assert.deepEqual(repeated.Y,r.Y);
+  const open=planeRoute(null,{...action,shape:'arrow'});
+  assert.notEqual(open.Y[0],open.Y.at(-1),'changing type invalidates the closed route cache');
+}
 for(const [glyph,icon]of Object.entries(STRATEGY_OBJECTS)){
   assert.equal(OBJECT_ICONS[glyph],icon);assert.equal(icon.group,'kingdom');assert.equal(typeof icon.draw,'function');
   p.actions.push(makeAction('object',0,{glyph,color:icon.color}));

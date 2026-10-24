@@ -7,10 +7,12 @@ export const ZONE_TERRAINS = {
   snow:'Snowfields', marsh:'Marsh / wetlands', farmland:'Farmland'
 };
 export const TERRAIN_COLORS={grassland:'#80a04b',jungle:'#426e35',woodland:'#729047',pineForest:'#62816a',mountains:'#929183',hills:'#8d9c58',river:'#4c9fae',lake:'#4a94b0',desert:'#d3b875',snow:'#dce4dc',marsh:'#6d9272',farmland:'#9fa553'};
+export const TERRAIN_CONTENTS={background:'Background only',objects:'Objects only',both:'Background + objects'};
 const hash=(x,y,seed=0)=>{let n=Math.imul(x|0,374761393)^Math.imul(y|0,668265263)^Math.imul(seed|0,1274126177);n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967296;};
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function validateZoneTerrain(a){
   if(a.zoneTerrain!==undefined&&!Object.hasOwn(ZONE_TERRAINS,a.zoneTerrain))throw Error('Invalid zone landscape.');
+  if(a.terrainContent!==undefined&&!Object.hasOwn(TERRAIN_CONTENTS,a.terrainContent))throw Error('Invalid zone landscape content.');
   for(const [key,lo,hi]of[['terrainDensity',.3,2],['terrainScale',.5,2.5],['terrainOpacity',0,1],['terrainSeed',0,9999]])if(a[key]!==undefined&&(!Number.isFinite(a[key])||a[key]<lo||a[key]>hi||key==='terrainSeed'&&!Number.isInteger(a[key])))throw Error('Invalid zone landscape settings.');
 }
 // Anchor details to geographic geometry rather than screen pixels or playback order.
@@ -136,10 +138,13 @@ export function drawZoneLandscape(c,H,v,a,r,k,progress,seconds){
 function paintZoneLandscape(c,H,v,a,r,k,progress,seconds){
   const kind=a.zoneTerrain;if(!kind||kind==='plain'||!Object.hasOwn(TERRAIN_COLORS,kind))return;
   c.save();c.clip();c.globalAlpha=(a.terrainOpacity??.92)*progress;
-  c.fillStyle=TERRAIN_COLORS[kind];c.fillRect(0,0,v.W,v.H);
   const points=Array.from({length:r.n},(_,i)=>({x:r.X[i],y:r.Y[i]}));
-  paintTerrainMaterial(c,H,v,points,k,kind,a.terrainSeed??0,a.terrainDensity??1,a.terrainScale??1);
-  if(kind==='farmland'){c.restore();return;}
+  const content=a.terrainContent??'both';
+  if(content!=='objects'){
+    c.fillStyle=TERRAIN_COLORS[kind];c.fillRect(0,0,v.W,v.H);
+    paintTerrainMaterial(c,H,v,points,k,kind,a.terrainSeed??0,a.terrainDensity??1,a.terrainScale??1);
+  }
+  if(content==='background'||kind==='farmland'&&a.terrainContent===undefined){c.restore();return;}
   const visible=[];
   const density=(a.terrainDensity??1)*(kind==='mountains'?.3:kind==='hills'?.55:1);
   for(const entry of landscapePlacements(points,density,a.terrainSeed??0)){

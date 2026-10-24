@@ -23,11 +23,12 @@ for(const [glyph,icon]of Object.entries(STRATEGY_OBJECTS)){
   p.actions.push(makeAction('object',0,{glyph,color:icon.color}));
 }
 for(const zoneTerrain of Object.keys(ZONE_TERRAINS))p.actions.push(makeAction('shape',0,{shape:'zone',path,zoneTerrain,terrainDensity:1.2,terrainScale:1.5,terrainOpacity:.9,terrainSeed:42}));
+for(const terrainContent of ['background','objects','both'])p.actions.push(makeAction('shape',0,{shape:'zone',path,zoneTerrain:'woodland',terrainContent}));
 validateMapProject(JSON.parse(JSON.stringify(p)));
 for(const objectView of ['side','normal','isometric','isometricBack']){const copy=structuredClone(p);for(const a of copy.actions)if(a.type==='object')a.objectView=objectView;validateMapProject(JSON.parse(JSON.stringify(copy)));}
 assert.throws(()=>validateMapProject({...p,actions:[{...p.actions[0],objectView:'invalid'}]}),/object view/);
 assert.deepEqual(JSON.parse(JSON.stringify(p)).actions,p.actions,'landscapes and strategy objects survive project serialization');
-for(const invalid of [{zoneTerrain:'lava'},{terrainDensity:0},{terrainDensity:3},{terrainScale:NaN},{terrainOpacity:1.1},{terrainSeed:1.5},{terrainSeed:-1}]){
+for(const invalid of [{zoneTerrain:'lava'},{terrainContent:'invalid'},{terrainContent:true},{terrainDensity:0},{terrainDensity:3},{terrainScale:NaN},{terrainOpacity:1.1},{terrainSeed:1.5},{terrainSeed:-1}]){
   const copy=structuredClone(p);Object.assign(copy.actions.at(-1),invalid);assert.throws(()=>validateMapProject(copy),/landscape/);
 }
 const square=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];

@@ -38,7 +38,14 @@ try{
     const outline={n:4,X:[10,150,150,10],Y:[10,10,110,110]};
     T.drawZoneLandscape(ec,{project:(_v,x,y)=>({x,y,z:1})},{W:160,H:120,unit:1,near:0},{zoneTerrain:'farmland',terrainOpacity:1},outline,0,1,0);
     const edgeAlpha=[8,10,13,18,24,32,60].map(x=>ec.getImageData(x,60,1,1).data[3]);
-    T.drawZoneLandscape(ec,{project:(_v,x,y)=>({x,y,z:1})},{W:160,H:120,unit:1,near:0},{zoneTerrain:'farmland',terrainOpacity:1},outline,0,1,0);
+    const contentFrames={},coverage={};
+    for(const terrainContent of ['background','objects','both']){
+      ec.clearRect(0,0,160,120);
+      T.drawZoneLandscape(ec,{project:(_v,x,y)=>({x,y,z:1})},{W:160,H:120,unit:1,near:0},{zoneTerrain:'woodland',terrainOpacity:1,terrainContent},outline,0,1,0);
+      contentFrames[terrainContent]=edge.toDataURL();
+      const pixels=ec.getImageData(35,35,90,50).data;coverage[terrainContent]=0;
+      for(let i=3;i<pixels.length;i+=4)if(pixels[i]>250)coverage[terrainContent]++;
+    }
     const canvas=document.createElement('canvas');canvas.width=800;canvas.height=600;const c=canvas.getContext('2d');
     const p=E.newMapProject();p.mapBackground={mode:'blank',color:'#dee1d2'};p.graticule=false;p.atlasLabels={countries:false,oceans:false};p.frames=300;p.camera.init={lon:1,lat:46,zoom:5.3,pitch:0,bearing:0};
     const zone=E.makeAction('shape',0,{id:'terrain',shape:'zone',path:[{lon:-4,lat:42},{lon:6,lat:42},{lon:6,lat:49},{lon:-4,lat:49}],curve:'straight',networkAnimation:'static',zoneTerrain:'woodland',terrainSeed:42,dur:300,width:1});p.actions=[zone];
@@ -63,12 +70,15 @@ try{
     const {exportMapVideo}=await import('./map-video-export.mjs');const blob=await exportMapVideo({canvas,fps:30,frames:6,draw:f=>E.drawMap(c,800,600,p,90+f,geo)});
     zone.zoneTerrain='farmland';const fields=render(90);zone.terrainDensity=2;const fieldDensity=fields!==render(90);zone.terrainDensity=1;zone.terrainScale=2;const fieldScale=fields!==render(90);zone.terrainScale=1;
     zone.curve='smooth';render(90);window.farmlandReview=canvas.toDataURL();localStorage.setItem('frameflow-map-v1',JSON.stringify(p));
-    return {stable,reseeded,cacheReused,colors:colors.size,distinct:new Set(images).size,leaked,animated,fpsStable,tilted,warmMs,videoSize:blob.size,fieldDensity,fieldScale,edgeAlpha};
+    return {stable,reseeded,cacheReused,colors:colors.size,distinct:new Set(images).size,leaked,animated,fpsStable,tilted,warmMs,videoSize:blob.size,fieldDensity,fieldScale,edgeAlpha,contentDistinct:new Set(Object.values(contentFrames)).size,coverage};
   })()`);
   assert.ok(result.stable&&result.reseeded&&result.cacheReused,JSON.stringify(result));
   assert.ok(result.colors>1000,'materials contain fine color variation');assert.equal(result.distinct,12);assert.equal(result.leaked,0,'texture stays inside zone');
   assert.ok(result.animated&&result.fpsStable&&result.tilted,JSON.stringify(result));assert.ok(result.videoSize>1000);
   assert.ok(result.fieldDensity&&result.fieldScale,'farmland density and scale change field sizes');
+  assert.equal(result.contentDistinct,3,'background, objects and combined content render independently');
+  assert.equal(result.coverage.background,4500,'background fills the interior');
+  assert.ok(result.coverage.objects>0&&result.coverage.objects<4000,'objects leave transparent ground between motifs: '+JSON.stringify(result.coverage));
   assert.equal(result.edgeAlpha[0],0,'feathering stays inside the drawn boundary');
   assert.ok(result.edgeAlpha[1]<10&&result.edgeAlpha[2]>result.edgeAlpha[1]&&result.edgeAlpha[3]>result.edgeAlpha[2]&&result.edgeAlpha[4]>result.edgeAlpha[3]&&result.edgeAlpha[5]===255&&result.edgeAlpha[6]===255,'terrain fades gradually to a sharp interior: '+result.edgeAlpha);
   await writeFile(join(tmpdir(),'frameflow-terrain-review.png'),Buffer.from((await evaluate('window.terrainReview')).split(',')[1],'base64'));
@@ -91,6 +101,20 @@ try{
   assert.equal(await evaluate(`document.querySelector('.m-shape-draw').getAttribute('aria-pressed')`),'false');
   assert.equal(await evaluate(`document.querySelector('.m-shape-draw').textContent`),'Edit on map');
   assert.equal(await evaluate(`document.querySelector('#mCanvas').style.cursor`),'');
+  const change=async(key,value)=>evaluate(`(()=>{const el=document.querySelector('[data-mf="'+${JSON.stringify(key)}+'"]');el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal(await evaluate(`document.querySelector('[data-mf="terrainContent"]').value`),'both','older terrain retains its combined appearance');
+  await change('zoneTerrain','woodland');await change('terrainContent','background');
+  assert.equal(await evaluate(`document.querySelector('[data-mf="terrainDensity"]')`),null,'background has no object density control');
+  await change('terrainContent','objects');
+  assert.ok(await evaluate(`!!document.querySelector('[data-mf="terrainDensity"]')`));
+  const storedPath=await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.find(a=>a.id==='terrain').path`);
+  await evaluate(`document.querySelector('[data-madd="shape"]').click()`);
+  await evaluate(`document.querySelector('[data-shape-choice="zone"]').click()`);
+  await change('zoneTerrain','woodland');
+  assert.equal(await evaluate(`document.querySelector('[data-mf="terrainContent"]').value`),'background','new terrain starts with the background alone');
+  await evaluate('location.reload()');await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  const savedContent=await evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1')).actions.find(a=>a.id==='terrain')`);
+  assert.equal(savedContent.terrainContent,'objects');assert.deepEqual(savedContent.path,storedPath,'changing content preserves the boundary and persists after reload');
   assert.deepEqual(errors,[]);console.log('Terrain materials, cache reuse, seeds, clipping, all 12 landscapes, pitched camera, water animation and video passed',result);
 }finally{
   ws?.close();chrome.kill();server.closeAllConnections();server.close();await new Promise(r=>chrome.exitCode!==null?r():chrome.once('exit',r));

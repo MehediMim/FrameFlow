@@ -42,7 +42,7 @@ import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
 import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
-import { ZONE_TERRAINS } from './map-strategy-terrain.mjs';
+import { ZONE_TERRAINS, TERRAIN_CONTENTS } from './map-strategy-terrain.mjs';
 import { OBJECT_CATEGORIES, objectEntries } from './map-object-catalog.mjs';
 import { objectViewOf, OBJECT_VIEWS, isFrontArtwork } from './map-object-view.mjs';
 import { objectAnimationOptions } from './map-isometric-objects.mjs';
@@ -814,7 +814,7 @@ function actionFields(a) {
       return shapePicker(SHAPES,a.shape)
         +(['arrow','retreat'].includes(a.shape)?F.sel('__arrowStyle','Arrow style',a.shape,[['arrow','Advance'],['retreat','Retreat']]):['zone','noFly'].includes(a.shape)?F.sel('__zoneStyle','Zone style',a.shape,[['zone','Solid'],['noFly','Restricted']]):'')
         +'<div class="section-title">GEOMETRY</div>'+pathFields(a)
-        + (a.shape==='zone'?'<div class="section-title">LANDSCAPE</div>'+F.sel('zoneTerrain','Zone landscape',a.zoneTerrain||'plain',Object.entries(ZONE_TERRAINS))+(a.zoneTerrain&&a.zoneTerrain!=='plain'?'<details class="m-advanced-controls" data-terrain-advanced><summary>Advanced landscape</summary>'+F.range('terrainDensity','Detail density',a.terrainDensity??1,.3,2,.1,x=>x.toFixed(1)+'×')+F.range('terrainScale','Trees / terrain size',a.terrainScale??1,.5,2.5,.1,x=>x.toFixed(1)+'×')+F.range('terrainOpacity','Landscape opacity',a.terrainOpacity??.92,0,1,.05,x=>Math.round(x*100)+'%')+F.num('terrainSeed','Landscape seed',a.terrainSeed??0,0,9999,1)+'<p class="mini-label">Draw at least three corners for a filled landscape. Change the seed to rearrange details. Use a River path for a narrow waterway, or a river zone for a wider water area.</p></details>':''):'')
+        + (a.shape==='zone'?landscapeFields(a):'')
         + (measurement?'<div class="section-title">MEASUREMENT</div>'+shapeMeasurementFields(a):'')
         + '<div class="section-title">APPEARANCE</div>'
         + (['road','railway'].includes(a.shape)?networkDesignFields(a):F.color('color', 'Color', a.color))
@@ -854,6 +854,18 @@ function placeAt(p) {
 }
 /** Keeps From / To equal to the first and last point, so labels and camera shots that name the route keep working. */
 function syncPathEnds(a) { const p = a.path || []; if (p.length) { a.from = placeAt(p[0]); a.to = placeAt(p[p.length - 1]); if (a.type === 'pin') a.place = a.from; } if(a.type==='shape'&&a.pathKeys?.length&&p.length>=2&&frame>=a.start&&frame<=a.start+a.dur)putPathKey(a,frame,p); }
+function landscapeFields(a){
+  let html='<div class="section-title">LANDSCAPE</div>'+F.sel('zoneTerrain','Terrain type',a.zoneTerrain||'plain',Object.entries(ZONE_TERRAINS));
+  if(!a.zoneTerrain||a.zoneTerrain==='plain')return html;
+  const content=a.terrainContent??'both',objects=content!=='background',fields=a.zoneTerrain==='farmland';
+  html+=F.sel('terrainContent','Show',content,Object.entries(TERRAIN_CONTENTS))
+    +'<p class="mini-label">Use background for the ground texture. Choose objects only for a separate area of trees or terrain details. Add Object layers to place individual trees or mountains.</p>'
+    +'<details class="m-advanced-controls" data-terrain-advanced><summary>Advanced landscape</summary>';
+  if(objects||fields)html+=F.range('terrainDensity',objects?'Object density':'Field density',a.terrainDensity??1,.3,2,.1,x=>x.toFixed(1)+'×')
+    +F.range('terrainScale',objects?'Object size':'Field size',a.terrainScale??1,.5,2.5,.1,x=>x.toFixed(1)+'×');
+  return html+F.range('terrainOpacity','Terrain opacity',a.terrainOpacity??.92,0,1,.05,x=>Math.round(x*100)+'%')
+    +F.num('terrainSeed','Landscape seed',a.terrainSeed??0,0,9999,1)+'</details>';
+}
 function pathFields(a) {
   const drawing = pathDraw?.id === a.id,pts = a.type==='shape'&&a.pathKeys?.length&&!drawing?pathAt(a,frame):a.path||[];
   if(a.type==='shape'){
@@ -1065,7 +1077,8 @@ function bindInspector(it) {
       if (key === '__cameraTrack') { cameraProperty = v; renderTimeline(); renderInspector(); return; }
       if (key === '__keyProperty') return;
       if (key === '__objectTrack') { objectProperty=v;renderTimeline();return; }
-      if (key === 'zoneTerrain') { it.zoneTerrain=v;changed();renderInspector();return; }
+      if (key === 'zoneTerrain') { if(!it.zoneTerrain||it.zoneTerrain==='plain')it.terrainContent??='background';it.zoneTerrain=v;changed();renderInspector();return; }
+      if (key === 'terrainContent') { it.terrainContent=v;changed();renderInspector();return; }
       if(key==='roadStyle'){
         const previous=ROAD_STYLES[it.roadStyle||'asphalt'];if(it.color===previous.surface||it.color===NETWORK_SHAPES.road.color||it.color==='#8c7353')it.color=ROAD_STYLES[v].surface;
         it.roadStyle=v;changed();renderInspector();return;

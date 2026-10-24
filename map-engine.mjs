@@ -1146,14 +1146,56 @@ function partialRing(r, p) {
   return { xy: tmp, n, closed: false };
 }
 
+export const HIGHLIGHT_ANIMATIONS = [['radial', 'Circular spread'], ['fade', 'Fade in'], ['left', 'Wipe left to right'], ['right', 'Wipe right to left'], ['down', 'Wipe top to bottom'], ['up', 'Wipe bottom to top'], ['none', 'Instant']];
+export const BORDER_ANIMATIONS = [['draw', 'Trace outline'], ['fade', 'Fade in'], ['pulse', 'Pulsing outline'], ['flow', 'Flowing dashes'], ['none', 'Instant']];
+export const BORDER_STYLES = [['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted']];
+
+// Ground-space wipes follow the map through rotation, pitch and video export.
+function clipHighlightReveal(ctx, v, box, off, mode, p) {
+  if (!['left','right','down','up'].includes(mode)) return;
+  let [x0,y0,x1,y1] = box;
+  if(mode==='left') x1=lerp(x0,x1,p);
+  if(mode==='right') x0=lerp(x1,x0,p);
+  if(mode==='down') y1=lerp(y0,y1,p);
+  if(mode==='up') y0=lerp(y1,y0,p);
+  ctx.beginPath();
+  for(const [i,point] of [[x0,y0],[x1,y0],[x1,y1],[x0,y1]].entries()){
+    const q=project(v,point[0]+off,point[1]);
+    if(i===0)ctx.moveTo(q.x,q.y);else ctx.lineTo(q.x,q.y);
+  }
+  ctx.closePath();ctx.clip();
+}
+const highlightPatternCache = new WeakMap();
+function highlightPaint(ctx, v, a, color) {
+  if(a.highlightFill==='gradient'){
+    const g=ctx.createLinearGradient(0,0,v.W,v.H);g.addColorStop(0,color);g.addColorStop(1,a.highlightColor2||'#ffffff');return g;
+  }
+  if(!['stripes','dots'].includes(a.highlightFill))return color;
+  const size=Math.max(6,Math.round(16*v.unit)),key=[a.highlightFill,color,size].join(':');
+  const cached=highlightPatternCache.get(ctx);if(cached?.key===key)return cached.paint;
+  const tile=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(size,size):document.createElement('canvas');tile.width=tile.height=size;
+  const c=tile.getContext('2d');c.fillStyle=color;c.globalAlpha=.22;c.fillRect(0,0,size,size);c.globalAlpha=1;
+  if(a.highlightFill==='dots'){c.beginPath();c.arc(size/2,size/2,size*.16,0,Math.PI*2);c.fill();}
+  else {c.strokeStyle=color;c.lineWidth=size*.25;c.beginPath();for(const x of [-size,0,size]){c.moveTo(x,0);c.lineTo(x+size,size);}c.stroke();}
+  const paint=ctx.createPattern(tile,'repeat');highlightPatternCache.set(ctx,{key,paint});return paint;
+}
+
 function drawBorder(ctx, v, geo, th, a, frame) {
-  const alpha = actAlpha(a, frame); if (alpha <= 0) return;
-  const t0 = actionProgress(a, frame), p = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), w = a.width * v.unit; // invert: the same grow played backwards
+  let alpha = actAlpha(a, frame); if (alpha <= 0) return;
+  const mode=a.borderAnimation||'draw';
+  const t0 = actionProgress(a, frame), reveal = a.invert ? Math.max(0, 1 - ease(a.easing, t0)) : ease(a.easing, t0), w = a.width * v.unit; // invert: the same grow played backwards
+  const p=mode==='draw'?reveal:(reveal>0?1:0);
+  if(mode!=='draw'&&mode!=='none')alpha*=reveal;
+  if(mode==='pulse')alpha*=.65+.35*Math.cos((frame-a.start)*Math.PI/30);
   const all = a.target?.kind === 'all', features = all ? (a.target.country ? geo.details?.get(a.target.country)?.levels[detailLevelOf(geo, a.target.country, a.target.level)] || [] : geo.pick(v.cam.zoom).features) : targetFeatures(geo,a.target);
   const list = a.target?.kind === 'regions' ? [featureForTarget(geo,a.target)].filter(Boolean) : features;
   if (!list.length) return;
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const style=a.borderStyle||'solid';
+  if(style==='dotted')ctx.setLineDash([.01,Math.max(w*2.5,5*v.unit)]);
+  else if(style==='dashed'||mode==='flow')ctx.setLineDash([10*v.unit,7*v.unit]);
+  if(mode==='flow')ctx.lineDashOffset=-(frame-a.start)*.8*v.unit;
   ctx.beginPath();
   let head = null;
   for (const f of list) {
@@ -1175,7 +1217,7 @@ function drawBorder(ctx, v, geo, th, a, frame) {
     ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); }
     ctx.globalAlpha = alpha * a.fillAlpha * clamp01((p - .55) / .45); ctx.fillStyle = a.color; ctx.fill('evenodd');
   }
-  if (head) {
+  if (head && mode==='draw') {
     const i = head.n - 1, q = project(v, head.xy[2 * i] + head.off, head.xy[2 * i + 1]);
     headDot(ctx, q.x, q.y, 4 * v.unit + w * .5, a.color, alpha);
   }
@@ -1235,7 +1277,9 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
     const f = featureForTarget(geo,a.target); if (!f) return;
     const off = Math.round(v.cx - f.cx), path = () => { ctx.beginPath(); for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); } };
     const { x, y, radius } = highlightExtent(a, f);
-    const c = project(v, f.cx + off, f.cy), rad = radius * v.S * p;
+    const mode=a.highlightAnimation||'radial', reveal=mode==='none'?(p>0?1:0):p;
+    const fillAlpha=alpha*(mode==='fade'?reveal:1);
+    const rad = radius * v.S * (mode==='radial'?reveal:1);
     ctx.save();
     // Intersect separate exclusion clips so overlapping excluded areas stay empty.
     for(const excluded of a.highlightExclude||[]){
@@ -1248,19 +1292,20 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
     if (a.showFill !== false && a.dim > 0) {
       // Dim around the region without clearing earlier paint inside it.
       ctx.save();path();ctx.rect(0,0,v.W,v.H);ctx.clip('evenodd');
-      ctx.globalAlpha=a.dim*p*alpha;ctx.fillStyle=th.dim;ctx.fillRect(0,0,v.W,v.H);ctx.restore();
+      ctx.globalAlpha=a.dim*reveal*alpha;ctx.fillStyle=th.dim;ctx.fillRect(0,0,v.W,v.H);ctx.restore();
     }
-    if (a.showFill !== false && rad > 0) { // colour, outline and pulse are revealed outward from the centre, clipped to the country
+    if (a.showFill !== false && rad > 0 && reveal > 0) { // Reveal the fill and outline inside the selected extent.
       ctx.save(); ctx.beginPath(); groundCircle(ctx, v, x, y, rad, off); ctx.clip();
+      clipHighlightReveal(ctx,v,f.bbox,off,mode,reveal);
       if(v.highlightBase){ctx.save();path();ctx.clip('evenodd');ctx.globalAlpha=1;ctx.drawImage(v.highlightBase,0,0);ctx.restore();}
-      path(); ctx.globalAlpha = alpha * (th.relief ? (a.reliefOpacity ?? v.terrain.highlightOpacity) : (a.reliefOpacity ?? .78));
-      ctx.fillStyle = th.relief ? (a.reliefColor || v.terrain.highlightColor) : a.color;
+      path(); ctx.globalAlpha = fillAlpha * (th.relief ? (a.reliefOpacity ?? v.terrain.highlightOpacity) : (a.reliefOpacity ?? .78));
+      ctx.fillStyle = highlightPaint(ctx,v,a,th.relief ? (a.reliefColor || v.terrain.highlightColor) : a.color);
       // Hard-light can lift dark green terrain into warm gold while retaining
       // the elevation image's local contrast beneath the highlight.
       const flag=a.highlightFill==='flag'?badgeEntry(a.image):null;
       if(a.highlightFill==='flag' && flag?.ok){
         ctx.save();ctx.clip('evenodd');
-        ctx.globalAlpha=alpha*(a.flagOpacity??.9);
+        ctx.globalAlpha=fillAlpha*(a.flagOpacity??.9);
         if(th.relief && a.flagRelief!==false)ctx.globalCompositeOperation='hard-light';
         for(const part of flagFeatureParts(f)){
           const b=part.box,bw=b[2]-b[0],bh=b[3]-b[1];
@@ -1278,9 +1323,9 @@ function drawHighlight(ctx, v, geo, th, a, frame, labels) {
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.lineJoin = 'round';
-      if (th.relief) glowStroke(ctx, a.reliefColor || v.terrain.highlightColor, .8 * v.unit, alpha * .45, false);
-      else glowStroke(ctx, a.color, 2.6 * v.unit, alpha, true);
-      if (a.pulse) { const q = (age % 54) / 54; ctx.globalAlpha = alpha * (1 - q) * .35; ctx.fillStyle = '#fff'; path(); ctx.fill('evenodd'); }
+      if (th.relief) glowStroke(ctx, a.reliefColor || v.terrain.highlightColor, .8 * v.unit, fillAlpha * .45, false);
+      else glowStroke(ctx, a.color, 2.6 * v.unit, fillAlpha, true);
+      if (a.pulse) { const q = (age % 54) / 54; ctx.globalAlpha = fillAlpha * (1 - q) * .35; ctx.fillStyle = '#fff'; path(); ctx.fill('evenodd'); }
       ctx.restore();
     }
     ctx.restore();
@@ -1982,6 +2027,8 @@ export function validateMapProject(p) {
     if (a.animDur !== undefined && (!Number.isSafeInteger(a.animDur) || a.animDur < 1)) throw Error('Invalid animation duration.');
     if (a.type === 'border' && !(a.target?.kind === 'all' || (['country','region','regions','polygon'].includes(a.target?.kind) && isLoc(a.target)))) throw Error('Invalid border target.');
     if (a.type === 'border') {
+      if(a.borderAnimation!==undefined&&!BORDER_ANIMATIONS.some(([key])=>key===a.borderAnimation))throw Error('Invalid border animation.');
+      if(a.borderStyle!==undefined&&!BORDER_STYLES.some(([key])=>key===a.borderStyle))throw Error('Invalid border style.');
       for(const k of ['borderFrom','borderTo'])if(a[k]!==undefined&&!num(a[k],0,100))throw Error('Invalid border endpoint.');
       if(a.borderRing!==undefined&&(!Number.isSafeInteger(a.borderRing)||a.borderRing<0))throw Error('Invalid border ring.');
       for(const k of ['borderPartial','borderReverse'])if(a[k]!==undefined&&typeof a[k]!=='boolean')throw Error('Invalid border option.');
@@ -1995,7 +2042,9 @@ export function validateMapProject(p) {
       if(a.highlightExclude!==undefined&&(!Array.isArray(a.highlightExclude)||a.highlightExclude.length>100||a.highlightExclude.some(part=>!['country','region','polygon'].includes(part?.kind)||!isLoc(part))))throw Error('Invalid highlight exclusions.');
       if(a.highlightExtent!==undefined&&!['full','percentage','radius'].includes(a.highlightExtent))throw Error('Invalid highlight extent.');
       if(a.highlightPercent!==undefined&&!num(a.highlightPercent,0,100))throw Error('Invalid highlight percentage.');
-      if(a.highlightFill!==undefined&&!['color','flag'].includes(a.highlightFill))throw Error('Invalid highlight fill.');
+      if(a.highlightFill!==undefined&&!['color','flag','gradient','stripes','dots'].includes(a.highlightFill))throw Error('Invalid highlight fill.');
+      if(a.highlightAnimation!==undefined&&!HIGHLIGHT_ANIMATIONS.some(([key])=>key===a.highlightAnimation))throw Error('Invalid highlight animation.');
+      if(a.highlightColor2!==undefined&&!col(a.highlightColor2))throw Error('Invalid highlight secondary color.');
       if(a.flagFit!==undefined&&!['cover','stretch'].includes(a.flagFit))throw Error('Invalid flag fit.');
       if(a.flagRelief!==undefined&&typeof a.flagRelief!=='boolean')throw Error('Invalid flag relief setting.');
       for(const [k,lo,hi] of [['flagOpacity',0,1],['flagZoom',1,4],['flagX',-100,100],['flagY',-100,100]])if(a[k]!==undefined&&!num(a[k],lo,hi))throw Error('Invalid flag image setting.');

@@ -96,6 +96,15 @@ try {
   await change('[data-mexclude]','Chattogram');assert.equal((await stored()).actions[0].highlightExclude.length,2,'regions can also be excluded by name');
   await evaluate(`document.querySelector('[data-mexclude-remove="1"]').click()`);
   assert.equal((await stored()).actions[0].highlightExclude.length,1);
+  for(const fill of ['gradient','stripes','dots','color']){
+    await change('[data-mf="highlightFill"]',fill);
+    assert.equal((await stored()).actions[0].highlightFill,fill);
+    if(fill==='gradient')await change('[data-mf="highlightColor2"]','#00ff00');
+  }
+  for(const animation of ['fade','left','right','down','up','none','radial']){
+    await change('[data-mf="highlightAnimation"]',animation);
+    assert.equal((await stored()).actions[0].highlightAnimation,animation);
+  }
   const render=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));
     p.camera.init={lon:2,lat:46,zoom:5,bearing:0,pitch:0};p.area.detailCountries=[];p.actions=[E.makeAction('highlight',0,{id:'render',target:{kind:'country',name:'France'},color:'#ff2020',dim:0,pulse:false,showLabel:false,dur:240,animDur:1,highlightExclude:[{kind:'polygon',name:'Mask',path:[{lon:1,lat:45},{lon:3,lat:45},{lon:3,lat:47},{lon:1,lat:47}]}]})];
@@ -108,9 +117,30 @@ try {
     const old={...a,id:'older',color:'#2020ff',highlightExclude:[]},under=sample([old]),stack=sample([old,{...a,start:1}]);
     const flagCanvas=document.createElement('canvas');flagCanvas.width=flagCanvas.height=32;flagCanvas.getContext('2d').fillStyle='#20ff20';flagCanvas.getContext('2d').fillRect(0,0,32,32);
     const flag={...a,highlightFill:'flag',image:flagCanvas.toDataURL()};await E.preloadBadges({...p,actions:[flag]});const flagCut=sample([flag]);
-    sample([a]);const png=canvas.toDataURL();
+    // Every style respects masks; directional and fade reveals change over time
+    // and produce identical frames when scrubbed backwards.
+    const mainland={kind:'polygon',name:'Mainland test',path:[{lon:-4,lat:43},{lon:8,lat:43},{lon:8,lat:50},{lon:-4,lat:50}]};
+    const variants=[];
+    for(const highlightFill of ['color','gradient','stripes','dots']){
+      for(const [highlightAnimation] of E.HIGHLIGHT_ANIMATIONS){
+        const variant={...a,target:mainland,highlightFill,highlightAnimation,animDur:100};
+        const end=sample([variant]);
+        p.actions=[variant];E.drawMap(ctx,960,600,p,30,geo);const early=canvas.toDataURL();
+        E.drawMap(ctx,960,600,p,70,geo);const later=canvas.toDataURL();
+        E.drawMap(ctx,960,600,p,30,geo);const repeat=canvas.toDataURL();
+        variants.push({highlightFill,highlightAnimation,mask:end[0],changed:early!==later,stable:early===repeat});
+      }
+    }
+    const borders=[];
+    for(const [borderAnimation] of E.BORDER_ANIMATIONS)for(const [borderStyle] of E.BORDER_STYLES){
+      const border=E.makeAction('border',0,{target:mainland,borderAnimation,borderStyle,dur:240,animDur:100,fillAlpha:0});
+      p.actions=[border];E.drawMap(ctx,960,600,p,30,geo);const early=canvas.toDataURL();
+      E.drawMap(ctx,960,600,p,70,geo);const later=canvas.toDataURL();
+      E.drawMap(ctx,960,600,p,30,geo);borders.push({borderAnimation,borderStyle,changed:early!==later,stable:early===canvas.toDataURL()});
+    }
+    p.actions=[a];sample([a]);const png=canvas.toDataURL();
     const {exportMapVideo}=await import('./map-video-export.mjs');const bytes=(await exportMapVideo({canvas,fps:24,frames:3,draw:frame=>E.drawMap(ctx,960,600,p,120+frame,geo)})).size;
-    return {base,cut,full,overlapping,under,stack,flagCut,png,bytes};
+    return {base,cut,full,overlapping,under,stack,flagCut,png,bytes,variants,borders};
   })()`);
   assert.deepEqual(render.cut[0],render.base[0],'excluded part shows the unchanged map');
   assert.deepEqual(render.cut[1],render.full[1],'remaining country receives the full highlight');
@@ -119,13 +149,33 @@ try {
   assert.deepEqual(render.stack[0],render.under[0],'older highlights remain visible through newer exclusions');
   assert.deepEqual(render.flagCut[0],render.base[0],'flag fills respect exclusions');
   assert.notDeepEqual(render.flagCut[1],render.base[1],'flag still fills the rest of the country');
+  for(const variant of render.variants){
+    assert.deepEqual(variant.mask,render.base[0],JSON.stringify(variant));assert.ok(variant.stable,'highlight scrubbing is deterministic');
+    if(variant.highlightAnimation!=='none')assert.ok(variant.changed,JSON.stringify(variant));
+  }
+  for(const border of render.borders){
+    assert.ok(border.stable,'border scrubbing is deterministic');
+    if(border.borderAnimation==='none')assert.equal(border.changed,false);else assert.ok(border.changed,JSON.stringify(border));
+  }
   assert.ok(render.bytes>100);
   await writeFile(join(tmpdir(),'frameflow-highlight-exclusions.png'),Buffer.from(render.png.split(',')[1],'base64'));
   const saved=await stored();await evaluate('location.reload()');await waitFor(`document.querySelector('[data-mid="exclude-test"]')`);assert.deepEqual(await stored(),saved);
   await evaluate(`document.querySelector('[data-mid="exclude-test"]').click()`);assert.equal(await evaluate(`document.querySelectorAll('[data-mexclude-remove]').length`),1);
   await evaluate(`document.querySelector('[data-mexclude-remove]').click()`);assert.equal((await stored()).actions[0].highlightExclude.length,0);
+  await evaluate(`document.querySelector('#mAddGrid [data-madd="border"]').click()`);
+  for(const style of ['dashed','dotted','solid']){
+    await change('[data-mf="borderStyle"]',style);
+    assert.equal((await stored()).actions.at(-1).borderStyle,style);
+  }
+  for(const animation of ['fade','pulse','flow','none','draw']){
+    await change('[data-mf="borderAnimation"]',animation);
+    assert.equal((await stored()).actions.at(-1).borderAnimation,animation);
+  }
+  const borderSaved=await stored();await evaluate('location.reload()');
+  await waitFor(`document.querySelector('[data-mid="'+${JSON.stringify(borderSaved.actions.at(-1).id)}+'"]')`);
+  assert.deepEqual(await stored(),borderSaved,'new border settings survive reload');
   assert.deepEqual(errors,[]);
-  console.log('Country highlight exclusions: region picking, name lookup, toggle, undo/redo, overlapping cuts, stacked highlights, flag fills, persistence, removal and export passed');
+  console.log('Country highlight exclusions: region picking, name lookup, toggle, undo/redo, overlapping cuts, stacked highlights, flag fills, new fill and border styles, animations, deterministic scrubbing, persistence, removal and export passed');
 } finally {
   ws?.close(); chrome.kill(); server.closeAllConnections(); server.close();
   await new Promise(r => chrome.exitCode !== null ? r() : chrome.once('exit', r));

@@ -43,18 +43,36 @@ export function cameraKeysOf(s) {
 }
 export function cameraPoseAt(s, frame) {
   const keys = cameraKeysOf(s), pose = {};
+  const pairs = keys.filter(k => k.pairRole === 'start' && k.samples?.length).map(start => ({
+    start, end: keys.find(k => k.pairId === start.pairId && k.pairRole === 'end'),
+  })).filter(pair => pair.end).sort((a, b) => b.start.frame - a.start.frame);
+  const sampleAt = (pair, at, field) => {
+    const t = Math.max(0, Math.min(1, (at - pair.start.frame) / (pair.end.frame - pair.start.frame)));
+    const samples = pair.start.samples, after = samples.findIndex(sample => sample.t > t);
+    const left = after < 0 ? samples.at(-1) : samples[Math.max(0, after - 1)], right = after < 0 ? left : samples[after];
+    const mix = right.t === left.t ? 0 : (t - left.t) / (right.t - left.t);
+    return left.values[field] + (right.values[field] - left.values[field]) * mix;
+  };
   for (const field of Object.keys(CAMERA_FIELDS)) {
-    const track = keys.filter(k => k.values[field] !== undefined).sort((a, b) => a.frame - b.frame);
+    // Manual keys win shared frames; a newer movement wins over an older endpoint.
+    const ordered = keys.filter(k => k.values[field] !== undefined).sort((a, b) => a.frame - b.frame ||
+      Number(!a.pairId) - Number(!b.pairId) || Number(a.pairRole === 'start') - Number(b.pairRole === 'start'));
+    const track = [...new Map(ordered.map(k => [k.frame, k])).values()];
     if (!track.length) { pose[field] = s.cameraFrom[field]; continue; }
     const next = track.findIndex(k => k.frame > frame);
     if (next === 0) pose[field] = track[0].values[field];
     else if (next < 0) pose[field] = track.at(-1).values[field];
     else {
       const a = track[next - 1], b = track[next], t = (frame - a.frame) / (b.frame - a.frame);
-      if(a.pairId&&a.pairId===b.pairId&&a.samples?.length){
-        const after=a.samples.findIndex(sample=>sample.t>t),L=after<0?a.samples.at(-1):a.samples[Math.max(0,after-1)],R=after<0?L:a.samples[after];
-        const mix=R.t===L.t?0:(t-L.t)/(R.t-L.t);
-        pose[field]=L.values[field]+(R.values[field]-L.values[field])*mix;continue;
+      const pair = pairs.find(p => p.start.frame <= a.frame && p.end.frame >= b.frame);
+      if (pair) {
+        // Keep the preset's curve and smoothly offset it through edited/manual keys.
+        const correction = (easings[b.easing || s.easing] || easings.easeInOut)(t);
+        const left = a.values[field] - sampleAt(pair, a.frame, field);
+        const right = b.values[field] - sampleAt(pair, b.frame, field);
+        pose[field] = sampleAt(pair, frame, field) + left + (right - left) * correction;
+        pose[field] = Math.max(CAMERA_FIELDS[field][0], Math.min(CAMERA_FIELDS[field][1], pose[field]));
+        continue;
       }
       const eased = (easings[b.easing||s.easing] || easings.easeInOut)(t);
       if (field === 'lat') {
@@ -75,7 +93,6 @@ export function putCameraKey(s, frame, values, id) {
   let key = id?s.cameraKeys.find(k=>k.id===id):s.cameraKeys.find(k => k.frame === frame&&!k.pairId);
   if (!key) { key = { id:crypto.randomUUID(), frame, values: {} }; s.cameraKeys.push(key); }
   Object.assign(key.values, values);
-  if(key.pairId)for(const member of s.cameraKeys.filter(k=>k.pairId===key.pairId))delete member.samples;
   s.cameraKeys.sort((a, b) => a.frame - b.frame);
   return key;
 }

@@ -63,6 +63,9 @@ body.mode-map #mapStudio{display:flex}
 .m-camera-keybar{display:grid;grid-template-columns:26px minmax(0,1fr) 26px;gap:5px;align-items:stretch;margin-bottom:8px;min-width:0;width:100%}
 .m-camera-keybar button{min-width:0;padding:8px 4px;white-space:normal;overflow-wrap:anywhere;font-size:11px}
 .m-camera-property{padding:8px 0;border-bottom:1px solid var(--line);min-width:0}
+.m-camera-movement{display:grid;gap:8px;padding:10px;margin:8px 0;border:1px solid var(--line);border-radius:6px;min-width:0}
+.m-camera-movement .two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.m-camera-movement button{min-width:0;white-space:normal;font-size:11px}
 .m-camera-property .two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .m-camera-property button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .m-camera-position-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}

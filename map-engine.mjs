@@ -19,7 +19,7 @@ import { validatePathAnimation } from './map-path-animation.mjs';
 import { validPolygon } from './map-area-selection.mjs';
 import { transformGroupObject, validateObjectGroups } from './map-object-groups.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
-import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
+import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs?v=live-follow-3';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=path-flow-1';
@@ -582,7 +582,7 @@ function shotState(s, from, tr, frame, c) {
   const t = ease(s.easing, tr), { geo, W, H, project: pr } = c;
   switch (s.preset) {
     case 'keyframed': {
-      return camFrom(cameraPoseAt(s, frame));
+      return camFrom(cameraTrackPoseAt(pr, geo, W, H, s, frame));
     }
     case 'flyTo': case 'swoop': {
       const r = resolveLoc(geo, s.target, from.cx); if (!r) return from;
@@ -610,12 +610,22 @@ function shotState(s, from, tr, frame, c) {
       return fly(from, { cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, zoom: fitZoom(b, W, H, .38), pitch: s.pitch, bearing: s.bearing }, t, W, H);
     }
     case 'followPlane': {
-      const a = pr.actions.find(x => x.id === s.planeId && (x.type === 'plane' || x.type === 'object')), r = a && planeRoute(geo, a); if (!r) return from;
-      const q = ease(a.easing, a.type === 'object' ? objectMoveProgress(a, frame) : actionProgress(a, frame)), p = routeAt(r, q);
+      let a = pr.actions.find(x => x.id === s.planeId && ['plane','object','pin'].includes(x.type)); if (!a) return from;
+      const group = pr.actions.find(g => g.type === 'group' && g.memberIds.includes(a.id));
+      if (group) {
+        a={...a};
+        for(const key of ['place','from','to'])if(a[key]&&!Number.isFinite(a[key].lon)){
+          const p=resolveLoc(geo,a[key]);if(p)a[key]={...a[key],kind:'point',lon:xToLon(p.X),lat:yToLat(p.Y)};
+        }
+        a = transformGroupObject(a, group, frame);
+      }
+      const r = a.type === 'plane' ? planeRoute(geo, a) : pinRoute(geo, a);
+      const q = ease(a.easing, a.type === 'object' ? objectMoveProgress(a, frame) : actionProgress(a, frame));
+      const p = r ? routeAt(r, q) : objectLocationAt({cx:from.cx},geo,a,frame); if (!p) return from;
       const X = p.X + Math.round(from.cx - p.X), blend = ease('easeOut', tr * 3.2), settle = ease('easeInOut', tr * 2);
       return {
         cx: lerp(from.cx, X, blend), cy: lerp(from.cy, p.Y, blend), zoom: lerp(from.zoom, s.zoom, settle), pitch: lerp(from.pitch, s.pitch, settle),
-        bearing: s.lockHeading ? from.bearing + turn(from.bearing, routeHeading(r, q)) * settle : from.bearing,
+        bearing: s.lockHeading && r ? from.bearing + turn(from.bearing, routeHeading(r, q)) * settle : from.bearing,
       };
     }
     default: return from;
@@ -640,6 +650,22 @@ export function sampleCameraPreset(proj,geo,W,H,shot,fromPose) {
     samples.push({t,values:{lon:clamp(xToLon(pose.cx),-540,540),lat:clamp(yToLat(pose.cy),-85,85),zoom:clamp(pose.zoom,0,14),pitch:clamp(pose.pitch,0,75),bearing:clamp(pose.bearing,-3600,3600)}});
   }
   return samples;
+}
+
+/** Follow pairs keep their object link; samples remain a fallback for deleted targets. */
+export function cameraTrackPoseAt(proj, geo, W, H, track, frame) {
+  let keys = track.cameraKeys;
+  for (const start of track.cameraKeys || []) {
+    if (!start.follow || !start.samples?.length || !proj.actions.some(a => a.id === start.follow.planeId)) continue;
+    const end = track.cameraKeys.find(k => k.pairId === start.pairId && k.pairRole === 'end'); if (!end) continue;
+    const shot = makeShot('followPlane', start.frame, {...start.follow, dur:end.frame-start.frame});
+    const samples = sampleCameraPreset(proj,geo,W,H,shot,start.follow.from);
+    const adjust = (key, old, next) => ({...key,values:Object.fromEntries(Object.entries(key.values).map(([field,value]) => [field,clamp(next[field]+value-old[field],...CAMERA_FIELDS[field])]))});
+    const first = {...adjust(start,start.samples[0].values,samples[0].values),samples};
+    const last = adjust(end,start.samples.at(-1).values,samples.at(-1).values);
+    keys = keys.map(k => k.id === start.id ? first : k.id === end.id ? last : k);
+  }
+  return cameraPoseAt(keys === track.cameraKeys ? track : {...track,cameraKeys:keys},frame);
 }
 
 /** Camera state at a frame: start view followed by each preset shot in order. */
@@ -1898,7 +1924,7 @@ export const PRESETS = {
   tilt: { label: 'Tilt', icon: '◢', hint: 'Change the viewing angle', def: { dur: 45, pitch: 55, amount: .2 }, fields: ['pitch', 'amount'] },
   panTo: { label: 'Pan to', icon: '⇢', hint: 'Slide across without zooming', def: { dur: 60 }, fields: ['target'] },
   framePlane: { label: 'Frame route', icon: '▭', hint: 'Fit a travel route in view', def: { dur: 45, pitch: 0, bearing: 0 }, fields: ['planeId', 'pitch', 'bearing'] },
-  followPlane: { label: 'Follow traveler', icon: '➤', hint: 'Chase the moving icon along its route', def: { dur: 90, zoom: 4, pitch: 45, lockHeading: false }, fields: ['planeId', 'zoom', 'pitch', 'lockHeading'] },
+  followPlane: { label: 'Follow object / traveler', icon: '➤', hint: 'Follow an object or traveler as it moves', def: { dur: 90, zoom: 4, pitch: 45, lockHeading: false }, fields: ['planeId', 'zoom', 'pitch', 'lockHeading'] },
 };
 const uid = () => crypto.randomUUID();
 
@@ -2131,6 +2157,10 @@ export function validateMapProject(p) {
         if(key.pairId!==undefined){
           if(typeof key.pairId!=='string'||!key.pairId||key.pairId.length>100||!key.id||!['start','end'].includes(key.pairRole)||!ENUMS.preset.includes(key.preset)||key.preset==='keyframed')throw Error('Invalid paired camera keyframe.');
           if(!pairs.has(key.pairId))pairs.set(key.pairId,[]);pairs.get(key.pairId).push(key);
+        }
+        if(key.follow!==undefined){
+          const f=key.follow;
+          if(key.preset!=='followPlane'||key.pairRole!=='start'||!f||typeof f.planeId!=='string'||f.planeId.length>100||!num(f.zoom,0,14)||!num(f.pitch,0,75)||typeof f.lockHeading!=='boolean'||!easings[f.easing]||!f.from||Object.keys(CAMERA_FIELDS).some(field=>!num(f.from[field],...CAMERA_FIELDS[field])))throw Error('Invalid camera follow object.');
         }
         if(key.samples!==undefined){
           if(!key.pairId||key.pairRole!=='start'||!Array.isArray(key.samples)||key.samples.length<2||key.samples.length>181)throw Error('Invalid camera movement samples.');

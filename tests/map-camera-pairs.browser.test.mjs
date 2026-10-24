@@ -76,6 +76,15 @@ try {
   let project=await stored(),track=project.shots[0],pair=track.cameraKeys.filter(k=>k.pairId);
   assert.equal(project.shots.length,1);assert.equal(await evaluate(`document.querySelectorAll('#mTrackRows [data-mrow]').length`),1);
   assert.equal(pair.length,2);assert.deepEqual(pair.map(k=>k.frame),[30,90]);assert.equal(pair[0].pairId,pair[1].pairId);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-camera-time]').length`),2,'movement timing controls are visible');
+  await change(`[data-camera-time="${pair[1].id}"]`,100);
+  assert.equal((await stored()).shots[0].cameraKeys.find(k=>k.id===pair[1].id).frame,100,'end frame control retimes the pair');
+  await evaluate(`document.querySelector('#mUndo').click()`);
+  await evaluate(`document.querySelector('[data-camera-endpoint="${pair[1].id}"]').click()`);
+  await change('[data-camera-field="pitch"]',20);
+  assert.ok((await stored()).shots[0].cameraKeys.find(k=>k.id===pair[0].id).samples.length>2,'editing an endpoint retains the movement curve');
+  assert.equal((await stored()).shots[0].cameraKeys.find(k=>k.id===pair[1].id).values.pitch,20,'Edit end selects the correct endpoint');
+  await evaluate(`document.querySelector('#mUndo').click()`);
   await change('#mFrame',1.5);await evaluate(`document.querySelector('#mCaptureView').click()`);
   const manual45=(await stored()).shots[0].cameraKeys.find(k=>k.frame===45);assert.ok(!manual45.pairId,'capture creates an independent manual key');
   const clickKey=async(id,button='left')=>{
@@ -113,6 +122,27 @@ try {
   for(const id of [project.shots[0].cameraKeys[0].id,project.shots[0].cameraKeys.at(-1).id]){await clickKey(id);await press('Delete');}
   assert.deepEqual((await stored()).shots[0].cameraKeys,[]);assert.equal((await stored()).shots[0].dur,(await stored()).frames);
   await evaluate(`(async()=>{const E=await import('./map-engine.mjs');E.validateMapProject(JSON.parse(localStorage.getItem('frameflow-map-v1')));})()`);
+  // Follow retains its object link and exposes target/zoom controls on the merged track.
+  await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=E.newMapProject();p.actions=['First object','Second object'].map((name,i)=>E.makeAction('object',0,{name,mode:'move',dur:200,animDur:200,easing:'linear',place:{kind:'point',name:'Start',lon:i*30,lat:20},to:{kind:'point',name:'End',lon:20+i*30,lat:30}}));localStorage.setItem('frameflow-map-v1',JSON.stringify(p));location.reload();})()`);
+  await waitFor(`document.querySelectorAll('#mDlCountry option').length>100&&document.querySelectorAll('#mItems [data-mid]').length===3`);
+  let objects=(await stored()).actions;
+  await evaluate(`document.querySelector('[data-mid="${objects[1].id}"]').click();document.querySelector('[data-mpre="followPlane"]').click()`);
+  project=await stored();
+  let follow=project.shots[0].cameraKeys.find(k=>k.follow);
+  assert.equal(follow.follow.planeId,objects[1].id,'follow chooses the selected object');
+  assert.equal(project.shots[0].cameraKeys.find(k=>k.pairRole==='end').frame,200,'follow covers the object duration');
+  await change('[data-follow-field="planeId"]',objects[0].id);
+  await change('[data-follow-field="zoom"]',5.5);
+  project=await stored();follow=project.shots[0].cameraKeys.find(k=>k.follow);
+  assert.equal(follow.follow.planeId,objects[0].id,'follow target can be changed on the camera track');
+  assert.equal(follow.follow.zoom,5.5);
+  const followsCurrentObject=()=>evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),key=p.shots[0].cameraKeys.find(k=>k.follow),object=p.actions.find(a=>a.id===key.follow.planeId),camera=E.cameraAt(p,{},p.width,p.height,150),point=E.objectLocationAt({cx:camera.cx},{},object,150);return Math.abs(camera.cx-point.X)<1e-5&&Math.abs(camera.cy-point.Y)<1e-5&&Math.abs(camera.zoom-5.5)<1e-5;})()`);
+  assert.ok(await followsCurrentObject(),'camera follows the chosen object with the configured zoom');
+  await evaluate(`document.querySelector('[data-mid="${objects[0].id}"]').click()`);
+  await change('[data-mf="to"]','40, 60');
+  assert.ok(await followsCurrentObject(),'changing the object destination updates the follow camera');
+  await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100&&document.querySelectorAll('[data-camera-key-id]').length===2`);
+  assert.ok(await followsCurrentObject(),'live follow survives reload');
   assert.deepEqual(errors,[]);
   console.log('Camera pairs browser: one timeline row, paired presets, independent captures, keyboard/context/inspector deletion, shared frames, undo, reload and legacy migration passed');
 } finally {

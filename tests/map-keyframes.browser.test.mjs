@@ -131,8 +131,21 @@ try {
   p=await saved(); const E=await import('../map-engine.mjs');E.validateMapProject(p);
   assert.equal(p.shots.at(-1).cameraKeys.find(k=>k.frame===20).values.zoom,5,'camera keys persist after reload');
   await evaluate(`document.querySelector('[data-mid="${object.id}"]').click()`);
+  const beforeFollow = p;
   await evaluate(`document.querySelector('[data-mpre="followPlane"]').click()`);
-  p=await saved(); assert.equal(p.shots.at(-1).planeId,object.id,'Follow traveler selects the current moving object');
+  p=await saved();
+  const follow = p.shots[0].cameraKeys.find(k=>k.preset==='followPlane'&&k.pairRole==='start');
+  assert.ok(follow?.samples?.length>2,'Follow traveler adds a sampled movement to the camera track');
+  const from = E.cameraAt(beforeFollow,{},p.width,p.height,follow.frame);
+  const followEnd=p.shots[0].cameraKeys.find(k=>k.pairId===follow.pairId&&k.pairRole==='end');
+  assert.equal(follow.follow.planeId,object.id,'follow keeps a live link to the selected object');
+  assert.equal(followEnd.frame,object.start+object.dur,'follow covers the remaining object timeline');
+  const expectedFollow = E.sampleCameraPreset(beforeFollow,{},p.width,p.height,E.makeShot('followPlane',follow.frame,{planeId:object.id,dur:followEnd.frame-follow.frame}),{lon:E.xToLon(from.cx),lat:E.yToLat(from.cy),zoom:from.zoom,pitch:from.pitch,bearing:from.bearing});
+  assert.equal(follow.samples.length,expectedFollow.length);
+  follow.samples.forEach((sample,i)=>{
+    assert.equal(sample.t,expectedFollow[i].t);
+    for(const field of Object.keys(sample.values))assert.ok(Math.abs(sample.values[field]-expectedFollow[i].values[field])<1e-9,`Follow traveler samples the selected moving object's ${field}`);
+  });
   await evaluate(`document.querySelector('[data-mid="${object.id}"]').click()`);
   await change('#mFrame','2');
   const splitButton = await evaluate(`(()=>{const r=document.querySelector('#mSplit').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);

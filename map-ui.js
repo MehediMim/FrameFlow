@@ -9,7 +9,7 @@ import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs?v=typed-lanes-1';
-import { HIGHLIGHT_ANIMATIONS, BORDER_ANIMATIONS, BORDER_STYLES, installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=path-flow-1';
+import { HIGHLIGHT_ANIMATIONS, BORDER_ANIMATIONS, BORDER_STYLES, installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=live-follow-3';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, featureForTarget, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
 import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
@@ -18,7 +18,7 @@ import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=expanded-settings
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=add-submenu-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=path-flow-1';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=live-follow-3';
 import { CITIES } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './fonts.mjs';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
@@ -26,16 +26,16 @@ import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.m
 import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { applyDocumentaryLook, DOCUMENTARY_LABEL } from './map-documentary.mjs';
-import { terrainSettingsOf } from './map-engine.mjs?v=path-flow-1';
+import { terrainSettingsOf } from './map-engine.mjs?v=live-follow-3';
 import { plaqueStyle } from './map-plaque-text.mjs';
 import { FORMATIONS, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
-import { resolveLoc } from './map-engine.mjs?v=path-flow-1';
+import { resolveLoc } from './map-engine.mjs?v=live-follow-3';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
-import { sampleCameraPreset, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=path-flow-1';
+import { sampleCameraPreset, cameraTrackPoseAt, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=live-follow-3';
 import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs?v=paired-camera-1';
-import { syncCameraTimeline, cameraKeyAt, addCameraPair, cameraKeysOf, cameraPoseAt, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs?v=paired-camera-1';
+import { syncCameraTimeline, cameraKeyAt, addCameraPair, cameraKeysOf, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs?v=live-follow-3';
 import { trimMapHistory } from './map-history.mjs';
 import { installCampaignUI } from './map-campaign-ui.mjs?v=path-flow-1';
 import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
@@ -50,7 +50,7 @@ import { naturalTrailKind } from './map-object-trails.mjs';
 import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs';
 import { lightingAt, LIGHTING_FIELDS as SUN_FIELDS, putLightingKey, removeLightingKey, moveLightingKey } from './map-lighting-keys.mjs';
 import { lightingOf, lightingPreset } from './map-lighting.mjs';
-import { planeRoute } from './map-engine.mjs?v=path-flow-1';
+import { planeRoute } from './map-engine.mjs?v=live-follow-3';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const objectPreviewStates=new WeakMap();
@@ -89,6 +89,8 @@ const isShot = it => it.kind === 'shot';
 const iconOf = it => (isShot(it) ? PRESETS[it.preset].icon : ACTION_TYPES[it.type].icon);
 const clsOf = it => (isShot(it) ? 'shot' : it.type);
 const planes = () => proj.actions.filter(a => a.type === 'plane' || (a.type === 'object' && ['path', 'move'].includes(a.mode)));
+const followObjects = () => proj.actions.filter(a => ['plane','object','pin'].includes(a.type));
+const cameraPoseAt = (s, at) => cameraTrackPoseAt(proj,geo,proj.width,proj.height,s,at);
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function notify(s) {
@@ -374,14 +376,22 @@ function addAction(type,extra={}) {
 function addShot(preset) {
   if (preset === 'keyframed') { pause();sel=ensureCameraTrack().id;renderAll();return; }
   const needsPlane=PRESETS[preset].fields.includes('planeId');
-  if(needsPlane&&!planes().length){notify('Add an Object and choose a movement destination or path first');return;}
+  const candidates=preset==='followPlane'?followObjects():planes();
+  if(needsPlane&&!candidates.length){notify('Add an object or traveler to follow first');return;}
   pause();const pose=captureCamera(),c=current(),extra={};
   const target=suggestTarget();if(target)extra.target=target;
-  if(needsPlane)extra.planeId=(planes().find(a=>a.id===c?.id)||planes()[0]).id;
-  const movement=makeShot(preset,frame,extra);checkpoint();
+  if(needsPlane)extra.planeId=(candidates.find(a=>a.id===c?.id)||candidates.find(a=>frame>=a.start&&frame<a.start+a.dur)||candidates[0]).id;
+  const movement=makeShot(preset,frame,extra);
+  if(preset==='followPlane'){
+    const object=candidates.find(a=>a.id===extra.planeId);
+    if(frame>=object.start+object.dur){notify('Move the playhead inside the object timeline before adding Follow object');return;}
+    movement.dur=object.start+object.dur-frame;
+  }
+  checkpoint();
   if(!ensureLength(movement.start+movement.dur+1))return;
   const track=ensureCameraTrack(),samples=sampleCameraPreset(proj,geo,proj.width,proj.height,movement,pose);
   const keys=addCameraPair(track,preset,frame,frame+movement.dur,samples);
+  if(preset==='followPlane')keys[0].follow={planeId:movement.planeId,zoom:movement.zoom,pitch:movement.pitch,lockHeading:movement.lockHeading,easing:movement.easing,from:pose};
   proj.camera.activeTrack=track.id;selectedCameraKeyId=keys[0].id;sel=track.id;previewCamera=null;
   saveLocal();renderAll();notify(`${PRESETS[preset].label} added as paired camera keyframes`);
 }
@@ -392,7 +402,8 @@ function migrateCameraMovements(){
     if(movement.preset==='keyframed'){for(const key of cameraKeysOf(movement))if(key.frame>=movement.start&&key.frame<=movement.start+movement.dur){ensureLength(key.frame+1);putCameraKey(track,key.frame,key.values);}continue;}
     const c=cameraAt(original,geo,proj.width,proj.height,movement.start),pose={lon:xToLon(c.cx),lat:yToLat(c.cy),zoom:c.zoom,pitch:c.pitch,bearing:c.bearing};
     const end=movement.start+movement.dur;ensureLength(end+1);
-    addCameraPair(track,movement.preset,movement.start,end,sampleCameraPreset(original,geo,proj.width,proj.height,movement,pose));
+    const pair=addCameraPair(track,movement.preset,movement.start,end,sampleCameraPreset(original,geo,proj.width,proj.height,movement,pose));
+    if(movement.preset==='followPlane')pair[0].follow={planeId:movement.planeId,zoom:movement.zoom,pitch:movement.pitch,lockHeading:movement.lockHeading,easing:movement.easing,from:pose};
   }
   if(legacy.some(s=>s.id===sel))sel=track.id;
   proj.shots=[track];proj.camera.activeTrack=track.id;saveLocal();
@@ -400,6 +411,10 @@ function migrateCameraMovements(){
 function setCameraKey(shot,at,values){
   proj.camera.activeTrack=shot.id;
   const selected=selectedCameraKeyId&&cameraKeyAt(shot,at,selectedCameraKeyId);
+  if(selected?.pairId){
+    const start=cameraKeysOf(shot).find(k=>k.pairId===selected.pairId&&k.follow);
+    if(start){const live=cameraPoseAt(shot,at);values=Object.fromEntries(Object.entries(values).map(([field,value])=>[field,clamp(value-live[field]+selected.values[field],...CAMERA_FIELDS[field])]));}
+  }
   return putCameraKey(shot,at,values,selected?.frame===at?selected.id:undefined);
 }
 function deleteCameraKeyAt(shot,at,id){
@@ -535,7 +550,7 @@ function renderInspector() {
   h += isShot(it) && it.preset === 'keyframed' ? F.sel('__cameraTrack', 'Keyframe property', cameraProperty, [['all', 'Camera - All properties'], ...Object.entries(CAMERA_PROPERTIES).map(([k,p]) => [k,p.label])]) : it.type === 'object' ? F.sel('__objectTrack','Keyframe property',objectProperty,[['all','All object tracks'],['animation','Appearance / movement'],['size','Size'],['objectAngle','Rotation'],['objectView','Object view'],['damageState','Damage state']].filter(([key])=>key!=='objectView'||!isFrontArtwork(it.glyph))) : '';
   h += '<p class="mini-label">' + (shot && it.preset === 'keyframed' ? 'Edit the camera at the playhead. Changes create keyframes automatically. Choose a property to see and retime its diamonds.' : 'The timeline bar controls when this layer appears and disappears. Drag the two centered diamonds to set when its animation starts and finishes.') + '</p>' + F.sel('easing', 'Motion', it.easing, EASE_OPTS);
   h += '<div class="section-title m-sep">' + (shot ? 'CAMERA' : 'LOOK') + '</div>';
-  if (shot) h += shotFields(it); else h += actionFields(it) + labelFields(it);
+  if (shot) h += (it.preset === 'keyframed' ? cameraMovementFields(it) : '') + shotFields(it); else h += actionFields(it) + labelFields(it);
   box.innerHTML = h; bindInspector(it); campaign?.bind(it); if (it.type === 'object') {  bindObjectKeys(it); bindArmyFields(it); updateObjectInspector(it); }
 }
 function sunlightFields(a){
@@ -927,6 +942,32 @@ function updateCameraInspector(s) {
 }
 function bindCameraInspector(s) {
   if (s.preset !== 'keyframed') return;
+  $$('#mInspector [data-camera-follow]').forEach(el => el.onchange = () => {
+    const start=cameraKeysOf(s).find(k=>k.id===el.dataset.cameraFollow),field=el.dataset.followField;
+    if(!start)return;
+    const value=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;
+    if(typeof value==='number'&&!Number.isFinite(value)){renderInspector();return;}
+    pause();checkpoint();
+    start.follow??={planeId:'',zoom:4,pitch:45,lockHeading:false,easing:s.easing,from:{...start.samples[0].values}};
+    start.follow[field]=field==='zoom'?clamp(value,0,14):field==='pitch'?clamp(value,0,75):value;
+    previewCamera=null;changed();renderInspector();
+  });
+  $$('#mInspector [data-camera-endpoint]').forEach(el => el.onclick = () => {
+    const key = cameraKeysOf(s).find(k => k.id === el.dataset.cameraEndpoint);
+    if (!key) return;
+    pause(); selectedCameraKeyId = key.id; previewCamera = null; setFrame(key.frame); renderInspector();
+  });
+  $$('#mInspector [data-camera-time]').forEach(el => el.onchange = () => {
+    const key = cameraKeysOf(s).find(k => k.id === el.dataset.cameraTime), value = Number(el.value);
+    if (!key || !Number.isFinite(value)) { renderInspector(); return; }
+    pause(); checkpoint();
+    moveCameraKey(s, key.frame, clamp(Math.round(value), 0, proj.frames - 1), Object.keys(CAMERA_FIELDS), key.id);
+    selectedCameraKeyId = key.id; previewCamera = null; setFrame(key.frame); changed(); renderInspector();
+  });
+  $$('#mInspector [data-camera-remove-pair]').forEach(el => el.onclick = () => {
+    const key = cameraKeysOf(s).find(k => k.id === el.dataset.cameraRemovePair);
+    if (key) deleteCameraKeyAt(s, key.frame, key.id);
+  });
   $$('#mInspector [data-camera-field]').forEach(el => el.onchange = () => {
     const field = el.dataset.cameraField, value = Number(el.value);
     if (!Number.isFinite(value)) { renderInspector(); return; }
@@ -948,7 +989,7 @@ function bindCameraInspector(s) {
   $$('#mInspector [data-camera-nav]').forEach(el => el.onclick = () => {
     const keys = cameraKeysOf(s).filter(k => Object.keys(k.values).some(f => cameraTrackFields().includes(f))).sort((a,b) => a.frame - b.frame);
     const key = +el.dataset.cameraNav < 0 ? keys.filter(k => k.frame < frame).at(-1) : keys.find(k => k.frame > frame);
-    if (key) { pause(); setFrame(key.frame); }
+    if (key) { pause(); selectedCameraKeyId = key.id; setFrame(key.frame); renderInspector(); }
   });
   const centerPick = $('#mInspector [data-camera-center-pick]');
   if (centerPick) centerPick.onclick = () => {
@@ -968,6 +1009,21 @@ function bindCameraInspector(s) {
 function cameraPositionFields(s, pose, disabled) {
   const picking = pick?.kinds === 'cameraCenter' && pick.id === s.id;
   return `<div class="m-camera-position-actions"><button type="button" data-camera-center-pick ${disabled ? 'disabled' : ''}>${picking ? 'Cancel picking' : '&#8982; Pick camera center'}</button><button type="button" data-camera-center-view ${disabled ? 'disabled' : ''}>Use map center</button></div><p class="mini-label">Click a point to center the camera there. Or pan the map, then use its center.</p><details class="m-camera-coordinates"><summary>Coordinates (optional)</summary><div class="two">${['lon','lat'].map(field => `<label>${field === 'lon' ? 'Longitude' : 'Latitude'}<input type="number" data-camera-field="${field}" min="${CAMERA_FIELDS[field][0]}" max="${CAMERA_FIELDS[field][1]}" step=".01" value="${+pose[field].toFixed(3)}" ${disabled ? 'disabled' : ''}></label>`).join('')}</div></details>`;
+}
+function cameraMovementFields(s) {
+  const keys = cameraKeysOf(s), starts = keys.filter(k => k.pairRole === 'start');
+  return '<div class="section-title">MOVEMENTS</div><p class="mini-label">Add a camera move at the playhead from the Camera menu. Set its start and end frames below, or drag its blue diamonds. Select an endpoint to adjust position, zoom, tilt and rotation below. Manual keys blend into the saved movement curve.</p>' +
+    (starts.length ? starts.map(start => {
+      const end = keys.find(k => k.pairId === start.pairId && k.pairRole === 'end');
+      if (!end) return '';
+      const follow=start.preset==='followPlane'?cameraFollowFields(start):'';
+      return `<div class="m-camera-movement"><strong>${esc(PRESETS[start.preset].label)}</strong>${follow}<div class="two">${[start, end].map(key => `<label>${key.pairRole === 'start' ? 'Start' : 'End'} frame<input type="number" data-camera-time="${esc(key.id)}" min="${key.pairRole === 'start' ? 0 : start.frame + 1}" max="${key.pairRole === 'start' ? end.frame - 1 : proj.frames - 1}" step="1" value="${key.frame}"></label>`).join('')}</div><div class="two">${[start, end].map(key => `<button type="button" data-camera-endpoint="${esc(key.id)}">Edit ${key.pairRole}</button>`).join('')}</div><button type="button" data-camera-remove-pair="${esc(start.id)}">Delete movement pair</button></div>`;
+    }).join('') : '<p class="mini-label">No preset movements yet. You can also animate with camera keyframes below.</p>') + '<div class="section-title m-sep">CAMERA AT PLAYHEAD</div>';
+}
+function cameraFollowFields(start){
+  const f=start.follow||{zoom:4,pitch:45},attr=`data-camera-follow="${esc(start.id)}"`;
+  const missing=f.planeId&&!followObjects().some(a=>a.id===f.planeId);
+  return `<label>Object to follow<select ${attr} data-follow-field="planeId"><option value="">Choose an object</option>${missing?`<option value="${esc(f.planeId)}" selected>Object removed — choose another</option>`:''}${followObjects().map(a=>`<option value="${esc(a.id)}" ${a.id===f.planeId?'selected':''}>${esc(a.name)}</option>`).join('')}</select></label><div class="two">${[['zoom','Follow zoom',14],['pitch','Follow tilt',75]].map(([field,label,max])=>`<label>${label}<input type="number" ${attr} data-follow-field="${field}" min="0" max="${max}" step=".1" value="${f[field]}"></label>`).join('')}</div><label><input type="checkbox" ${attr} data-follow-field="lockHeading" ${f.lockHeading?'checked':''}> Turn with object</label><p class="mini-label">Follows the linked object's current movement, including route edits. End frame controls when following stops.</p>`;
 }
 function shotFields(s) {
   if (s.preset === 'keyframed') {

@@ -264,11 +264,13 @@ export function installCountryDetail(geo, pack) {
   return geo.details.get(pack.country);
 }
 export function detailRegions(proj, geo) {
+  if(geo.historical)return mapBackgroundOf(proj).additionalRegions===false?[]:geo.additionalRegions||[];
   const a = areaOf(proj);
   const countries=detailCountriesOf(a),regions=country=>geo.details?.get(country)?.levels[detailLevelOf(geo, country, a.detailLevels?.[country] || a.detailLevel)] || [];
   return countries.length===1?regions(countries[0]):countries.flatMap(regions);
 }
 export function regionAt(proj, geo, lon, lat) {
+  if(geo.historical)return mapBackgroundOf(proj).additionalRegions===false?null:countryAt({hi:{features:geo.additionalHitFeatures||[]}},lon,lat);
   return countryAt({hi:{features:detailRegions(proj,geo).map(f => ({...f,name:f.key}))}},lon,lat);
 }
 

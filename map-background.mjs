@@ -5,6 +5,7 @@ export function validateMapBackground(project){
   const b=project.mapBackground;if(b===undefined)return;
   if(!b||typeof b!=='object'||Array.isArray(b)||!Object.hasOwn(MAP_BACKGROUNDS,b.mode))throw Error('Invalid base map.');
   if(b.color!==undefined&&!/^#[0-9a-f]{6}$/i.test(b.color))throw Error('Invalid canvas background color.');
+  if(b.additionalRegions!==undefined&&typeof b.additionalRegions!=='boolean')throw Error('Invalid additional region selection.');
   if(b.name!==undefined&&(typeof b.name!=='string'||b.name.length>160))throw Error('Invalid map image name.');
   if(b.image!==undefined&&(typeof b.image!=='string'||b.image.length>1.9e6||!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(b.image)))throw Error('Invalid base map image.');
   const bounds=mapBackgroundOf(project);

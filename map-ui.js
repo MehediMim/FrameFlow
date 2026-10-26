@@ -6,7 +6,7 @@ import { interfaceIcon, setIconButton } from './interface-icons.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';
 import { shapePicker } from './map-shape-picker.mjs';
 import { mapBackgroundOf, validateMapBackground } from './map-background.mjs';
-import { createMapSources, mapSourceOf, HISTORICAL_1300 } from './map-sources.mjs';
+import { createMapSources, mapSourceOf, HISTORICAL_1300, EUROPE_REGIONS } from './map-sources.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
@@ -198,15 +198,19 @@ async function ensureDetail() {
   return results.every(Boolean);
 }
 function defaultRegion() {
+  if(geo?.historical){
+    const key=lastView&&regionAt(proj,geo,...centerLonLat()),f=key&&geo.byName.get(key);
+    return f?{kind:'region',name:f.key,country:f.country}:{kind:'country',name:(lastView&&countryAt(geo,...centerLonLat()))||'Yuan Dynasty'};
+  }
   const c = detailCountry(), list = geo ? detailRegions(proj,geo) : [], want = c && geo ? detailInfo(geo, c).defaultRegion : '';
   const f = list.find(f => f.key === want || f.name === want) || list[0];
   return f ? {kind:'region',name:f.key,country:f.country} : {kind:'country',name:areaOf(proj).country};
 }
 const cityKey = c => (geo && geo.byName.has(c[0]) ? `${c[0]} (city)` : c[0]);
 function buildLists() {
-  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, 'Country')).join('') : '', cities = localCities().map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
+  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`, countries = geo ? geo.names.map(n => opt(n, geo.historical?'Historical territory':'Country')).join('') : '', cities = localCities().map(c => opt(cityKey(c), `City · ${c[3]}`)).join('');
   const dc = detailCountry(), levelName = dc && geo ? Object.fromEntries(detailInfo(geo, dc).levels) : {};
-  const regions = geo ? detailRegions(proj,geo).map(f => opt(f.key, levelName[f.level] || f.level)).join('') : '';
+  const regions = geo ? detailRegions(proj,geo).map(f => opt(f.key, f.level==='additional'?(f.approximate?'Region · approximate extent':'Region · administrative extent'):levelName[f.level] || f.level)).join('') : '';
   $('#mDlBorder').innerHTML = opt('All countries','Every country border') + countries + (regions ? opt('All regions','Every regional border') + regions : ''); $('#mDlCountry').innerHTML = countries + regions;
   $('#mDlPlace').innerHTML = cities; $('#mDlAny').innerHTML = cities + countries + regions;
   const area = $('#mAreaCountry'); if (area) area.innerHTML = geo ? geo.names.map(n => opt(n, n)).join('') : '';
@@ -219,8 +223,11 @@ function parseLoc(text, kinds) {
   if (kinds === 'border' && (low === 'all countries' || low === 'all')) return { kind: 'all', name: 'All countries' };
   if (wantCountry && geo && isDetail()) {
     const dc = detailCountry();
+    if(geo.historical&&kinds==='border'&&low==='all regions')return {kind:'regions',name:'All additional regions',members:detailRegions(proj,geo).map(f=>({kind:'region',name:f.key,country:f.country}))};
     if (kinds === 'border' && ['all regions','all'].includes(low)) return {kind:'all',name:'All regions',country:dc,level:detailLevelOf(geo, dc, areaOf(proj).detailLevel)};
-    const f = detailRegions(proj,geo).find(f => f.key.toLowerCase() === low || f.name.toLowerCase() === low);
+    const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    const search=normalize(t);
+    const f = detailRegions(proj,geo).find(f => [f.key,f.name,...(f.aliases||[])].some(name=>normalize(name)===search));
     if (f) return {kind:'region',name:f.key,country:f.country};
   }
   if (wantCountry && geo) { const n = geo.names.find(x => x.toLowerCase() === low); if (n) return { kind: 'country', name: n }; }
@@ -362,6 +369,7 @@ function regionFields(a) {
     + excludedRegionFields(a)
     + (isDetail() ? '' : '<p class="mini-label">For states, districts and other local regions, add that country under <button type="button" class="link" data-mopenset>Map settings → Country details</button>.</p>')
     + (list.length > 1 ? `<label>Several regions<select data-mcombine><option value="together" selected>Together as one region</option><option value="separate">Separately, as different regions</option></select></label><p class="mini-label">Together draws one outline around all of them. Separately makes one item per region, so each can be timed or partly animated on its own.</p>` : '')
+    + (list.some(t=>geo?.byName.get(t.name)?.level==='additional')?`<details><summary>Region extent notes</summary><p class="mini-label">These selectable extents use modern administrative boundaries, rather than medieval political borders.</p>${list.map(t=>geo?.byName.get(t.name)).filter(f=>f?.level==='additional').map(f=>`<p class="mini-label"><b>${esc(f.key)}</b>: ${esc(f.selectionNote||'Modern administrative extent.')}</p>`).join('')}</details>`:'')
     + campaign.regionFields(a) + '</div>';
 }
 function buildStaticUI() {
@@ -1265,9 +1273,9 @@ function bindInspector(it) {
   const addBox = $('#mInspector [data-madd]');
   if (addBox) addBox.onchange = () => {
     const loc = parseLoc(addBox.value, addBox.dataset.kinds);
-    if (!loc || !['country', 'region', 'all'].includes(loc.kind)) { notify('Not found. Type a country or region name'); addBox.value = ''; return; }
+    if (!loc || !['country', 'region', 'regions', 'all'].includes(loc.kind)) { notify('Not found. Type a country or region name'); addBox.value = ''; return; }
     checkpoint();
-    if (loc.kind === 'all') { it.target = loc; delete it.borderRing; }
+    if (loc.kind === 'all' || loc.kind === 'regions') { it.target = loc; delete it.borderRing; }
     else if (!addMember(it, loc, false)) { undoStack.pop(); updateHistory(); addBox.value = ''; return; }
     changed(); renderInspector();
   };
@@ -1580,6 +1588,9 @@ function renderMapBackgroundSettings(){
   const note={modern:'The world map with modern country boundaries.',historical1300:HISTORICAL_1300.attribution,coastline:'Land and water without modern borders or country names. Draw your own regions.',image:'Use your own historical or custom map image. Modern borders and names are hidden.',blank:'An empty canvas for building your own map or scene.'}[b.mode];
   $('#mMapBackgroundNote').textContent=note+(geoState==='loading'?' Loading map…':geoState==='error'?` Loading failed: ${geoError}`:'');
   $('#mMapSourceRetry').hidden=geoState!=='error';
+  $('#mAdditionalRegionsBox').hidden=!historical;
+  $('#mAdditionalRegions').checked=b.additionalRegions!==false;
+  $('#mAdditionalRegionsNote').textContent=(geo?.additionalRegions?`${geo.additionalRegions.length} selectable regions. `:'')+EUROPE_REGIONS.note;
   for(const el of $$('[data-map-bound]'))el.value=b[el.dataset.mapBound];
   $('#mMapStyleBox').hidden=custom;$('#mAreaBox').hidden=!modern;$('#mAtlasLabels').hidden=!(modern||historical);
   $('#mGraticule').disabled=custom;$('#mGrat').disabled=custom;
@@ -1641,6 +1652,7 @@ function bindSettings() {
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   $('#mMapBackground').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),mode:el.value};if(el.value===HISTORICAL_1300.mode){proj.atlasLabels={...proj.atlasLabels,countries:true};}void ensureGeo();});
   $('#mMapSourceRetry').onclick=()=>{requestedMapSource=null;void ensureGeo();};
+  $('#mAdditionalRegions').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),additionalRegions:el.checked};});
   $('#mMapBackgroundColor').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),color:el.value};});
   $('#mMapBackgroundUpload').onclick=()=>$('#mMapBackgroundFile').click();
   $('#mMapBackgroundFile').onchange=async e=>{

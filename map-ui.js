@@ -6,6 +6,7 @@ import { interfaceIcon, setIconButton } from './interface-icons.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';
 import { shapePicker } from './map-shape-picker.mjs';
 import { mapBackgroundOf, validateMapBackground } from './map-background.mjs';
+import { createMapSources, mapSourceOf, HISTORICAL_1300 } from './map-sources.mjs';
 import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
@@ -72,6 +73,8 @@ let previewCamera = null, mapPan = null;
 let directMapEditing=null;
 let timelineAutoFit=true;
 let campaign=null;
+const mapSources = createMapSources();
+let requestedMapSource = null;
 
 // ------------------------------------------------------------------ helpers
 const items = () => {
@@ -130,12 +133,21 @@ function ensureLength(end) {
 
 // ------------------------------------------------------------------ map data
 async function ensureGeo() {
-  if (geo || geoState === 'loading') return;
+  const source = mapSourceOf(proj);
+  if (requestedMapSource === source && (geo || geoState === 'loading' || geoState === 'error')) return;
+  requestedMapSource = source; geo = null; lastView = null; buildLists();
   geoState = 'loading'; draw();
   try {
-    const [hi, lo] = await Promise.all(['countries-50m.json', 'countries-110m.json'].map(f => fetch('map-data/' + f).then(r => { if (!r.ok) throw Error(`${f}: HTTP ${r.status}`); return r.json(); })));
-    geo = buildGeo(hi, lo); geo.cities = CITIES; geo.imagery = createImagery(); geo.relief = createRelief(); let tileDraw = 0; geo.relief.onTile = geo.imagery.onTile = () => { if (!tileDraw) tileDraw = requestAnimationFrame(() => { tileDraw = 0; if (!exporting) { draw(); updateTerrainStatus(); } }); }; geoState = 'ready'; buildLists();
-  } catch (e) { geoState = 'error'; geoError = e.message || String(e); }
+    const loaded = await mapSources.load(source);
+    if (requestedMapSource !== source || mapSourceOf(proj) !== source) return;
+    geo = loaded;
+    const modern = geo.land || geo;
+    modern.cities ||= CITIES;
+    modern.imagery ||= createImagery(); modern.relief ||= createRelief();
+    geo.imagery = modern.imagery; geo.relief = modern.relief;
+    let tileDraw = 0; geo.relief.onTile = geo.imagery.onTile = () => { if (!tileDraw) tileDraw = requestAnimationFrame(() => { tileDraw = 0; if (!exporting) { draw(); updateTerrainStatus(); } }); };
+    geoState = 'ready'; geoError = ''; buildLists();
+  } catch (e) { if (requestedMapSource !== source) return; geoState = 'error'; geoError = e.message || String(e); }
   renderAll();
 }
 
@@ -145,12 +157,13 @@ const detailLoads = new Map();  // country -> Promise<boolean>. Kept after a fai
 const detailErrors = new Map(); // country -> message, for a pack file that exists but could not be used
 const noDetail = new Set();     // countries with no pack file: they simply stay plain country maps
 const areaCountry = () => (areaOf(proj).mode === 'country' ? areaOf(proj).country : null);
-const detailCountry = () => { const countries=detailCountriesOf(areaOf(proj)).filter(c=>!noDetail.has(c)); return countries.includes(areaOf(proj).country)?areaOf(proj).country:countries[0] || null; };
+const detailCountry = () => { if(mapSourceOf(proj)===HISTORICAL_1300.mode)return null; const countries=detailCountriesOf(areaOf(proj)).filter(c=>!noDetail.has(c)); return countries.includes(areaOf(proj).country)?areaOf(proj).country:countries[0] || null; };
 const isDetail = () => !!geo && detailRegions(proj,geo).length>0;
-const localCities = () => geo ? [...new Map([...CITIES,...detailCountriesOf(areaOf(proj)).flatMap(c=>citiesOf(geo,c))].map(c=>[`${c[0]}:${c[3]}`,c])).values()] : CITIES;
+const localCities = () => mapSourceOf(proj) === HISTORICAL_1300.mode ? [] : geo ? [...new Map([...CITIES,...detailCountriesOf(areaOf(proj)).flatMap(c=>citiesOf(geo,c))].map(c=>[`${c[0]}:${c[3]}`,c])).values()] : CITIES;
 // Which country's pack does a location need? Region targets saved before they carried a country were Bangladesh-only.
 const regionCountryOf = t => (t?.kind === 'region' ? t.country || areaCountry() || LEGACY_REGION_COUNTRY : t?.kind === 'all' ? t.country || null : null);
 function packCountries() { // packs the project needs to draw its regions
+  if (mapSourceOf(proj) === HISTORICAL_1300.mode) return [];
   const set = new Set(detailCountriesOf(areaOf(proj)));
   for (const it of [...proj.actions, ...proj.shots]) for (const target of [it.target, it.from, it.to, it.place,...(it.highlightExclude||[])]) for(const t of targetMembers(target)) { const c = regionCountryOf(t); if (c) set.add(c); }
   return [...set].filter(c => !noDetail.has(c));
@@ -161,6 +174,7 @@ function loadDetail(country) {
   if (geo.details?.has(country)) return Promise.resolve(true);
   if (detailLoads.has(country)) return detailLoads.get(country);
   detailErrors.delete(country);
+  const targetGeo = geo;
   const task = (async () => {
     try {
       const r = await fetch(detailFileOf(country));
@@ -169,7 +183,7 @@ function loadDetail(country) {
       if (!r.ok) throw Error('HTTP ' + r.status);
       const pack = JSON.parse(text);
       if (pack.country !== country) throw Error(`the file says "country": "${pack.country}" but it must say "${country}"`);
-      installCountryDetail(geo, pack); buildLists(); renderAll(); return true;
+      installCountryDetail(targetGeo, pack); buildLists(); renderAll(); return true;
     } catch (e) {
       detailErrors.set(country, e.message || String(e)); renderAreaSettings();
       notify(packCountries().includes(country) ? `${country} detail failed to load. Use Retry in map settings.` : 'Regional detail could not load. Route names will use country names.');
@@ -232,7 +246,7 @@ function draw() {
     ctx.fillStyle = '#9fb3c4'; ctx.textAlign = 'center'; ctx.font = `600 ${Math.round(canvas.height / 30)}px Arial, sans-serif`;
     const msg = geoState === 'error' ? 'Map data could not be loaded' : 'Loading map…';
     ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
-    if (geoState === 'error') { ctx.font = `${Math.round(canvas.height / 44)}px Arial, sans-serif`; ctx.fillText('Serve this folder over http (for example: python -m http.server 8000) and reload.', canvas.width / 2, canvas.height / 2 + canvas.height / 20); }
+    if (geoState === 'error') { ctx.font = `${Math.round(canvas.height / 44)}px Arial, sans-serif`; ctx.fillText('Open Canvas settings and retry map loading.', canvas.width / 2, canvas.height / 2 + canvas.height / 20); }
     return;
   }
   lastView = drawMap(ctx, proj.width, proj.height, proj, frame, geo, previewCamera, { cacheBase: true });
@@ -265,9 +279,23 @@ function updatePlayControl() {
   $('#mPlay').setAttribute('aria-label', playing ? 'Pause playback' : 'Play animation');
   $('#mPlay').setAttribute('aria-pressed', String(playing));
 }
-function pause() { playing = false; cancelAnimationFrame(raf); updatePlayControl(); window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
-function play() {
-  if (playing) { pause(); return; }
+let playbackRequest = 0, preparingPlayback = false;
+function pause() { playbackRequest++; preparingPlayback = false; $('#mPlay').removeAttribute('aria-busy'); playing = false; cancelAnimationFrame(raf); updatePlayControl(); window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:false,frame,fps:proj.fps}})); }
+async function play() {
+  if (playing || preparingPlayback) { pause(); return; }
+  if (!geo || exporting) return;
+  const request = ++playbackRequest, project = proj;
+  if (wantedCountries().some(country => !geo.details?.has(country))) {
+    preparingPlayback = true;
+    $('#mPlay').setAttribute('aria-busy', 'true');
+    $('#mPlay').setAttribute('aria-label', 'Loading map detail; click to cancel');
+    const ready = await ensureDetail();
+    if (request !== playbackRequest) return;
+    preparingPlayback = false;
+    $('#mPlay').removeAttribute('aria-busy');
+    updatePlayControl();
+    if (!ready || proj !== project || exporting) return;
+  }
   if (frame >= proj.frames - 1) frame = 0;
   playing = true; startTime = performance.now(); startFrame = frame; updatePlayControl(); window.dispatchEvent(new CustomEvent('ff-play',{detail:{studio:'map',playing:true,frame,fps:proj.fps}}));
   const tick = t => {
@@ -367,6 +395,10 @@ function addAction(type,extra={}) {
   pause(); checkpoint();
   if(type==='pin'&&!extra.place){const[lon,lat]=centerLonLat();extra={...extra,place:{kind:'point',name:'Map position',lon:((lon+180)%360+360)%360-180,lat}};}
   const a = makeAction(type, frame,extra); if (!ensureLength(a.start + a.dur)) { notify('Choose an earlier start frame for this animation.'); return; }
+  if (geo?.historical && ['border','highlight'].includes(type) && !extra.target) {
+    const name = (lastView && countryAt(geo, ...centerLonLat())) || 'Yuan Dynasty';
+    a.target = {kind:'country', name};
+  }
   if(['object','pin','effect'].includes(type)){endPathDraw(true);cancelPick();campaign?.cancel();}
   if (isDetail()) { if ((type === 'border' || type === 'highlight')&&!extra.target) a.target = defaultRegion(); const cities = localCities(); const loc = c => ({kind:'city',name:c[0],lat:c[1],lon:c[2]}); if (['pin', 'object', 'effect'].includes(type) && cities.length&&!extra.place) a.place = loc(cities[0]); if (type === 'plane' && cities.length > 1) { a.from=loc(cities[0]); a.to=loc(cities[1]); } }
 
@@ -1193,7 +1225,7 @@ function bindInspector(it) {
         }
         if(v==='text'&&!it.labelPlacement){it.labelPlacement='map';it.offsetX=0;it.offsetY=0;it.labelStyle={...DEFAULT_LABEL_STYLE,...LABEL_PRESETS.atlasGround.style,...it.labelStyle};}
         it.badge = v === 'badge'; it.showIcon = v === 'badge' ? false : v !== 'text'; it.showLabel = v !== 'icon'; if (it.badge && !it.size) it.size = 1; changed(); renderInspector(); return; }
-      if (key === '__hmode') { it.target = v === 'country' ? (isDetail() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || 'Australia' }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
+      if (key === '__hmode') { it.target = v === 'country' ? (isDetail() ? defaultRegion() : { kind: 'country', name: (lastView && geo && countryAt(geo, ...centerLonLat())) || (geo?.historical?'Yuan Dynasty':'Australia') }) : { kind: 'city', name: 'Paris', lat: 48.8566, lon: 2.3522 }; changed(); renderInspector(); return; }
       if (t === 'num') {
         if (key === '__startSeconds' || key === '__finishSeconds') {
           const target = Math.round(v * proj.fps), finish = it.start + it.dur;
@@ -1541,13 +1573,15 @@ function renderSettings() {
   renderMapBackgroundSettings();
 }
 function renderMapBackgroundSettings(){
-  const b=mapBackgroundOf(proj),modern=b.mode==='modern',custom=['blank','image'].includes(b.mode);
+  const b=mapBackgroundOf(proj),modern=b.mode==='modern',historical=b.mode===HISTORICAL_1300.mode,custom=['blank','image'].includes(b.mode);
   $('#mMapBackground').value=b.mode;$('#mMapBackgroundColor').value=b.color;
   $('#mMapBackgroundColorBox').hidden=!custom;$('#mMapBackgroundImageBox').hidden=b.mode!=='image';
   $('#mMapBackgroundRemove').disabled=!b.image;$('#mMapBackgroundImageName').textContent=b.image?(b.name||'Uploaded map'):'No map image chosen';
-  $('#mMapBackgroundNote').textContent={modern:'The world map with modern country boundaries.',coastline:'Land and water without modern borders or country names. Draw your own regions.',image:'Use your own historical or custom map image. Modern borders and names are hidden.',blank:'An empty canvas for building your own map or scene.'}[b.mode];
+  const note={modern:'The world map with modern country boundaries.',historical1300:HISTORICAL_1300.attribution,coastline:'Land and water without modern borders or country names. Draw your own regions.',image:'Use your own historical or custom map image. Modern borders and names are hidden.',blank:'An empty canvas for building your own map or scene.'}[b.mode];
+  $('#mMapBackgroundNote').textContent=note+(geoState==='loading'?' Loading map…':geoState==='error'?` Loading failed: ${geoError}`:'');
+  $('#mMapSourceRetry').hidden=geoState!=='error';
   for(const el of $$('[data-map-bound]'))el.value=b[el.dataset.mapBound];
-  $('#mMapStyleBox').hidden=custom;$('#mAreaBox').hidden=!modern;$('#mAtlasLabels').hidden=!modern;
+  $('#mMapStyleBox').hidden=custom;$('#mAreaBox').hidden=!modern;$('#mAtlasLabels').hidden=!(modern||historical);
   $('#mGraticule').disabled=custom;$('#mGrat').disabled=custom;
   $('#mGraticule').classList.toggle('active',!custom&&!!proj.graticule);$('#mGraticule').setAttribute('aria-pressed',String(!custom&&!!proj.graticule));
   if(!modern)$('#mImageryBox').hidden=true;
@@ -1605,7 +1639,8 @@ function bindSettings() {
   $('#mFps').onchange = edit(el => proj.fps = +el.value);
   $('#mDuration').onchange = edit(el => { const seconds = Number(el.value), frames = Math.max(2, Math.round(seconds * proj.fps)); if (el.value.trim() && Number.isFinite(seconds) && Number.isSafeInteger(frames)) proj.frames = frames; frame = Math.min(frame, proj.frames - 1); });
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
-  $('#mMapBackground').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),mode:el.value};});
+  $('#mMapBackground').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),mode:el.value};if(el.value===HISTORICAL_1300.mode){proj.atlasLabels={...proj.atlasLabels,countries:true};}void ensureGeo();});
+  $('#mMapSourceRetry').onclick=()=>{requestedMapSource=null;void ensureGeo();};
   $('#mMapBackgroundColor').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),color:el.value};});
   $('#mMapBackgroundUpload').onclick=()=>$('#mMapBackgroundFile').click();
   $('#mMapBackgroundFile').onchange=async e=>{
@@ -1816,7 +1851,7 @@ async function exportVideo() {
   if (!geo) { notify('Map data is still loading'); return; }
   if (!await ensureDetail() && requiresDetail()) return;
   await preloadBadges(proj);
-  const snapshot = clone(proj), exportName = fileBase();
+  const snapshot = clone(proj), exportName = fileBase(), exportGeo = geo;
   modal(exportMarkup({...snapshot, progressId:'mProgress', statusId:'mExportStatus'}));
   $('#mCloseModal').textContent = 'Cancel export'; exporting = true;
   const c = document.createElement('canvas'); c.width = snapshot.width; c.height = snapshot.height;
@@ -1825,12 +1860,12 @@ async function exportVideo() {
     await loadFonts(mapFontsUsed(snapshot)); await document.fonts.ready;
     const video = await exportMapVideo({ audio: getAudioSnapshot('map'), canvas: c, fps: snapshot.fps, frames: snapshot.frames,
       draw: async f => {
-        if (THEMES[snapshot.theme]?.imagery || THEMES[snapshot.theme]?.relief) {
-          const provider = THEMES[snapshot.theme]?.relief ? geo.relief : geo.imagery;
-          await provider.ready(imageryNeeds(snapshot, geo, c.width, c.height, f), () => !exporting);
-          provider.prefetch(imageryNeeds(snapshot, geo, c.width, c.height, Math.min(f + 8, snapshot.frames - 1)));
+        if (mapBackgroundOf(snapshot).mode==='modern' && (THEMES[snapshot.theme]?.imagery || THEMES[snapshot.theme]?.relief)) {
+          const provider = THEMES[snapshot.theme]?.relief ? exportGeo.relief : exportGeo.imagery;
+          await provider.ready(imageryNeeds(snapshot, exportGeo, c.width, c.height, f), () => !exporting);
+          provider.prefetch(imageryNeeds(snapshot, exportGeo, c.width, c.height, Math.min(f + 8, snapshot.frames - 1)));
         }
-        drawMap(ec, c.width, c.height, snapshot, f, geo);
+        drawMap(ec, c.width, c.height, snapshot, f, exportGeo);
       },
       cancelled: () => !exporting,
       progress: n => { $('#mProgress').value = n; $('#mExportStatus').textContent = `Rendering frame ${n} of ${snapshot.frames}`; }
@@ -1871,7 +1906,15 @@ function bindToolbar() {
     e.target.value = '';
   };
   $('#mExport').onclick = exportVideo;
-  $('#mSnapshot').onclick = async () => { if (!geo || (!await ensureDetail() && requiresDetail())) return; await preloadBadges(proj); await loadFonts(mapFontsUsed(proj)); await document.fonts.ready; const c = document.createElement('canvas'); c.width = proj.width; c.height = proj.height; if (THEMES[proj.theme]?.relief) await geo.relief.ready(imageryNeeds(proj, geo, c.width, c.height, frame)); drawMap(c.getContext('2d'), c.width, c.height, proj, frame, geo); c.toBlob(b => download(b, fileBase() + `-frame-${frame}.png`), 'image/png'); };
+  $('#mSnapshot').onclick = async () => {
+    if (!geo || (!await ensureDetail() && requiresDetail())) return;
+    const snapshot=clone(proj),snapshotGeo=geo,snapshotFrame=frame,name=fileBase();
+    await preloadBadges(snapshot); await loadFonts(mapFontsUsed(snapshot)); await document.fonts.ready;
+    const c=document.createElement('canvas'); c.width=snapshot.width;c.height=snapshot.height;
+    if (mapBackgroundOf(snapshot).mode==='modern'&&THEMES[snapshot.theme]?.relief) await snapshotGeo.relief.ready(imageryNeeds(snapshot,snapshotGeo,c.width,c.height,snapshotFrame));
+    drawMap(c.getContext('2d'),c.width,c.height,snapshot,snapshotFrame,snapshotGeo);
+    c.toBlob(b=>download(b,name+`-frame-${snapshotFrame}.png`),'image/png');
+  };
   $('#mPlay').onclick = play; $('#mStart').onclick = () => { pause(); setFrame(0); }; $('#mEnd').onclick = () => { pause(); setFrame(proj.frames - 1); };
   $('#mPrev').onclick = () => { pause(); setFrame(frame - 1); }; $('#mNext').onclick = () => { pause(); setFrame(frame + 1); };
   for (const [id, icon, label] of [['mStart','firstFrame','First frame'],['mPrev','previousFrame','Previous frame'],['mNext','nextFrame','Next frame'],['mEnd','lastFrame','Last frame'],['mLoop','loop','Loop playback']]) {
@@ -1926,7 +1969,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('#mDelete').click(); }
 });
 
-function renderAll() { ensureCameraTrack();migrateCameraMovements(); if(proj.area?.mode==='country'){proj.area={...proj.area,mode:'world',detailCountries:detailCountriesOf(proj.area)};saveLocal()} if (geo) { buildLists(); for (const c of wantedCountries()) if (!geo.details?.has(c) && !detailLoads.has(c)) void loadDetail(c); } if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
+function renderAll() { void ensureGeo(); ensureCameraTrack();migrateCameraMovements(); if(proj.area?.mode==='country'){proj.area={...proj.area,mode:'world',detailCountries:detailCountriesOf(proj.area)};saveLocal()} if (geo) { buildLists(); for (const c of wantedCountries()) if (!geo.details?.has(c) && !detailLoads.has(c)) void loadDetail(c); } if (pathDraw && !proj.actions.some(a => a.id === pathDraw.id)) { pathDraw = null; pathDrag = null; canvas.style.cursor = ''; $('#mHint').textContent = HINT; } renderSettings(); renderItems(); renderInspector(); renderTimeline(); setFrame(frame); updateHistory(); }
 
 // Match Motion Studio: fullscreen the preview toolbar, canvas and transport.
 const mapFullscreenRoot = document.querySelector('#mapStudio main');

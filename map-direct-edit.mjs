@@ -419,7 +419,7 @@ export function installDirectMapEditing(api){
       api.select(e.shiftKey&&!selected.has(found.id)?[...selected].at(-1)||null:found.id);toolbar(true);api.draw();if(!e.shiftKey)begin(e,found,'move',p);return;
     }
     const point=ground(v,p);if(!point)return;
-    const modern=!v.mapBackground||v.mapBackground==='modern',region=modern&&regionAt(api.project(),api.geo(),point.lon,point.lat),name=modern&&(region||countryAt(api.geo(),point.lon,point.lat));
+    const modern=!v.mapBackground||v.mapBackground==='modern',political=modern||v.mapBackground==='historical1300',region=modern&&regionAt(api.project(),api.geo(),point.lon,point.lat),name=political&&(region||countryAt(api.geo(),point.lon,point.lat));
     if(!name){lands.clear();selected.clear();api.select(null);toolbar(true);api.draw();return;}
     e.preventDefault();e.stopImmediatePropagation();api.pause();selected.clear();api.select(null);
     const target=region?{kind:'region',name,country:api.geo().byName.get(name)?.country}:{kind:'country',name};

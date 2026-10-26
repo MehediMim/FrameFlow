@@ -49,6 +49,12 @@ In **Arrow / zone → Properties → Measurements**, show the full path length o
 
 ## Validation
 
+Choose **Canvas settings → Map source → World · c. AD 1300** for the historical world map. Its territory names are available to Border, Highlight, location picking and camera targets; automatic atlas labels are enabled on selection and remain editable. The map source is saved with the project, restored on reload and undo, and used in video and snapshot exports. Historical data loads only when selected and is cached during the session. Modern regional detail and city lists are hidden in this source.
+
+The bundled `map-data/world-1300.json` contains 151 polity records active in AD 1300 from [Cliopatria v0.2.0](https://github.com/Seshat-Global-History-Databank/cliopatria/tree/v0.2.0), Seshat Global History Databank, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is about 176 KB before compression. Borders and coverage are approximate, overlapping realms and members are retained, and plain land indicates no recorded polity. Coastlines use the modern Natural Earth background. See [credits](terrain-credits.html) for attribution and transformations. Rebuild from the pinned archive with `python scripts/build-historical-1300.py PATH_TO_ZIP`; the script uses only the Python standard library. Include source attribution with published exports.
+
+Multi-country maps load detail packs only for countries used by the project. Background regional boundaries fade in as countries become larger on screen, and small or off-screen regions are skipped. City dots and labels are limited to the visible view. These rules use the same geographic scale in preview and export; explicit Border and Highlight layers and region picking keep their full geometry. Playback waits for required detail packs before starting; click Play again to cancel loading. Video and snapshot exports also wait for their required packs.
+
 Run `npm test` for map unit tests and `npm run check` for JavaScript syntax checks. Browser checks use a local Chrome or Edge installation; set `CHROME_PATH` if necessary. Run `npm run test:landing:browser` and the `test:map-*:browser` scripts for editor workflows.
 
 ## GitHub Pages

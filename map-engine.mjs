@@ -292,7 +292,7 @@ function inRing(r, x, y) {
 /** Name of the country under a longitude/latitude, or null for open water. */
 export function countryAt(geo, lon, lat) {
   const x0 = ((lonToX(lon) % 1) + 1) % 1, y = latToY(lat);
-  for (const f of geo.hi.features) {
+  for (const f of geo.hitFeatures || geo.hi.features) {
     const b = f.bbox;
     if (y < b[1] || y > b[3]) continue;
     for (const x of [x0, x0 + 1, x0 - 1]) { // rings may be unwrapped past the date line
@@ -418,6 +418,36 @@ function bboxVisible(v, b, off, margin = 40) {
     if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x; if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
   }
   return !(maxx < -margin || minx > v.W + margin || maxy < -margin || miny > v.H + margin);
+}
+
+// Resolution-independent detail thresholds: preview and export reveal the same geography.
+export function detailVisibility(v, f, off = 0, start = 120, end = 200) {
+  const b = f.mainBox || f.bbox;
+  if (!bboxVisible(v, f.bbox, off)) return 0;
+  const size = Math.max(b[2] - b[0], b[3] - b[1]) * v.S / v.unit;
+  const t = clamp((size - start) / (end - start), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+/** Background detail only. Explicit highlights, borders and picking retain full geometry. */
+export function visibleDetailRegions(proj, geo, v) {
+  const a = areaOf(proj), out = [], k0 = Math.round(v.cx);
+  for (const country of detailCountriesOf(a)) {
+    const pack = geo.details?.get(country), f = pack?.country || geo.byName.get(country);
+    if (!f) continue;
+    const copies = [];
+    for (let off = k0 - 1; off <= k0 + 1; off++) {
+      const alpha = detailVisibility(v, f, off);
+      if (alpha) copies.push({ off, alpha });
+    }
+    if (!copies.length) continue;
+    const level = detailLevelOf(geo, country, a.detailLevels?.[country] || a.detailLevel);
+    for (const region of pack?.levels[level] || []) for (const copy of copies) {
+      const alpha = copy.alpha * detailVisibility(v, region, copy.off, 6, 18);
+      if (alpha) out.push({ region, off: copy.off, alpha });
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- Locations
@@ -987,6 +1017,21 @@ function drawPreviewBase(ctx, v, geo, th, proj) {
 }
 function drawBase(ctx, v, geo, th, proj) {
   const background=mapBackgroundOf(proj);
+  if (background.mode === 'historical1300') {
+    // The land under unrecorded territories has no modern borders or names.
+    drawBase(ctx, v, geo.land || geo, th, {...proj, mapBackground:{...background, mode:'coastline'}});
+    if (!geo.historical) return;
+    const k0 = Math.round(v.cx);
+    for (let off = k0 - 1; off <= k0 + 1; off++) for (const f of geo.pick(v.cam.zoom).features) {
+      if (!bboxVisible(v, f.bbox, off)) continue;
+      ctx.beginPath();
+      for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); }
+      ctx.fillStyle = th.strategy ? strategyGroundPattern(ctx, th.land[f.tint]) : th.land[f.tint];
+      ctx.fill('evenodd'); ctx.strokeStyle = th.border; ctx.lineWidth = th.bw * v.unit;
+      ctx.globalAlpha = th.borderA; ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    return;
+  }
   if(['blank','image'].includes(background.mode)){
     ctx.fillStyle=background.color;ctx.fillRect(0,0,v.W,v.H);
     const entry=background.mode==='image'?badgeEntry(background.image):null;
@@ -1010,10 +1055,22 @@ function drawBase(ctx, v, geo, th, proj) {
     for (const lat of [-60, -30, 0, 30, 60]) { const Y = latToY(lat); loadXY(v, new Float64Array([k0 - 4, Y, k0 + 5, Y]), 2, 0); emit(ctx, v, 2, false); }
     ctx.strokeStyle = th.grat; ctx.globalAlpha = th.gratA; ctx.lineWidth = Math.max(.6, v.unit * .8); ctx.stroke(); ctx.globalAlpha = 1;
   }
-  const focus = coastline?null:focusFeature(proj, geo), neighbors = focus ? areaOf(proj).neighbors : 'show';
+  if (coastline) {
+    // Fill the shared land path once, so antialiasing between modern country
+    // polygons cannot leave faint contemporary borders on a historical map.
+    ctx.beginPath();
+    for (let off = k0 - 1; off <= k0 + 1; off++) for (const f of geo.pick(v.cam.zoom).features) {
+      if (!bboxVisible(v, f.bbox, off)) continue;
+      for (const r of f.rings) { loadXY(v, r.xy, r.n, off); emit(ctx, v, r.n, true); }
+    }
+    ctx.fillStyle = th.land[0]; ctx.fill('evenodd');
+    return;
+  }
+  const focus = focusFeature(proj, geo), neighbors = focus ? areaOf(proj).neighbors : 'show';
   const set = focus ? geo.hi : geo.pick(v.cam.zoom); // a country map always uses the detailed outlines
   ctx.strokeStyle = th.border; ctx.lineWidth = th.bw * v.unit;
-  const paint = (f, k, fill, borderA, lw, raised) => {
+  const paint = (f, k, fill, borderA, lw, raised, opacity = 1) => {
+    ctx.globalAlpha = opacity;
     ctx.beginPath();
     for (const r of f.rings) { loadXY(v, r.xy, r.n, k); emit(ctx, v, r.n, true); }
     ctx.fillStyle = fill || '#000';
@@ -1021,11 +1078,12 @@ function drawBase(ctx, v, geo, th, proj) {
       // Color territories over the DEM while preserving its ridges and valleys.
       if (v.img && th.territoryTint) {
         ctx.save(); ctx.globalCompositeOperation = 'hard-light';
-        ctx.globalAlpha = th.territoryTint; ctx.fillStyle = th.land[f.tint];
+        ctx.globalAlpha = th.territoryTint * opacity; ctx.fillStyle = th.land[f.tint];
         ctx.fill('evenodd'); ctx.restore();
       }
     } else if (raised) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.42)'; ctx.shadowBlur = 18 * v.unit; ctx.shadowOffsetY = 4 * v.unit; ctx.fill('evenodd'); ctx.restore(); } else ctx.fill('evenodd');
-    if(!coastline){ctx.lineWidth = lw; ctx.globalAlpha = borderA; ctx.stroke(); ctx.globalAlpha = 1;}
+    if(!coastline){ctx.lineWidth = lw; ctx.globalAlpha = borderA * opacity; ctx.stroke();}
+    ctx.globalAlpha = 1;
   };
   const fillOf = (f, k) => (coastline?th.land[0]:v.img ? null : th.strategy ? strategyGroundPattern(ctx,th.land[f.tint]||th.land[0]) : proj.theme === 'realistic' ? terrainLandStyle(ctx, v, f, k, th) : th.land[f.tint]);
   for (let k = k0 - 1; k <= k0 + 1; k++) for (const f of set.features) {
@@ -1039,7 +1097,7 @@ function drawBase(ctx, v, geo, th, proj) {
     const f = focus;
     if (f) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, f.bbox, k)) paint(f, k, fillOf(f, k), 1, th.bw * v.unit * 1.7, true);
   }
-  if(!coastline)for (const region of detailRegions(proj, geo)) for (let k = k0 - 1; k <= k0 + 1; k++) if (bboxVisible(v, region.bbox, k)) paint(region, k, fillOf(region, k), th.borderA, th.bw * v.unit, false);
+  if(!coastline)for (const {region, off, alpha} of visibleDetailRegions(proj, geo, v)) paint(region, off, fillOf(region, off), th.borderA, th.bw * v.unit, false, alpha);
 }
 /** A spot inside the country, as far from its cities as possible, where the country name can sit without covering a city. */
 function nameAnchor(f, cities, midX) {
@@ -1061,7 +1119,8 @@ function nameAnchor(f, cities, midX) {
 }
 /** Country and ocean names share geographic anchors across preview and export. */
 export function atlasMapLabels(proj, geo, v) {
-  if(mapBackgroundOf(proj).mode!=='modern')return [];
+  if(!['modern','historical1300'].includes(mapBackgroundOf(proj).mode))return [];
+  if(mapBackgroundOf(proj).mode==='historical1300'&&!geo.historical)return [];
   const s = atlasLabelSettings(proj.atlasLabels), out = [], occupied = [];
   if (!s.countries && !s.oceans) return out;
   const style = { font: s.font, weight: 700, shape: 'none', halo: true, haloWidth: s.haloWidth, useTheme: false, text: s.text, bg: s.outline, spacing: s.spacing, placement: s.placement, scaleMode: s.scaleMode, referenceZoom: s.referenceZoom, textPath:s.textPath, curveAngle:s.curveAngle, caps: s.caps, italic: false };
@@ -1113,7 +1172,8 @@ function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames, worldOverlay=
   const f = focusFeature(proj, geo); if (!f) return;
   const ar = areaOf(proj), b = f.mainBox, mid = (b[0] + b[2]) / 2, off = Math.round(v.cx - mid), st = labelStyleOf(proj);
   // Keep town and administrative labels readable when detailed countries share a world view.
-  if(worldOverlay && Math.max(b[2]-b[0],b[3]-b[1])*v.S<160*v.unit)return;
+  const detailAlpha = worldOverlay ? detailVisibility(v, f, off, 160, 240) : 1;
+  if (!detailAlpha) return;
   const cities = ar.cities ? citiesOf(geo, f.name) : [];
   const NAME_STYLE = { shape: 'none', halo: true, weight: 800, caps: true, spacing: 14 };
   const box = (x, y, text, scale, over) => { // approximate label rectangle on screen
@@ -1121,16 +1181,16 @@ function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames, worldOverlay=
     return { x0: x - w / 2, x1: x + w / 2, y0: y - fs, y1: y + fs, w };
   };
   const placed = [], hits = r => placed.some(p => r.x0 < p.x1 && r.x1 > p.x0 && r.y0 < p.y1 && r.y1 > p.y0);
-  const dots = cities.map(c => { const X0 = lonToX(c[2]), ground = { X: X0 + Math.round(mid - X0) + off, Y: latToY(c[1]) }, q = project(v, ground.X, ground.Y); return { c, q, ground }; });
+  const dots = cities.map(c => { const X0 = lonToX(c[2]), ground = { X: X0 + Math.round(mid - X0) + off, Y: latToY(c[1]) }, q = project(v, ground.X, ground.Y); return { c, q, ground }; }).filter(({q}) => q.z > v.near && q.x >= 0 && q.x <= v.W && q.y >= 0 && q.y <= v.H);
   for (const { q } of dots) placed.push({ x0: q.x - 8 * v.unit, x1: q.x + 8 * v.unit, y0: q.y - 8 * v.unit, y1: q.y + 8 * v.unit });
   if (ar.name && !proj.atlasLabels?.countries && !routeNames.has(routeLabelKey(f.name))) {
     const a = nameAnchor(f, cities, mid), q = !worldOverlay && geo.details?.has(f.name) ? {x:v.W / 2,y:28 * v.unit} : project(v, a.x + off, a.y), r = box(q.x, q.y, f.name, 1.6, NAME_STYLE);
     placed.push(r);
-    labels.push({ x: q.x, y: q.y, ground: { X: a.x + off, Y: a.y }, text: f.name, alpha: .96, scale: 1.6, over: NAME_STYLE });
+    if (q.z > v.near && q.x >= 0 && q.x <= v.W && q.y >= 0 && q.y <= v.H) labels.push({ x: q.x, y: q.y, ground: { X: a.x + off, Y: a.y }, text: f.name, alpha: .96 * detailAlpha, scale: 1.6, over: NAME_STYLE });
   }
   ctx.save();
   for (const { c, q, ground } of dots) {
-    ctx.globalAlpha = 1; ctx.fillStyle = th.pillText; ctx.strokeStyle = th.pill; ctx.lineWidth = 2.4 * v.unit;
+    ctx.globalAlpha = detailAlpha; ctx.fillStyle = th.pillText; ctx.strokeStyle = th.pill; ctx.lineWidth = 2.4 * v.unit;
     ctx.beginPath(); ctx.arc(q.x, q.y, 4.2 * v.unit, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
     if (routeNames.has(routeLabelKey(c[0]))) continue;
     const w = box(0, 0, c[0], .82).w, u = v.unit;
@@ -1139,15 +1199,18 @@ function drawAreaDetail(ctx, v, geo, th, proj, labels, routeNames, worldOverlay=
     for (const sp of spots) { if (!hits(box(q.x + sp[0], q.y + sp[1], c[0], .82))) { pick = sp; break; } }
     if (!pick || q.x < 0 || q.x > v.W || q.y < 0 || q.y > v.H) continue;
     placed.push(box(q.x + pick[0], q.y + pick[1], c[0], .82));
-    labels.push({ x: q.x + pick[0], y: q.y + pick[1], ground, groundOffset: { x: pick[0], y: pick[1] }, text: c[0], alpha: 1, scale: .82 });
+    labels.push({ x: q.x + pick[0], y: q.y + pick[1], ground, groundOffset: { x: pick[0], y: pick[1] }, text: c[0], alpha: detailAlpha, scale: .82 });
   }
   if (ar.cities) for (const region of detailRegions(proj,geo)) {
+    const alpha = detailAlpha * detailVisibility(v, region, off, 18, 40);
+    if (!alpha) continue;
     const q = project(v,region.cx + off,region.cy), text = region.name.split(' · ')[0];
+    if (q.z <= v.near) continue;
     if (routeNames.has(routeLabelKey(text))) continue;
     if (labels.some(l => l.text === text)) continue;
     const r = box(q.x,q.y,text,.65,{shape:'none'});
     if (q.x < 0 || q.x > v.W || q.y < 0 || q.y > v.H || hits(r)) continue;
-    placed.push(r); labels.push({x:q.x,y:q.y,ground:{X:region.cx + off,Y:region.cy},text,alpha:.9,scale:.65,over:{shape:'none',halo:true}});
+    placed.push(r); labels.push({x:q.x,y:q.y,ground:{X:region.cx + off,Y:region.cy},text,alpha:.9 * alpha,scale:.65,over:{shape:'none',halo:true}});
   }
   ctx.restore();
 }
@@ -1838,9 +1901,9 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (cacheBase) drawPreviewBase(ctx, v, geo, th, proj); else drawBase(ctx, v, geo, th, proj);
   // Route names belong to their travel clip, including before and after it.
-  if(baseMap.mode==='modern'){
+  if(baseMap.mode==='modern'||baseMap.mode==='historical1300'){
     labels.push(...atlasMapLabels(proj, geo, v));
-    drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
+    if(baseMap.mode==='modern')drawAreaDetail(ctx, v, geo, th, proj, labels, controlledNames);
   }
   const tag = (a, fn) => { const n = labels.length; fn(); for (let i = n; i < labels.length; i++) labels[i].item = a; }; // remember which item each label belongs to (for its style)
   // Reveal new fills over existing paint. Restore the base only within the

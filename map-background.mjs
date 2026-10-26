@@ -1,4 +1,4 @@
-export const MAP_BACKGROUNDS={modern:'Modern world',coastline:'Land only · no modern borders',image:'Historical / custom map image',blank:'Blank canvas'};
+export const MAP_BACKGROUNDS={modern:'Modern world',historical1300:'World · c. AD 1300',coastline:'Land only · no modern borders',image:'Historical / custom map image',blank:'Blank canvas'};
 export const DEFAULT_MAP_BACKGROUND={mode:'modern',color:'#eef1ec',west:-180,east:180,north:85.0511287798,south:-85.0511287798};
 export const mapBackgroundOf=project=>({...DEFAULT_MAP_BACKGROUND,...project.mapBackground});
 export function validateMapBackground(project){

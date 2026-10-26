@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Browser map animation studio with keyframes, terrain, routes, objects, audio, and video export",
   "scripts": {
+    "test:map-pin-styles": "node tests/map-pin-styles.test.mjs",
+    "test:map-pin-styles:browser": "node tests/map-pin-styles.browser.test.mjs",
     "test:map-lighting-network": "node tests/map-lighting-network.test.mjs",
     "test:map-lighting-network:browser": "node tests/map-lighting-network.browser.test.mjs",
     "test:map-object-trails": "node tests/map-object-trails.test.mjs",

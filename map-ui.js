@@ -1,4 +1,5 @@
 import { duplicateLayers, removeLayers, arrangeLayers, copyLayers, pasteLayers } from './map-layer-actions.mjs?v=map-order-1';
+import { PIN_STYLES } from './map-pin-styles.mjs';
 import { installDirectMapEditing } from './map-direct-edit.mjs?v=add-submenu-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
 import { interfaceIcon, setIconButton } from './interface-icons.mjs';
@@ -847,6 +848,9 @@ function actionFields(a) {
       return F.sel('__pinMove', 'Position', mv, Object.entries(PIN_MODES)) + (mv === 'stay' ? F.loc('place', 'Location', a.place, 'place') : mv === 'move' ? F.loc('place', 'From', a.place, 'place') + F.loc('to', 'To', a.to, 'place') + '<p class="mini-label">It travels for the animation duration above, then stays at the end until the bar ends.</p>' : pathFields(a))
         + (mv !== 'stay' ? F.chk('trail', 'Draw a trail behind it', a.trail !== false) + (ownColor ? F.color('color', 'Trail color', a.color) : '') : '')
         + F.sel('__pinDisplay', 'Display', display, [['both', 'Pin + text'], ['icon', 'Pin only'], ['text', 'Text only'], ...(a.badge ? [['badge', 'Image badge (legacy)']] : [])])
+        + (display !== 'text' ? (a.badge ? '' : F.sel('pinStyle','Pin style',a.pinStyle||'classic',Object.entries(PIN_STYLES)))
+          + F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
+          + (a.sizeMode==='map'?F.num('sizeZoom','Anchor zoom',a.sizeZoom??3,0,14,.1):'') : '')
         + (display === 'text' && mv === 'stay' ? F.sel('labelPlacement','Anchor',a.labelPlacement||'map',[['map','Geographic position'],['screen','Canvas position']]) + (a.labelPlacement==='screen' ? F.num('x','Horizontal position (%)',a.x??50,0,100)+F.num('y','Vertical position (%)',a.y??15,0,100) : F.num('offsetX','Horizontal offset',a.offsetX??0,-1000,1000)+F.num('offsetY','Vertical offset',a.offsetY??0,-1000,1000)) : '')
         + (display === 'badge' ? '<button type="button" data-imageobject>Move image to Objects</button>' + badgeFields(a) + F.chk('showLabel', 'Show label', a.showLabel) : (a.showIcon !== false ? F.color('color', 'Pin color', a.color) : ''))
         + (a.showIcon !== false || a.badge ? F.range('size', a.badge ? 'Badge size' : 'Pin size', a.size, .5, 3, .1, x => x + '×') : '')

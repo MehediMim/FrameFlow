@@ -1,4 +1,5 @@
 import { curvedGlyphs, flagImageCrop, flagFeatureParts } from './map-label-curve.mjs';
+import { PIN_STYLES, pinScaleAt, pinSizeAt, drawPinSymbol } from './map-pin-styles.mjs';
 import { mapStackOrder } from './map-layer-actions.mjs?v=map-order-1';
 import { mapBackgroundOf, validateMapBackground } from './map-background.mjs';
 import { SCENE_PANEL_DEFAULTS, drawScenePanel, validateScenePanel } from './map-scene-panel.mjs';
@@ -1676,6 +1677,7 @@ function drawPinTrail(ctx, v, spot, a, alpha) {
   ctx.globalAlpha = alpha * .75; ctx.strokeStyle = a.color; ctx.lineWidth = 3 * v.unit; ctx.setLineDash([8 * v.unit, 6 * v.unit]); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
 }
 function drawBadge(ctx, v, geo, a, frame, labels) {
+  if (a.type === 'pin') v = {...v, unit: v.unit * pinScaleAt(a, v.cam.zoom)};
   const alpha = actAlpha(a, frame), loc = pinSpot(v, geo, a, frame); if (!loc || alpha <= 0) return;
   const st = badgeOf(a), t = pinAppear(a, loc, frame), pop = ease('backOut', clamp01(t / .4));
   // exit: plays over the last frames of the item's bar (fewer when the bar is short)
@@ -1736,7 +1738,8 @@ function drawPin(ctx, v, geo, th, a, frame, labels) {
   }
   const alpha = actAlpha(a, frame), r = pinSpot(v, geo, a, frame); if (!r || alpha <= 0) return;
   const t = pinAppear(a, r, frame), showIcon = a.showIcon !== false;
-  const g = project(v, r.X, r.Y, 0), s = a.size * v.unit * 24;
+  const pinUnit = v.unit * pinScaleAt(a, v.cam.zoom);
+  const g = project(v, r.X, r.Y, 0), s = pinSizeAt(a, v.cam.zoom) * v.unit * 24;
   drawPinTrail(ctx, v, r, a, alpha);
   if (showIcon) {
     const drop = clamp01(t / .45), fall = (1 - bounce(drop)) * 240 * v.unit, top = project(v, r.X, r.Y, fall);
@@ -1746,21 +1749,18 @@ function drawPin(ctx, v, geo, th, a, frame, labels) {
     ctx.beginPath(); ctx.ellipse(g.x, g.y, s * .5 * (1 - fall / (700 * v.unit)), s * .2 * (1 - fall / (700 * v.unit)), 0, 0, Math.PI * 2); ctx.fill();
     if (t > .4) for (let i = 0; i < 2; i++) {
       const q = (((frame - a.start) / 50) + i / 2) % 1;
-      ctx.beginPath(); groundCircle(ctx, v, r.X, r.Y, (10 + q * 54) * v.unit * a.size);
+      ctx.beginPath(); groundCircle(ctx, v, r.X, r.Y, (10 + q * 54) * pinUnit * a.size);
       ctx.globalAlpha = alpha * (1 - q) * .75; ctx.strokeStyle = a.color; ctx.lineWidth = 2.4 * v.unit; ctx.stroke();
     }
     // pin body (tip at the location)
     const x = top.x, y = top.y;
-    ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(x, y);
-    ctx.bezierCurveTo(x - s * .1, y - s * .55, x - s * .62, y - s * .95, x - s * .62, y - s * 1.5);
-    ctx.arc(x, y - s * 1.5, s * .62, Math.PI, 0, false);
-    ctx.bezierCurveTo(x + s * .62, y - s * .95, x + s * .1, y - s * .55, x, y);
-    ctx.fillStyle = a.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.2 * v.unit; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - s * 1.5, s * .24, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = alpha;
+    drawPinSymbol(ctx, a.pinStyle, x, y, s, a.color, pinUnit);
     ctx.restore();
   }
   if (a.showLabel) {
-    const pop = ease('backOut', (t - .45) / .3), offset = showIcon ? -s * 2.5 - 14 * v.unit : 0;
+    const tall = !a.pinStyle || ['classic','flag'].includes(a.pinStyle);
+    const pop = ease('backOut', (t - .45) / .3), offset = showIcon ? -s * (tall ? 2.5 : 1.1) - 14 * v.unit : 0;
     if (pop > 0) labels.push({ x: g.x, y: g.y + offset, ground: { X: r.X, Y: r.Y }, groundOffset: { y: offset }, text: pinName(a, r), alpha: alpha * clamp01(pop * 1.5), scale: .9 + .2 * pop });
   }
 }
@@ -2081,6 +2081,11 @@ export function validateMapProject(p) {
     if (a.type === 'highlight' && a.highlightOrigin !== undefined && !(a.highlightOrigin?.kind === 'point' && isLoc(a.highlightOrigin))) throw Error('Invalid highlight fill start.');
     if (['border', 'highlight'].includes(a.type) && a.invert !== undefined && typeof a.invert !== 'boolean') throw Error('Invalid invert option.');
     if (a.type === 'pin' && !isLoc(a.place)) throw Error('Invalid pin location.');
+    if (a.type === 'pin') {
+      if (a.pinStyle !== undefined && !Object.hasOwn(PIN_STYLES, a.pinStyle)) throw Error('Invalid pin style.');
+      if (a.sizeMode !== undefined && !['screen','map'].includes(a.sizeMode)) throw Error('Invalid pin sizing mode.');
+      if (a.sizeZoom !== undefined && !num(a.sizeZoom,0,14)) throw Error('Invalid pin reference zoom.');
+    }
     if (a.type === 'pin' && a.showIcon !== undefined && typeof a.showIcon !== 'boolean') throw Error('Invalid pin icon setting.');
     if (a.type === 'pin' || (a.type === 'object' && ['image', 'banner', 'artwork', 'portrait', 'flag'].includes(a.glyph))) {
       if (a.badge !== undefined && typeof a.badge !== 'boolean') throw Error('Invalid pin badge setting.');

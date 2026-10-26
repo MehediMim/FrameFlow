@@ -1,4 +1,5 @@
 import { paintObjectPreviews } from './map-object-preview.mjs';
+import { PIN_STYLES, pinSizeAt } from './map-pin-styles.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';
 import { mapStackOrder } from './map-layer-actions.mjs?v=map-order-1';
 import { objectLocationAt, project, screenToLonLat, lonToX, latToY, xToLon, yToLat, countryAt, regionAt, resolveLoc, drawRegionSelection, OBJECT_ICONS, EFFECTS, SHAPES, TRAVEL_ICONS } from './map-engine.mjs?v=path-flow-1';
@@ -73,8 +74,17 @@ export function installDirectMapEditing(api){
       else if(['object','group'].includes(a.type))objectControls(a);
       else layerControls(a);
     });
-    const objects=[...selected].flatMap(id=>{const a=item(id);return a?.type==='group'?a.memberIds.map(item):[a];}).filter(a=>a?.type==='object');
-    if(objects.length)contextSubmenu('Object sizing','directSizing',sub=>{
+    const pins=[...selected].map(item).filter(a=>a?.type==='pin'&&!a.badge&&a.showIcon!==false);
+    if(pins.length)contextSubmenu('Pin style','directPinStyle',sub=>{
+      for(const [value,label] of Object.entries(PIN_STYLES)){
+        const button=menuButton(label,'directPinStyle'+value[0].toUpperCase()+value.slice(1),()=>{
+          api.pause();api.checkpoint();applySelection('pinStyle',value);api.changed();api.renderInspector();toolbar(true);
+        },sub);
+        button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(pins.every(a=>(a.pinStyle||'classic')===value)));
+      }
+    });
+    const objects=[...selected].flatMap(id=>{const a=item(id);return a?.type==='group'?a.memberIds.map(item):[a];}).filter(a=>a?.type==='object'||a?.type==='pin'&&(a.showIcon!==false||a.badge));
+    if(objects.length)contextSubmenu(objects.every(a=>a.type==='pin')?'Pin sizing':'Object sizing','directSizing',sub=>{
       for(const [value,label]of [['screen','Fixed on screen'],['map','Scale with map']]){
         const button=menuButton(label,'directSizing'+(value==='map'?'Map':'Screen'),()=>{
           api.pause();api.checkpoint();applySelection('sizeMode',value);api.changed();api.renderInspector();
@@ -170,7 +180,7 @@ export function installDirectMapEditing(api){
   }
   function sizeHandle(a,v){
     const p=anchor(a,v);if(!p||p.z<=v.near)return null;
-    const size=(a.type==='label'||a.type==='pin'&&a.showIcon===false)?(a.labelStyle?.size||api.project().labelStyle.size||16)/24:a.type==='group'?groupPoseAt(a,api.frame()).scale:a.type==='object'?objectSizeAt(a,api.frame(),v.cam.zoom):a.size||1;
+    const size=(a.type==='label'||a.type==='pin'&&a.showIcon===false&&!a.badge)?(a.labelStyle?.size||api.project().labelStyle.size||16)/24:a.type==='group'?groupPoseAt(a,api.frame()).scale:a.type==='object'?objectSizeAt(a,api.frame(),v.cam.zoom):a.type==='pin'?pinSizeAt(a,v.cam.zoom):a.size||1;
     const radius=Math.max(48,52*size)*v.unit,offset=radius/Math.SQRT2;
     return{...p,sx:p.x-offset,sy:p.y+offset,radius};
   }
@@ -204,10 +214,11 @@ export function installDirectMapEditing(api){
         }
         continue;
       }
-      if(a.type==='label'||a.type==='pin'&&a.showIcon===false)continue;
+      if(a.type==='label'||a.type==='pin'&&a.showIcon===false&&!a.badge)continue;
       const spot=objectLocationAt(v,api.geo(),a.type==='plane'?{...a,place:a.from,mode:a.mode==='path'?'path':'move'}:a,api.frame());if(!spot)continue;
-      const q=project(v,spot.X,spot.Y,a.type==='plane'?(a.lift||0)*v.unit*Math.sin(Math.PI*spot.p):0),radius=(a.type==='effect'?35:24)*(a.type==='plane'?(a.size||20)/20:a.size||1)*v.unit;
-      if(q.z>v.near&&Math.abs(p.x-q.x)<radius&&p.y>q.y-radius*(a.type==='pin'?2.2:1.4)&&p.y<q.y+radius)return a;
+      const q=project(v,spot.X,spot.Y,a.type==='plane'?(a.lift||0)*v.unit*Math.sin(Math.PI*spot.p):0),radius=(a.type==='effect'?35:24)*(a.type==='plane'?(a.size||20)/20:a.type==='pin'?pinSizeAt(a,v.cam.zoom):a.size||1)*v.unit;
+      const pinWidth=a.type==='pin'?(a.badge?2:a.pinStyle==='flag'?1.4:1):1;
+      if(q.z>v.near&&Math.abs(p.x-q.x)<radius*pinWidth&&p.y>q.y-radius*(a.type==='pin'?(a.badge?5:2.2):1.4)&&p.y<q.y+radius*(a.badge?2:1))return a;
     }
 
     for(const label of [...(v.labels||[])].reverse()){
@@ -246,7 +257,7 @@ export function installDirectMapEditing(api){
         if(object.objectAnimation&&!objectAnimationOptions(value).some(([key])=>key===object.objectAnimation))object.objectAnimation='auto';
       }
       const common=['color','label','showLabel','size','opacity'];
-      const byType={pin:['__pinDisplay','labelPlacement'],label:['text','labelPlacement'],effect:['fx','repeat'],shape:['shape','width'],plane:['icon','planeColor'],object:['glyph','sizeMode']};
+      const byType={pin:['__pinDisplay','labelPlacement','pinStyle','sizeMode'],label:['text','labelPlacement'],effect:['fx','repeat'],shape:['shape','width'],plane:['icon','planeColor'],object:['glyph','sizeMode']};
       if(!common.includes(field)&&!byType[object.type]?.includes(field))continue;
       if(field==='color'&&object.type==='label'){object.labelStyle={...api.project().labelStyle,...object.labelStyle,text:value};continue;}
       if(field==='__pinDisplay'){
@@ -301,7 +312,7 @@ export function installDirectMapEditing(api){
     bar.append(form);paintObjectPreviews(form);
   }
   function layerControls(a){
-    const fields={pin:['color'],label:['text'],effect:['color'],shape:['color'],plane:['color'],scene:['title']}[a.type]||[];
+    const fields={pin:['color','pinStyle','sizeMode'],label:['text'],effect:['color'],shape:['color'],plane:['color'],scene:['title']}[a.type]||[];
     const form=document.createElement('div');form.className='m-map-object-controls m-map-layer-controls';
     for(const field of fields){
       if(selected.size>1&&field!=='color'&&![...selected].every(id=>item(id)?.type===a.type))continue;

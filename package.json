@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Browser map animation studio with keyframes, terrain, routes, objects, audio, and video export",
   "scripts": {
+    "test:map-antique": "node tests/map-antique.test.mjs",
     "test:map-historical": "node tests/map-historical.test.mjs",
     "test:map-historical:browser": "node tests/map-historical.browser.test.mjs",
     "test:map-pin-styles": "node tests/map-pin-styles.test.mjs",

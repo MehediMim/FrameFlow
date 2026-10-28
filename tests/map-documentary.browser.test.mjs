@@ -65,6 +65,29 @@ try {
   const stored=()=>evaluate(`JSON.parse(localStorage.getItem('frameflow-map-v1'))`);
   await change('#mFps','30');
   const before=await stored();
+  await change('#mTheme','antique');
+  const antique=await stored();
+  assert.equal(antique.theme,'antique');assert.equal(antique.texture.type,'paper');
+  assert.equal(antique.labelStyle.font,'Georgia');assert.equal(antique.atlasLabels.text,'#30291e');
+  assert.deepEqual(antique.actions,before.actions,'antique style preserves clips');
+  await evaluate(`document.querySelector('#mUndo').click()`);
+  assert.equal((await stored()).theme,before.theme,'antique style is one undo step');
+  await evaluate(`document.querySelector('#mRedo').click()`);
+  await evaluate('location.reload()');
+  await waitFor(`document.querySelectorAll('#mDlCountry option').length>100`);
+  assert.deepEqual(await stored(),antique,'antique style survives reload');
+  const antiqueRender=await evaluate(`(async()=>{
+    const E=await import('./map-engine.mjs'),A=await import('./map-antique.mjs');
+    const geo=E.buildGeo(await fetch('map-data/countries-50m.json').then(r=>r.json()));
+    const p=A.applyAntiqueLook(E.newMapProject());p.camera.init={lon:14,lat:47,zoom:3.1,pitch:0,bearing:0};
+    E.validateMapProject(p);
+    const c=document.createElement('canvas');c.width=1280;c.height=720;const ctx=c.getContext('2d',{willReadFrequently:true});
+    const view=E.drawMap(ctx,1280,720,p,0,geo),pixels=ctx.getImageData(0,0,1280,720).data.slice();
+    E.drawMap(ctx,1280,720,p,0,geo);
+    return{image:c.toDataURL(),labels:E.atlasMapLabels(p,geo,view).length,stable:ctx.getImageData(0,0,1280,720).data.every((v,i)=>v===pixels[i])};
+  })()`);
+  assert.ok(antiqueRender.labels>5,'antique atlas labels render');assert.equal(antiqueRender.stable,true,'paper grain is stable across frames');
+  await writeFile(join(tmpdir(),'frameflow-antique-map.png'),Buffer.from(antiqueRender.image.split(',')[1],'base64'));
   await change('#mTheme','documentary');
   let project=await stored();
   assert.equal(project.theme,'documentary');assert.equal(project.texture.type,'paper');assert.equal(project.atlasLabels.caps,true);
@@ -72,7 +95,7 @@ try {
   assert.equal(await evaluate(`document.querySelector('#mTerrainLow').value`),'#829888');
   assert.deepEqual(project.actions,before.actions,'applying look preserves existing clips');
   await evaluate(`document.querySelector('#mUndo').click()`);
-  assert.equal((await stored()).theme,before.theme,'look is undoable');
+  assert.equal((await stored()).theme,antique.theme,'look is undoable');
   await evaluate(`document.querySelector('#mRedo').click()`);
   assert.equal((await stored()).theme,'documentary');
   await evaluate(`document.querySelector('[data-madd="object"]').click()`);

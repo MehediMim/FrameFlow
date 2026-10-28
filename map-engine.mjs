@@ -15,6 +15,7 @@ import { armyCopies, validateArmyUnits } from './map-armies.mjs';
 import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { DOCUMENTARY_TERRAIN, DOCUMENTARY_LABEL } from './map-documentary.mjs';
+import { ANTIQUE_LABEL, drawAntiqueFrame } from './map-antique.mjs';
 import { validatePlaqueStyle } from './map-plaque-text.mjs';
 import { validatePathAnimation } from './map-path-animation.mjs';
 import { validPolygon } from './map-area-selection.mjs';
@@ -53,6 +54,7 @@ export const yToLat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / RAD;
 
 // ---------------------------------------------------------------- Themes
 export const THEMES = {
+  antique: { label: 'Antique parchment', void: '#b6ad88', ocean: '#929c88', land: ['#e2cfa0', '#d2b49a', '#dcc597', '#c6a08c', '#e8d8ad'], border: '#665840', borderA: .8, bw: .8, grat: '#766d50', gratA: .14, dim: '#493823', vignette: .2, pill: 'rgba(224,205,162,.94)', pillText: '#30291e' },
   kingdom: { label:'Kingdom strategy · illustrated', strategy:true, void:'#293d35', ocean:'#4a8f9f', land:['#85a350','#8baa56','#97a75b','#7f9b4b','#a0ad60'], border:'#4c663d', borderA:.4, bw:.7, grat:'#e1e4af', gratA:.12, dim:'#182c24', vignette:.14, pill:'rgba(47,49,32,.94)', pillText:'#f6ecd1' },
   documentary: { label: 'War documentary · colored terrain', relief: true, terrain: DOCUMENTARY_TERRAIN, territoryTint: .72, void: '#263d4a', ocean: '#345772', land: ['#4a9c91', '#866083', '#bf643c', '#b39a4d', '#537d94'], border: '#303d36', borderA: .42, bw: .75, grat: '#c8d4ca', gratA: .12, dim: '#192c30', vignette: .24, pill: 'rgba(38,49,43,.94)', pillText: '#eee6cf' },
   relief: { label: 'Cartographic Relief', relief: true, void: '#263f4b', ocean: '#246c93', land: ['#596653', '#596653', '#596653', '#596653', '#596653'], border: '#45534a', borderA: .42, bw: .65, grat: '#dce5da', gratA: .12, dim: '#14242a', vignette: .12, pill: 'rgba(31,43,42,.9)', pillText: '#f5f0dc' },
@@ -723,6 +725,7 @@ export const LABEL_SHAPES = { pill: 'Pill', rounded: 'Rounded box', square: 'Squ
 export const LABEL_WEIGHTS = [[400, 'Regular'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold']];
 export const DEFAULT_LABEL_STYLE = { font: 'Arial', weight: 600, italic: false, size: 14, caps: false, spacing: 0, textPath: 'straight', curveAngle: 90, shape: 'pill', placement: 'screen', useTheme: true, text: '#ffffff', bg: '#0c1c28', bgAlpha: .9, border: '#ffffff', borderW: 0, halo: false, shadow: false };
 export const LABEL_PRESETS = {
+  antique: { label: 'Antique serif capitals', style: { ...ANTIQUE_LABEL } },
   documentary: { label: 'War documentary · military lettering', style: { ...DOCUMENTARY_LABEL } },
   atlasGround: { label: 'Atlas serif · fixed to map', style: { placement: 'map', scaleMode: 'fixed', font: 'Libre Baskerville', weight: 700, size: 48, shape: 'none', halo: true, haloWidth: .08, useTheme: false, text: '#d5e3df', bg: '#172c30', spacing: 8 } },
   curved: { label: 'Curved atlas text', style: { placement:'map', shape:'none', font:'Libre Baskerville', size:36, halo:true, textPath:'arc', curveAngle:90 } },
@@ -1957,6 +1960,7 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   if(foreground)ctx.drawImage(foreground.surface,0,0);
   if(!['blank','image'].includes(baseMap.mode))vignette(ctx, v, th);
+  if (proj.theme === 'antique' && !['blank','image'].includes(baseMap.mode)) drawAntiqueFrame(ctx, W, H);
   for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
   applySceneLighting(ctx,W,H,proj.lighting);

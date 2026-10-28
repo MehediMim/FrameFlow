@@ -1,5 +1,6 @@
 import { duplicateLayers, removeLayers, arrangeLayers, copyLayers, pasteLayers } from './map-layer-actions.mjs?v=map-order-1';
 import { PIN_STYLES } from './map-pin-styles.mjs';
+import { applyAntiqueLook } from './map-antique.mjs';
 import { installDirectMapEditing } from './map-direct-edit.mjs?v=add-submenu-1';
 import { paintObjectPreviews } from './map-object-preview.mjs';
 import { interfaceIcon, setIconButton } from './interface-icons.mjs';
@@ -395,7 +396,7 @@ function suggestTarget() {
   return t && t.kind !== 'all' ? clone(t) : null;
 }
 function addAction(type,extra={}) {
-  if(type==='label'){type='pin';extra={showIcon:false,showLabel:true,label:'Your label',labelPlacement:'map',offsetX:0,offsetY:0,labelStyle:{...DEFAULT_LABEL_STYLE,...LABEL_PRESETS.atlasGround.style},...extra};}
+  if(type==='label'){type='pin';extra={showIcon:false,showLabel:true,label:'Your label',labelPlacement:'map',offsetX:0,offsetY:0,labelStyle:{...DEFAULT_LABEL_STYLE,...LABEL_PRESETS[proj.theme==='antique'?'antique':'atlasGround'].style},...extra};}
   if(type==='plane'){type='object';extra={mode:'move',glyph:'jet',place:{kind:'city',name:'London',lat:51.5072,lon:-.1276},to:{kind:'city',name:'New York',lat:40.7128,lon:-74.006},...extra};}
   const explicitPlace=!!extra.place;
   const dc = detailCountry();
@@ -1370,7 +1371,7 @@ function renderAtlasLabelPanel() {
   const color = (key, title) => `<label>${title}<input type="color" data-atlas="${key}" value="${s[key]}"></label>`;
   box.innerHTML = `<section class="m-settings-group"><h4>Country &amp; ocean labels</h4>
     <p class="mini-label">Names fit each country’s mainland shape and follow its natural direction. Use the country size multiplier to adjust all names together. Fixed zoom sizing preserves these proportions as you zoom.</p>
-    ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('caps', 'Uppercase military lettering')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
+    ${chk('countries', 'Label all countries')}${chk('oceans', 'Label oceans and major seas')}${chk('caps', 'Uppercase lettering')}${chk('declutter', 'Reduce overlapping names')}${chk('fitCountries', 'Fit label size to each country')}${chk('countryAngles', 'Follow country and ocean angles')}
     ${fontPickerHtml('mAtlasFont', 'Font', s.font)}
     <div class="two">${num('size', 'Country size multiplier (30 = normal)', 6, 240)}${num('oceanSize', 'Ocean text size', 6, 240)}</div>
     <label>Text path<select data-atlas="textPath"><option value="straight" ${s.textPath==='straight'?'selected':''}>Straight</option><option value="arc" ${s.textPath==='arc'?'selected':''}>Circular arc</option></select></label>
@@ -1668,7 +1669,8 @@ function bindSettings() {
     try{validateMapBackground({mapBackground:b});pause();checkpoint();proj.mapBackground=b;saveLocal();renderAll();}catch(error){notify(error.message);renderMapBackgroundSettings();}
   };
   $('#mTheme').onchange = edit(el => {
-    if(el.value==='documentary')applyDocumentaryLook(proj);
+    if(el.value==='antique')applyAntiqueLook(proj);
+    else if(el.value==='documentary')applyDocumentaryLook(proj);
     else proj.theme=el.value;
   });
   $('#mImagery').onchange = edit(el => proj.imagery = el.value);

@@ -101,6 +101,48 @@ try {
   assert.equal((await stored()).actions.find(a=>a.id==='object').sizeMode,'map','right-click sizing changes the object');
   assert.equal((await stored()).actions.find(a=>a.id==='object').sizeZoom,4,'map sizing captures the current zoom');
   await evaluate(`document.querySelector('#mUndo').click()`);
+  // Sizing uses the same context menu for every supported stroke and pattern.
+  for(const shape of ['arrow','zone','noFly','road','railway','area','distance']){
+    await evaluate(`document.querySelector('[data-mid="shape"]').click()`);
+    await change('#mInspector [data-mf="shape"]',shape);
+    const before=(await stored()).actions.find(a=>a.id==='shape');
+    await openEdit();
+    assert.ok(await evaluate(`!!document.querySelector('[data-direct-sizing]')`),shape+' exposes canvas sizing');
+    await evaluate(`document.querySelector('[data-direct-sizing-map]').click()`);
+    const after=(await stored()).actions.find(a=>a.id==='shape');
+    assert.equal(after.sizeMode,'map');assert.equal(after.sizeZoom,4);
+    assert.deepEqual(after.path,before.path,shape+' sizing preserves map geometry');
+    await openEdit();
+    assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="sizeZoom"]')`),shape+' exposes anchor zoom');
+    await change('#mMapContext [data-direct-field="sizeZoom"]',3.5);
+    assert.equal((await stored()).actions.find(a=>a.id==='shape').sizeZoom,3.5);
+    await evaluate(`document.querySelector('#mUndo').click();document.querySelector('#mUndo').click();document.querySelector('#mUndo').click()`);
+  }
+  await evaluate(`document.querySelector('[data-mid="label"]').click()`);
+  await openEdit();await evaluate(`document.querySelector('[data-direct-text-sizing-map]').click()`);
+  assert.equal((await stored()).actions.find(a=>a.id==='label').labelStyle.scaleMode,'world');
+  assert.equal((await stored()).actions.find(a=>a.id==='label').labelStyle.referenceZoom,4);
+  await openEdit();await change('#mMapContext [data-direct-field="__textSize"]',32);
+  assert.equal((await stored()).actions.find(a=>a.id==='label').labelStyle.size,32);
+  await evaluate(`document.querySelector('#mUndo').click();document.querySelector('#mUndo').click()`);
+  for(const [id,field,value] of [['object','size',1.5],['object','objectAngle',45],['pin','size',1.5],['effect','size',2],['travel','size',32]]){
+    await evaluate(`document.querySelector('[data-mid="${id}"]').click()`);await openEdit();
+    const before=(await stored()).actions.find(a=>a.id===id);
+    assert.ok(await evaluate(`!!document.querySelector('#mMapContext [data-direct-field="${field}"]')`),id+' has '+field+' controls');
+    await change('#mMapContext [data-direct-field="'+field+'"]',value);
+    assert.equal((await stored()).actions.find(a=>a.id===id)[field],value,id+' exposes '+field);
+    await evaluate(`document.querySelector('#mUndo').click()`);
+    assert.deepEqual((await stored()).actions.find(a=>a.id===id),before,id+' numeric edit has one undo step');
+  }
+  await evaluate(`document.querySelector('[data-mid="object"]').click()`);
+  await change('#mInspector [data-mf="autoObjectKey"]',true);
+  for(const [field,value] of [['size',1.5],['objectAngle',45]]){
+    await openEdit();await change('#mMapContext [data-direct-field="'+field+'"]',value);
+    const object=(await stored()).actions.find(a=>a.id==='object');
+    assert.equal(object.objectKeys.find(k=>k.frame===30).values[field],value,'canvas '+field+' edit respects auto-key');
+    await evaluate(`document.querySelector('#mUndo').click()`);
+  }
+  await evaluate(`document.querySelector('#mUndo').click()`);
   const shortcut=key=>evaluate(`document.activeElement?.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},ctrlKey:true,bubbles:true,cancelable:true}))`);
   await evaluate(`document.querySelector('[data-mid="object"]').click()`);
   const copiedObject=(await stored()).actions.find(a=>a.id==='object');

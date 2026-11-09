@@ -83,15 +83,29 @@ export function installDirectMapEditing(api){
         button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(pins.every(a=>(a.pinStyle||'classic')===value)));
       }
     });
-    const objects=[...selected].flatMap(id=>{const a=item(id);return a?.type==='group'?a.memberIds.map(item):[a];}).filter(a=>a?.type==='object'||a?.type==='pin'&&(a.showIcon!==false||a.badge));
-    if(objects.length)contextSubmenu(objects.every(a=>a.type==='pin')?'Pin sizing':'Object sizing','directSizing',sub=>{
+    const members=[...selected].flatMap(id=>{const a=item(id);return a?.type==='group'?a.memberIds.map(item):[a];}).filter(Boolean);
+    const objects=members.filter(a=>['object','shape'].includes(a.type)||a.type==='pin'&&(a.showIcon!==false||a.badge));
+    if(objects.length)contextSubmenu('Sizing','directSizing',sub=>{
       for(const [value,label]of [['screen','Fixed on screen'],['map','Scale with map']]){
         const button=menuButton(label,'directSizing'+(value==='map'?'Map':'Screen'),()=>{
-          api.pause();api.checkpoint();applySelection('sizeMode',value);api.changed();api.renderInspector();
+          api.pause();api.checkpoint();applySelection('sizeMode',value);api.changed();api.renderInspector();toolbar(true);
         },sub);
         button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(objects.every(a=>(a.sizeMode||'screen')===value)));
       }
     });
+    const texts=members.filter(a=>a.type==='label'||a.type==='pin'&&a.showIcon===false&&!a.badge);
+    if(texts.length)contextSubmenu('Text sizing','directTextSizing',sub=>{
+      for(const [value,label] of [['fixed','Fixed on screen'],['world','Scale with map']]){
+        const button=menuButton(label,'directTextSizing'+(value==='world'?'Map':'Screen'),()=>{
+          api.pause();api.checkpoint();applySelection('__textScaleMode',value);api.changed();api.renderInspector();toolbar(true);
+        },sub);
+        button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(texts.every(a=>({...api.project().labelStyle,...a.labelStyle}.scaleMode||'fixed')===value)));
+      }
+    });
+    if(objects.some(a=>a.type==='shape')){
+      const note=document.createElement('div');note.className='m-map-context-help';note.textContent='Sizing changes strokes and patterns; paths follow the map.';note.setAttribute('role','presentation');
+      menu.querySelector('[data-direct-sizing-menu]').append(note);
+    }
   }
   function addMenu(regions=false){
     contextSubmenu('Add','directAdd',sub=>{
@@ -244,12 +258,24 @@ export function installDirectMapEditing(api){
     const roots=[...selected].map(item).filter(Boolean),objects=new Set();
     for(const root of roots){
       if(root.type==='group'){
+        if(field==='__groupScale'){
+          if(root.groupKeys?.some(k=>k.values.scale!==undefined))putGroupKey(root,api.frame(),{scale:value});else root.transform={...root.transform,scale:value};
+          continue;
+        }
         if(field==='color')root.color=value;
         for(const id of root.memberIds)objects.add(item(id));
       }else objects.add(root);
     }
     for(const object of objects){
       if(!object)continue;
+      if(['__textSize','__textScaleMode','__textZoom'].includes(field)){
+        if(object.type!=='label'&&!(object.type==='pin'&&object.showIcon===false&&!object.badge))continue;
+        const style={...api.project().labelStyle,...object.labelStyle};
+        if(field==='__textSize')style.size=value;
+        else if(field==='__textZoom')style.referenceZoom=value;
+        else{if(style.scaleMode!==value&&value==='world')style.referenceZoom=api.view()?.cam.zoom??api.project().camera.init.zoom;style.scaleMode=value;}
+        object.labelStyle=style;continue;
+      }
       if(field==='glyph'){
         const old=OBJECT_ICONS[object.glyph],next=OBJECT_ICONS[value];if(!next)continue;
         if(object.color===old?.color)object.color=next.color;
@@ -257,9 +283,11 @@ export function installDirectMapEditing(api){
         if(object.objectAnimation&&!objectAnimationOptions(value).some(([key])=>key===object.objectAnimation))object.objectAnimation='auto';
       }
       const common=['color','label','showLabel','size','opacity'];
-      const byType={pin:['__pinDisplay','labelPlacement','pinStyle','sizeMode'],label:['text','labelPlacement'],effect:['fx','repeat'],shape:['shape','width'],plane:['icon','planeColor'],object:['glyph','sizeMode']};
+      const byType={pin:['__pinDisplay','labelPlacement','pinStyle','sizeMode','sizeZoom'],label:['text','labelPlacement'],effect:['fx','repeat'],shape:['shape','width','fillAlpha','sizeMode','sizeZoom'],plane:['icon','planeColor','width','lift'],object:['glyph','sizeMode','sizeZoom','objectAngle'],scene:['title']};
       if(!common.includes(field)&&!byType[object.type]?.includes(field))continue;
-      if(field==='color'&&object.type==='label'){object.labelStyle={...api.project().labelStyle,...object.labelStyle,text:value};continue;}
+      if(field==='sizeMode'&&!(object.type==='object'||object.type==='shape'||object.type==='pin'&&(object.showIcon!==false||object.badge)))continue;
+      if(object.type==='object'&&['size','objectAngle'].includes(field)&&(object.autoObjectKey||object.objectKeys?.some(k=>k.values[field]!==undefined))){putObjectKey(object,api.frame(),{[field]:value});continue;}
+      if(field==='color'&&(object.type==='label'||object.type==='pin'&&object.showIcon===false&&!object.badge)){object.labelStyle={...api.project().labelStyle,...object.labelStyle,text:value};continue;}
       if(field==='__pinDisplay'){
         object.badge=false;object.showIcon=value!=='text';object.showLabel=value!=='icon';
         if(value==='text'){object.labelPlacement||='map';object.offsetX??=0;object.offsetY??=0;}
@@ -274,15 +302,15 @@ export function installDirectMapEditing(api){
         const catalog=field==='fx'?EFFECTS:TRAVEL_ICONS,next=catalog[value],old=catalog[object[field]];if(!next)continue;
         if(object.color===old?.color)object.color=next.color;if(object.name===old?.label)object.name=next.label;
       }
-      object[field]=value;
+      const previous=object[field];object[field]=value;
       if(field==='glyph'&&object.mode==='wallPath'&&!['stoneWall','palisade','earthwork','gatehouse','stoneFort','watchtower','bastion'].includes(value))object.mode='stay';
-      if(field==='sizeMode'&&value==='map')object.sizeZoom=api.view()?.cam.zoom??api.project().camera.init.zoom;
+      if(field==='sizeMode'&&value==='map'&&previous!==value)object.sizeZoom=api.view()?.cam.zoom??api.project().camera.init.zoom;
     }
   }
   function objectControls(a){
     const inspector=document.querySelector('#mInspector'),group=a.type==='group';
     const homogeneous=[...selected].every(id=>item(id)?.type===a.type);
-    const keys=group?['__groupColor']:['color'];
+    const keys=!homogeneous?['color']:group?['__groupColor','__groupScale','__groupSizeZoom']:['color','size','objectAngle','sizeZoom'];
     const form=document.createElement('div');form.className='m-map-object-controls'+(group?' m-map-group-controls':!homogeneous?' m-map-layer-controls':'');
     const sources=group||!homogeneous?[]:[inspector.querySelector('[data-object-type]')?.closest('label'),inspector.querySelector('.m-object-picker')];
     for(const key of keys){const el=inspector.querySelector(`[data-mf="${key}"]`);if(!el)continue;if(el.type==='color'){const label=document.createElement('label');label.append('Color',el.cloneNode(true));sources.push(label);}else sources.push(el.closest('.m-loc')||el.closest('label'));}
@@ -298,12 +326,13 @@ export function installDirectMapEditing(api){
     let editing=false;
     const apply=(field,value,commit)=>{
       api.pause();if(!editing){api.checkpoint();editing=true;}
-      applySelection(field.replace('__groupColor','color').replace('__groupSizeMode','sizeMode'),value);
+      applySelection(field.replace('__groupColor','color').replace('__groupSizeMode','sizeMode').replace('__groupSizeZoom','sizeZoom'),value);
       if(commit){editing=false;api.changed();api.renderInspector();toolbar(true);}else api.draw();
     };
     for(const el of form.querySelectorAll('[data-direct-field]')){
+      if(el.type==='range'){el.type='number';el.closest('label').querySelector('.m-val')?.remove();}
       el.oninput=()=>{if(el.type==='color')apply(el.dataset.directField,el.value,false);};
-      el.onchange=()=>apply(el.dataset.directField,el.value,true);
+      el.onchange=()=>{const value=el.type==='number'?el.valueAsNumber:el.value;if(el.type==='number'&&(!Number.isFinite(value)||!el.checkValidity()))return;apply(el.dataset.directField,value,true);};
     }
     for(const button of form.querySelectorAll('[data-direct-object-choice]'))button.onclick=()=>apply('glyph',button.dataset.directObjectChoice,true);
     for(const button of form.querySelectorAll('[data-direct-pick]'))button.onclick=()=>document.querySelector(`#mInspector [data-mpick="${button.dataset.directPick}"]`)?.click();
@@ -312,7 +341,7 @@ export function installDirectMapEditing(api){
     bar.append(form);paintObjectPreviews(form);
   }
   function layerControls(a){
-    const fields={pin:['color','pinStyle','sizeMode'],label:['text'],effect:['color'],shape:['color'],plane:['color'],scene:['title']}[a.type]||[];
+    const fields={pin:['color','pinStyle','size','sizeZoom','label'],label:['text'],effect:['color','size'],shape:['color','width','fillAlpha','sizeZoom','label'],plane:['color','planeColor','size','width','lift'],scene:['title']}[a.type]||[];
     const form=document.createElement('div');form.className='m-map-object-controls m-map-layer-controls';
     for(const field of fields){
       if(selected.size>1&&field!=='color'&&![...selected].every(id=>item(id)?.type===a.type))continue;
@@ -331,7 +360,16 @@ export function installDirectMapEditing(api){
       if(input.type==='color')input.oninput=()=>send(false);input.onchange=()=>send(true);
       form.append(label);
     }
-    if(a.type==='label'){
+    if(a.type==='label'||a.type==='pin'&&a.showIcon===false&&!a.badge){
+      const style={...api.project().labelStyle,...a.labelStyle};
+      for(const [field,title,value,min,max,step] of [['__textSize','Text size',style.size||16,6,240,1],...(style.scaleMode==='world'?[['__textZoom','Anchor zoom',style.referenceZoom??3,0,14,.1]]:[])]){
+        const label=document.createElement('label');label.textContent=title;
+        const input=document.createElement('input');input.type='number';input.min=min;input.max=max;input.step=step;input.value=value;input.dataset.directField=field;
+        input.onchange=()=>{if(!Number.isFinite(input.valueAsNumber)||!input.checkValidity())return;api.pause();api.checkpoint();applySelection(field,input.valueAsNumber);api.changed();api.renderInspector();toolbar(true);};
+        label.append(input);form.append(label);
+      }
+    }
+    if(a.type==='label'||a.type==='pin'&&a.showIcon===false&&!a.badge){
       const label=document.createElement('label');label.textContent='Text color';const input=document.createElement('input');input.type='color';input.value=a.labelStyle?.text||api.project().labelStyle.text;input.dataset.directField='color';
       input.onchange=()=>{api.pause();api.checkpoint();applySelection('color',input.value);api.changed();api.renderInspector();toolbar(true);};label.append(input);form.append(label);
     }

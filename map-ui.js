@@ -1,7 +1,7 @@
 import { duplicateLayers, removeLayers, arrangeLayers, copyLayers, pasteLayers } from './map-layer-actions.mjs?v=map-order-1';
 import { PIN_STYLES } from './map-pin-styles.mjs';
 import { applyAntiqueLook } from './map-antique.mjs';
-import { installDirectMapEditing } from './map-direct-edit.mjs?v=add-submenu-1';
+import { installDirectMapEditing } from './map-direct-edit.mjs?v=consistent-sizing-2';
 import { paintObjectPreviews } from './map-object-preview.mjs';
 import { interfaceIcon, setIconButton } from './interface-icons.mjs';
 import { bindObjectCascade } from './map-object-picker.mjs';

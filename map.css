@@ -191,6 +191,7 @@ body.mode-map #mapStudio{display:flex}
 #mMapContext input[type=text]{width:160px;max-width:100%;min-width:80px}
 #mMapContext .m-map-land-controls input[type=text]{width:130px}
 #mMapContext .m-map-land-controls input[type=number]{width:58px}
+#mMapContext .m-map-object-controls input[type=number]{width:90px}
 #mMapContext .m-object-picker>.mini-label{font-size:9px;line-height:12px;margin:0;color:var(--ff-muted)}
 #mMapContext .m-object-picker summary{display:flex;align-items:center;gap:5px;cursor:pointer}
 #mMapContext .m-object-picker summary>span:not(.m-object-caret){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -210,6 +211,7 @@ body.mode-map #mapStudio{display:flex}
 .m-map-submenu-panel[hidden]{display:none}
 .m-map-submenu-panel.m-map-edit-panel{width:290px;max-width:calc(100vw - 16px)}
 .m-map-context-title{max-width:220px;padding:7px 10px 9px;margin-bottom:4px;border-bottom:1px solid var(--ff-border);color:var(--ff-muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-map-context-help{padding:7px 10px;color:var(--ff-muted);font-size:10px;line-height:1.4;white-space:normal}
 .m-map-add-context [role=menuitemradio]{display:flex;align-items:center;gap:8px}
 .m-map-add-context [role=menuitemradio]::before{content:'';width:12px;flex:none}
 .m-map-add-context [role=menuitemradio][aria-checked=true]::before{content:'\2713';color:var(--ff-accent)}

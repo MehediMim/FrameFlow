@@ -15,7 +15,7 @@ import { armyCopies, validateArmyUnits } from './map-armies.mjs';
 import { wallPlacements } from './map-wall-path.mjs';
 import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { DOCUMENTARY_TERRAIN, DOCUMENTARY_LABEL } from './map-documentary.mjs';
-import { ANTIQUE_LABEL, drawAntiqueFrame } from './map-antique.mjs';
+import { ANTIQUE_LABEL } from './map-antique.mjs';
 import { validatePlaqueStyle } from './map-plaque-text.mjs';
 import { validatePathAnimation } from './map-path-animation.mjs?v=shape-sizing-1';
 import { validPolygon } from './map-area-selection.mjs';
@@ -1996,7 +1996,6 @@ function drawMapScene(ctx, W, H, proj, frame, geo, previewCamera = null, { cache
   for (const l of labels) drawLabel(ctx, v, th, l, { ...labelStyleOf(proj, l.item), ...(l.over || {}) });
   if(foreground)ctx.drawImage(foreground.surface,0,0);
   if(!['blank','image'].includes(baseMap.mode))vignette(ctx, v, th);
-  if (proj.theme === 'antique' && !['blank','image'].includes(baseMap.mode)) drawAntiqueFrame(ctx, W, H);
   for (const a of proj.actions) if (a.type === 'scene') drawScenePanel(ctx,W,H,a,frame,proj.fps);
   if (v.img) drawAttribution(ctx, v, v.img.im.attribution(v.img.id));
   applySceneLighting(ctx,W,H,proj.lighting);
@@ -2059,7 +2058,7 @@ export function makeShot(preset, start, extra = {}) {
 }
 
 export function newMapProject() {
-  return { version: 1, kind: 'map', name: 'Untitled map', width: 1280, height: 720, fps: 30, frames: 240, theme: 'earth', texture: { ...DEFAULT_TEXTURE }, labelStyle: { ...DEFAULT_LABEL_STYLE }, area: { ...DEFAULT_AREA }, graticule: true, camera: { init: { ...DEFAULT_CAM } }, shots: [], actions: [] };
+  return { version: 1, kind: 'map', name: 'Untitled map', width: 1280, height: 720, fps: 30, frames: 1800, theme: 'earth', texture: { ...DEFAULT_TEXTURE }, labelStyle: { ...DEFAULT_LABEL_STYLE }, area: { ...DEFAULT_AREA }, graticule: true, camera: { init: { ...DEFAULT_CAM } }, shots: [], actions: [] };
 }
 export function demoMapProject() {
   const p = newMapProject(); p.name = 'Across the Atlantic'; p.frames = 330;

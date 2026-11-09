@@ -341,7 +341,8 @@ body.landing #landing{display:block}
 </section>
 <label class="m-chk"><input type="checkbox" id="mGrat"> Grid lines</label>
 <label>Canvas <select id="mSize"><option value="1280,720">Landscape · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="1080,1920">Portrait · 1080 × 1920</option><option value="1080,1080">Square · 1080 × 1080</option></select></label>
-<div class="two"><label>Frame rate<select id="mFps"><option>24</option><option selected>30</option><option>60</option></select></label><label>Total frames<input id="mDuration" type="number" value="240" min="2"></label></div>
+<div class="two"><label>Frame rate<select id="mFps"><option>24</option><option selected>30</option><option>60</option></select></label><p class="mini-label">New projects start with a 60-second timeline. Adding longer clips extends it automatically.</p></div>
+<input id="mDuration" type="hidden" value="60">
 </dialog>
 </aside>
 </div>

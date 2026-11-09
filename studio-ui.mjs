@@ -1,7 +1,51 @@
 // Map Studio controls, dialogs, and preview layout.
 import { interfaceIcon, setIconButton } from './interface-icons.mjs';
+import { THEMES } from './map-engine.mjs?v=shape-sizing-1';
 export const CANVAS_SIZES = [['1280,720','Landscape · 1280 × 720'],['1920,1080','Full HD · 1920 × 1080'],['1080,1920','Portrait · 1080 × 1920'],['1080,1080','Square · 1080 × 1080']];
 const esc = v => String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Keep the native controls as the source of truth for loading, undo and saving.
+function installSettingPreviews(panel) {
+  const add = (id, preview) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const label = select.closest('label');
+    const group = document.createElement('div');
+    group.className = 'ff-setting-choices';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', label.firstChild.textContent.trim());
+    const update = () => {
+      const options = [...select.options];
+      if (group.children.length !== options.length) {
+        group.replaceChildren(...options.map(option => {
+          const button = document.createElement('button');
+          button.type = 'button';button.dataset.value = option.value;
+          button.innerHTML = preview(option) + `<span>${esc(option.textContent)}</span>`;
+          button.onclick = () => { select.value = option.value;select.dispatchEvent(new Event('change', { bubbles: true }));update(); };
+          return button;
+        }));
+      }
+      for (const button of group.children) button.setAttribute('aria-pressed', String(button.dataset.value === select.value));
+    };
+    label.after(group);select.classList.add('ff-preview-select');select.tabIndex = -1;
+    // Programmatic value updates do not emit change events. Refresh on open,
+    // undo and other edits, including options populated after initial setup.
+    select.addEventListener('change', update);
+    new MutationObserver(update).observe(select, { childList: true });
+    panel.addEventListener('click', update);
+    panel.addEventListener('toggle', update);
+    panel.addEventListener('focusin', update);
+    update();
+  };
+  add('mSize', option => {
+    const [w,h] = option.value.split(',').map(Number), scale = 58 / Math.max(w,h);
+    return `<div class="ff-format-demo" aria-hidden="true"><i style="width:${w*scale}px;height:${h*scale}px"><span>MAP</span></i></div>`;
+  });
+  const mapDemo = (theme, mode = 'modern') => {
+    const land = theme.land || ['#9db68c'];
+    return `<svg class="ff-map-demo" viewBox="0 0 180 90" aria-hidden="true"><rect width="180" height="90" fill="${esc(mode === 'blank' ? '#eef1ec' : theme.ocean)}"/>${mode === 'blank' ? '' : `<g stroke="${esc(theme.border)}" stroke-width="1"><path fill="${esc(land[0])}" d="M0 12L39 7 62 24 53 45 28 51 0 38Z"/><path fill="${esc(land[1] || land[0])}" d="M62 24L97 12 113 33 95 58 53 45Z"/><path fill="${esc(land[2] || land[0])}" d="M28 51L53 45 75 67 64 90H43Z"/><path fill="${esc(land[3] || land[0])}" d="M113 33L153 20 180 34V75L143 69 95 58Z"/></g><path d="M30 31Q83 12 142 50" fill="none" stroke="${esc(theme.pillText || '#fff')}" stroke-width="2" stroke-dasharray="4 4"/><circle cx="142" cy="50" r="4" fill="${esc(theme.pillText || '#fff')}"/>`}</svg>`;
+  };
+  add('mTheme', option => mapDemo(THEMES[option.value] || THEMES.earth));
+}
 export function settingsSection(title, content, { collapsible = false, open = true } = {}) {
   return collapsible
     ? `<details class="ff-settings-section"${open ? ' open' : ''}><summary>${esc(title)}</summary><div class="ff-settings-fields">${content}</div></details>`
@@ -28,10 +72,10 @@ function arrangeSettings(panel, prefix) {
     const control = id => document.getElementById(id)?.closest('label');
     const size = control(`${prefix}Size`);
     const timing = document.getElementById(`${prefix}Fps`)?.closest('.two');
-    const pages=[section('Document', [size, timing])];
+    const pages=[section('Canvas & playback', [size, timing])];
     if(prefix === 'm') {
       pages.push(section('Base map',[document.getElementById('mBaseMapSettings')]));
-      pages.push(section('Appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSlot'), document.getElementById('mTerrainBox')]));
+      pages.push(section('Map appearance', [control('mTheme'), control('mImagery'), control('mGrat'), document.getElementById('mTextureSlot'), document.getElementById('mTerrainBox')]));
       pages.push(section('Labels', [document.getElementById('mAtlasLabels'), document.getElementById('mLabelStyle')]));
       pages.push(section('Country details', [document.getElementById('mAreaBox')]));
       pages.push(section('Sunlight', [document.getElementById('mLightingBox')]));
@@ -52,6 +96,7 @@ function arrangeSettings(panel, prefix) {
     }
   }
   heading.after(body);
+  if(prefix === 'm') installSettingPreviews(panel);
   const footer = document.createElement('div');footer.className = 'ff-settings-footer';
   const note = document.createElement('span');note.textContent = 'Changes apply immediately';
   const done = document.createElement('button');done.type = 'button';done.className = 'primary';done.textContent = 'Done';done.addEventListener('click',()=>panel.close());

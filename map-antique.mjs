@@ -18,20 +18,3 @@ export function applyAntiqueLook(project) {
   project.graticule = false;
   return project;
 }
-
-/** Screen-space engraving, shared by the editor, stills and video exports. */
-export function drawAntiqueFrame(ctx, W, H) {
-  const u = Math.min(W, H) / 720, inset = 12 * u;
-  ctx.save();
-  ctx.strokeStyle = '#705735'; ctx.lineWidth = 8 * u;
-  ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
-  ctx.strokeStyle = '#deca97'; ctx.lineWidth = 3 * u;
-  ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
-  ctx.strokeStyle = '#705735'; ctx.lineWidth = .8 * u;
-  ctx.strokeRect(inset + 7 * u, inset + 7 * u, W - inset * 2 - 14 * u, H - inset * 2 - 14 * u);
-  // Fine corner flourishes stay within the frame margin.
-  for (const x of [26 * u, W - 26 * u]) for (const y of [26 * u, H - 26 * u]) {
-    ctx.beginPath(); ctx.arc(x, y, 3 * u, 0, Math.PI * 2); ctx.stroke();
-  }
-  ctx.restore();
-}

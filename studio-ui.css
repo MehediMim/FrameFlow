@@ -179,6 +179,17 @@ body.ff-unified{--bg:var(--ff-bg);--panel:var(--ff-panel);--line:var(--ff-border
 .ff-unified #mapStudio .m-clip{top:4px;bottom:4px}
 .ff-unified #mapStudio [data-audio-clip]{top:4px!important;height:24px!important}
 /* Categorized document settings: navigation stays visible as the active panel scrolls. */
+/* Selectable demos retain the native select for project synchronization. */
+#mSettingsPanel .ff-preview-select{position:absolute!important;width:1px!important;height:1px!important;min-height:0!important;padding:0!important;clip-path:inset(50%);overflow:hidden}
+#mSettingsPanel .ff-setting-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#mSettingsPanel .ff-setting-choices button{display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:0;white-space:normal;text-align:left;padding:8px;background:var(--ff-surface);border:1px solid var(--ff-border);border-radius:8px;color:var(--text)}
+#mSettingsPanel .ff-setting-choices button>span{font-size:11px;line-height:1.5}
+#mSettingsPanel .ff-setting-choices button[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:#303e2c}
+#mSettingsPanel .ff-setting-choices button:hover{border-color:var(--accent)}
+#mSettingsPanel .ff-format-demo{height:76px;display:grid;place-items:center;background:#131a1d;border-radius:4px}
+#mSettingsPanel .ff-format-demo i{display:grid;place-items:center;border:1px solid #accb91;border-radius:3px;background:linear-gradient(145deg,#405a49,#273a37);font:600 8px sans-serif;color:#deebd1;box-sizing:border-box}
+#mSettingsPanel .ff-map-demo{display:block;width:100%;height:76px;border-radius:4px;object-fit:cover}
+@media(max-width:380px){#mSettingsPanel .ff-setting-choices{grid-template-columns:minmax(0,1fr)}}
 body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group{display:grid;gap:12px;margin:0;padding:0;border:0;border-radius:0;background:transparent}
 body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group[hidden]{display:none}
 body.ff-unified dialog#mSettingsPanel.ff-settings.ff-organized .m-settings-group > h4{margin:0;padding:0 0 8px;border-bottom:1px solid var(--ff-border);font-size:11px;font-weight:600;color:var(--ff-text)}

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as E from '../map-engine.mjs';
 const load = f => JSON.parse(readFileSync(new URL('../map-data/' + f, import.meta.url), 'utf8'));
 const geo = E.buildGeo(load('countries-50m.json'), load('countries-110m.json'));
+assert.equal(E.newMapProject().frames / E.newMapProject().fps, 60, 'new projects default to 60 seconds');
 for(const mode of ['modern','coastline','image','blank']){
   const backgroundProject=E.newMapProject();backgroundProject.mapBackground={mode};E.validateMapProject(backgroundProject);
 }

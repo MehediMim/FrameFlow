@@ -374,10 +374,9 @@ function regionFields(a) {
     + campaign.regionFields(a) + '</div>';
 }
 function buildStaticUI() {
-  $('#mAddGrid').innerHTML = Object.entries(ACTION_TYPES).filter(([, a]) => !a.hidden).map(([k, a]) => `<button data-madd="${k}" title="${esc(a.hint)}"><b>${interfaceIcon(k)}</b>${a.label}</button>`).join('')+`<button type="button" data-measure-add title="Measure distance or area on the map"><b>${interfaceIcon('measure')}</b>Measure</button>`;
+  $('#mAddGrid').innerHTML = Object.entries(ACTION_TYPES).filter(([, a]) => !a.hidden).map(([k, a]) => `<button data-madd="${k}" title="${esc(a.hint)}"><b>${interfaceIcon(k)}</b>${a.label}</button>`).join('');
   $('#mPresets').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<button data-mpre="${k}" title="${esc(p.hint)}"><b>${interfaceIcon(k)}</b><span>${p.label}</span></button>`).join('');
   $$('[data-madd]').forEach(el => el.onclick = () => addAction(el.dataset.madd));
-  $('[data-measure-add]').onclick=()=>{endPathDraw(true);addAction('shape',{shape:'distance',name:SHAPES.distance.label,color:SHAPES.distance.color,curve:'straight',path:[]});};
   $$('[data-mpre]').forEach(el => el.onclick = () => addShot(el.dataset.mpre));
   $('#mTheme').innerHTML = Object.entries(THEMES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
   $('#mImagery').innerHTML = Object.entries(IMAGERY_SOURCES).map(([k, x]) => `<option value="${k}">${x.label}</option>`).join('');
@@ -1647,7 +1646,12 @@ function bindSettings() {
     $('#'+id).onchange=()=>{editing=false;saveLocal();renderSettings();};
   }
   $('#mProjectName').onchange = edit(el => proj.name = el.value.trim().slice(0, 100) || 'Untitled map');
-  $('#mFps').onchange = edit(el => proj.fps = +el.value);
+  $('#mFps').onchange = edit(el => {
+    const seconds = proj.frames / proj.fps;
+    proj.fps = +el.value;
+    proj.frames = Math.max(2, Math.round(seconds * proj.fps));
+    frame = Math.min(frame, proj.frames - 1);
+  });
   $('#mDuration').onchange = edit(el => { const seconds = Number(el.value), frames = Math.max(2, Math.round(seconds * proj.fps)); if (el.value.trim() && Number.isFinite(seconds) && Number.isSafeInteger(frames)) proj.frames = frames; frame = Math.min(frame, proj.frames - 1); });
   $('#mSize').onchange = edit(el => { const [w, h] = el.value.split(',').map(Number); proj.width = w; proj.height = h; });
   $('#mMapBackground').onchange=edit(el=>{proj.mapBackground={...mapBackgroundOf(proj),mode:el.value};if(el.value===HISTORICAL_1300.mode){proj.atlasLabels={...proj.atlasLabels,countries:true};}void ensureGeo();});

@@ -34,6 +34,7 @@
     "test:map-historic-objects:browser": "node tests/map-historic-objects.browser.test.mjs",
     "test:map-battle:browser": "node tests/map-battle.browser.test.mjs",
     "test:map-object-workflows:browser": "node tests/map-object-workflows.browser.test.mjs",
+    "test:map-damage:browser": "node tests/map-damage.browser.test.mjs",
     "test:map-object-images:browser": "node tests/map-object-images.browser.test.mjs",
     "test:map-cartography": "node tests/map-cartography.test.mjs",
     "test:map-cartography:browser": "node tests/map-cartography.browser.test.mjs",

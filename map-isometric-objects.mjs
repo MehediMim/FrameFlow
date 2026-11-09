@@ -1,4 +1,4 @@
-import { IsoScene } from './map-isometric-geometry.mjs';
+import { IsoScene } from './map-isometric-geometry.mjs?v=surface-damage-2';
 import { drawModelShadow } from './map-isometric-shadow.mjs';
 import { currentSceneLighting } from './map-lighting.mjs';
 import { objectViewOf, isFrontArtwork } from './map-object-view.mjs';
@@ -653,6 +653,15 @@ export function drawIsometricObject(c,glyph,size,color,t=0,action={},image,{shad
 export function drawSideObject(c,glyph,size,color,t=0,action={},image){
   const model=modelFor(glyph,color,t,action,image,'side',previewDetail(c,size));
   return drawStaticModel(c,model.scene,size,model.key,false);
+}
+export function objectRenderBounds(glyph,color,t=0,action={},image){
+  const view=isFrontArtwork(glyph)||objectViewOf(action)==='side'?'side':objectViewOf(action)==='isometricBack'?'isometricBack':'isometric';
+  return modelFor(glyph,color,t,action,image,view).scene.bounds(false);
+}
+export function objectDamageGeometry(glyph,color,t=0,action={},image){
+  if(isFrontArtwork(glyph))return {};
+  const view=objectViewOf(action),model=modelFor(glyph,color,t,action,image,view==='isometricBack'?'isometricBack':view==='side'?'side':'isometric');
+  return {view,surfaces:model.scene.damageSurfaces()};
 }
 export function drawIsometricShadow(c,glyph,size,color,t=0,action={},image,pose={}){
   if(isFrontArtwork(glyph))return;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { newMapProject, makeShot, makeAction, PRESETS, sampleCameraPreset, cameraAt, validateMapProject, xToLon, yToLat, objectLocationAt } from '../map-engine.mjs';
+import { newMapProject, makeShot, makeAction, PRESETS, sampleCameraPreset, cameraAt, cameraTrackPoseAt, putCameraTrackKey, validateMapProject, xToLon, yToLat, objectLocationAt } from '../map-engine.mjs';
 import { syncCameraTimeline, addCameraPair, putCameraKey, removeCameraKey, moveCameraKey, cameraPoseAt } from '../map-camera.mjs';
 const p=newMapProject(),track=syncCameraTimeline(p,pose=>makeShot('keyframed',0,{cameraFrom:pose,cameraTo:pose,cameraKeys:[]}));
 const start={lon:0,lat:20,zoom:3,pitch:0,bearing:0},end={...start,zoom:6};
@@ -53,6 +53,10 @@ const adjacent=makeShot('keyframed',0,{cameraFrom:start,cameraTo:start,cameraKey
 addCameraPair(adjacent,'pushIn',0,50,[{t:0,values:start},{t:1,values:{...start,zoom:5}}]);
 addCameraPair(adjacent,'pullBack',50,100,[{t:0,values:{...start,zoom:6}},{t:1,values:start}]);
 assert.equal(cameraPoseAt(adjacent,50).zoom,6,'the next movement owns its start at a shared frame');
+const simultaneous=makeShot('keyframed',0,{cameraFrom:start,cameraTo:start,cameraKeys:[]});
+addCameraPair(simultaneous,'pushIn',0,100,[{t:0,values:start},{t:1,values:{...start,zoom:5}}]);
+addCameraPair(simultaneous,'pullBack',0,50,[{t:0,values:start},{t:1,values:{...start,zoom:2}}]);
+assert.equal(cameraPoseAt(simultaneous,100).zoom,2,'the last added move wins identical start frames without an older endpoint resuming');
 for(const type of ['object','pin'])for(const mode of ['move','path','stay']){
   const project=newMapProject();project.camera.init={...start};
   const place={kind:'point',name:'Start',lon:0,lat:20},to={kind:'point',name:'End',lon:20,lat:30};
@@ -79,4 +83,48 @@ for(const type of ['object','pin'])for(const mode of ['move','path','stay']){
   reloaded.shots[0].cameraKeys[0].follow.zoom=Infinity;
   assert.throws(()=>validateMapProject(reloaded),/follow object/i,'invalid follow controls are rejected');
 }
-console.log('Camera pairs: manual keys, motion curves, retiming, live object/pin following, validation and reload passed');
+// Independent moves compose over a live anchor; interrupted properties never resume.
+{
+  const project = newMapProject(); project.frames = 400; project.camera.init = {...start};
+  const object = makeAction('object', 0, {mode:'move', dur:300, animDur:300, easing:'linear',
+    place:{kind:'point',name:'Start',lon:0,lat:20}, to:{kind:'point',name:'End',lon:50,lat:40}});
+  project.actions = [object];
+  const track = syncCameraTimeline(project, pose => makeShot('keyframed',0,{cameraFrom:pose,cameraTo:pose,cameraKeys:[]}));
+  const poseAt = frame => cameraTrackPoseAt(project, {}, 1280, 720, track, frame);
+  const add = (preset, at, dur, extra = {}) => {
+    const pose = poseAt(at), shot = makeShot(preset, at, {dur, ...extra});
+    const pair = addCameraPair(track, preset, at, at + dur, sampleCameraPreset(project,{},1280,720,shot,pose));
+    if (preset === 'followPlane') pair[0].follow = {planeId:object.id,zoom:shot.zoom,pitch:shot.pitch,lockHeading:shot.lockHeading,easing:shot.easing,from:pose};
+    return pair;
+  };
+  add('followPlane',0,300,{planeId:object.id});
+  const zoom = add('pushIn',100,40,{amount:2});
+  const orbit = add('orbit',150,40,{degrees:80,amount:0,pitch:55});
+  for (const frame of [120,160,210,280,300,340]) {
+    const actual = poseAt(frame), point = objectLocationAt({cx:.5},{},object,Math.min(frame,300));
+    assert.ok(Math.abs(actual.lon-xToLon(point.X))<1e-5 && Math.abs(actual.lat-yToLat(point.Y))<1e-5,`zoom/orbit preserve the live object anchor at ${frame}: ${JSON.stringify(actual)} vs ${xToLon(point.X)}, ${yToLat(point.Y)}`);
+  }
+  assert.equal(poseAt(140).zoom,zoom[1].values.zoom,'zoom move reaches its target');
+  assert.equal(poseAt(300).zoom,orbit[1].values.zoom,'old follow endpoint cannot reset zoom');
+  assert.equal(poseAt(300).bearing,orbit[1].values.bearing,'old follow endpoint cannot reset rotation');
+  assert.equal(poseAt(300).pitch,55,'old follow endpoint cannot reset tilt');
+  const before = poseAt(220);
+  putCameraTrackKey(project,{},1280,720,track,220,{lon:before.lon+3,lat:before.lat+2});
+  object.to = {...object.to,lon:70,lat:50};
+  const point = objectLocationAt({cx:.5},{},object,220), edited = poseAt(220);
+  assert.ok(Math.abs(edited.lon-xToLon(point.X)-3)<1e-5 && Math.abs(edited.lat-yToLat(point.Y)-2)<1e-5,'framing offsets follow route edits');
+  const beforeCapture = poseAt(230);
+  putCameraTrackKey(project,{},1280,720,track,230,{lon:beforeCapture.lon,lat:beforeCapture.lat});
+  const captured = poseAt(230);
+  assert.deepEqual(captured,beforeCapture,'capturing after route edits preserves the displayed framing');
+  const end = track.cameraKeys.find(k=>k.pairRole==='end'&&k.preset==='followPlane');
+  putCameraTrackKey(project,{},1280,720,track,300,{lon:poseAt(300).lon+1},end.id);
+  assert.ok(Math.abs(poseAt(300).lon-71)<1e-5,'follow endpoint edits use live coordinates');
+  const pan = add('panTo',240,30,{target:{kind:'point',lon:-20,lat:10}});
+  assert.equal(poseAt(340).lon,pan[1].values.lon,'a later pan releases follow and holds its position');
+  assert.equal(poseAt(340).lat,pan[1].values.lat,'follow cannot resume after a pan ends');
+  validateMapProject(JSON.parse(JSON.stringify(project)));
+  const reloaded = JSON.parse(JSON.stringify(project));
+  assert.deepEqual(cameraTrackPoseAt(reloaded,{},1280,720,reloaded.shots[0],280),poseAt(280),'composed follow survives reload');
+}
+console.log('Camera pairs: manual keys, motion curves, retiming, live following, composed moves, framing offsets, validation and reload passed');

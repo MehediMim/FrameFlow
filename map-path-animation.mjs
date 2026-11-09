@@ -1,9 +1,10 @@
 import { easings } from './easings.mjs';
-import { drawRoadOrRail, validateNetworkStyle } from './map-network-style.mjs';
+import { drawRoadOrRail, validateNetworkStyle } from './map-network-style.mjs?v=shape-sizing-1';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const NETWORK_SHAPES={road:{label:'Road',color:'#626867'},railway:{label:'Railway',color:'#839194'},river:{label:'River',color:'#6496ad'}};
 export const NETWORK_ANIMATIONS={reveal:'Draw along path',flow:'Flow / traffic',both:'Draw and flow',static:'Static'};
 export const pathAnimationMode=a=>a.networkAnimation??(a.revealPath===false?'flow':'both');
+export const shapeScaleAt=(a,zoom)=>a.sizeMode==='map'?2**(zoom-(a.sizeZoom??3)):1;
 const copy=path=>path.map(p=>({...p}));
 // Unwrap longitude before measuring or interpolating across the antimeridian.
 function samples(path,n){
@@ -30,6 +31,8 @@ export function putPathKey(a,frame,path,seed=true){
 export function movePathKey(a,from,to){const key=a.pathKeys?.find(k=>k.frame===from);if(!key||from===to)return;a.pathKeys=a.pathKeys.filter(k=>k.frame!==from&&k.frame!==to);putPathKey(a,to,key.path,false);}
 export function validatePathAnimation(a){
   validateNetworkStyle(a);
+  if(a.sizeMode!==undefined&&!['screen','map'].includes(a.sizeMode))throw Error('Invalid shape sizing mode.');
+  if(a.sizeZoom!==undefined&&(!Number.isFinite(a.sizeZoom)||a.sizeZoom<0||a.sizeZoom>14))throw Error('Invalid shape reference zoom.');
   if(a.revealPath!==undefined&&typeof a.revealPath!=='boolean')throw Error('Invalid path reveal.');
   if(a.networkAnimation!==undefined&&!Object.hasOwn(NETWORK_ANIMATIONS,a.networkAnimation))throw Error('Invalid network animation.');
   if(a.flowSpeed!==undefined&&(!Number.isFinite(a.flowSpeed)||Math.abs(a.flowSpeed)>200))throw Error('Invalid flow speed.');

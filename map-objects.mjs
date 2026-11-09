@@ -13,15 +13,15 @@ import { MEDIEVAL_OBJECTS } from './map-medieval-objects.mjs';
 import { TRADE_OBJECTS } from './map-trade-objects.mjs';
 import { STRATEGY_OBJECTS } from './map-strategy-objects.mjs';
 import { drawZoneLandscape } from './map-strategy-terrain.mjs';
-import { networkMargin } from './map-network-style.mjs';
+import { networkMargin } from './map-network-style.mjs?v=shape-sizing-1';
 import { currentSceneLighting } from './map-lighting.mjs';
-import { drawIsometricObject, drawIsometricShadow, drawSideObject } from './map-isometric-objects.mjs';
+import { drawIsometricObject, drawIsometricShadow, drawSideObject, objectRenderBounds, objectDamageGeometry, ISOMETRIC_MODELS } from './map-isometric-objects.mjs?v=surface-damage-2';
 import { isIsometricView, pathViewFacing, isFrontArtwork } from './map-object-view.mjs';
 import { movementTrailKind, drawMovementTrail } from './map-object-trails.mjs';
 import { shapeLabel } from './map-shape-measurements.mjs';
-import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode } from './map-path-animation.mjs?v=path-flow-1';
+import { NETWORK_SHAPES, pathAt, revealPolyline, clipPolyline, drawNetwork, pathAnimationMode, shapeScaleAt } from './map-path-animation.mjs?v=shape-sizing-1';
 import { BATTLE_EFFECTS, drawBattleEffect, targetedAttack } from './map-battle-effects.mjs';
-import { drawDamage, drawDestruction, destructionProgress } from './map-damage.mjs';
+import { drawDamage, drawDestruction, destructionProgress } from './map-damage.mjs?v=surface-damage-2';
 const TAU = Math.PI * 2, dark = '#1d2226', light = '#eef2f4', metal = '#9aa5ad';
 const stroke = (c, s) => { c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = Math.max(1, s * .05); c.stroke(); };
 const poly = (c, pts, fill, s) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s))); c.closePath(); c.fillStyle = polygonSurface(c,fill,s,pts); c.fill(); stroke(c, s); };
@@ -102,11 +102,14 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   const enter = a.enter === 'none' ? 1 : H.clamp01(t / 18), xd = a.exit === 'none' ? 0 : H.clamp01(1 - left / 18);
   let alpha = 1, sc = 1, dx = 0, dy = 0, rot = 0;
   if (a.enter === 'drop') { dy = -(1 - H.bounce(enter)) * 220 * u; alpha = H.clamp01(enter * 3); } else if (a.enter === 'fade') alpha = enter; else if (a.enter === 'grow') sc = H.ease('backOut', enter);
-  if (a.idle === 'pulse') sc *= 1 + .08 * Math.sin(t * .35); else if (a.idle === 'shake') { dx = Math.sin(t * 2.3) * 2.2 * u; dy += Math.cos(t * 3.1) * 1.6 * u; } else if (a.idle === 'bob') dy += Math.sin(t * .2) * 5 * u; else if (a.idle === 'spin') rot = t * .12;
+  if(a.damageState!=='destroyed'){
+    if (a.idle === 'pulse') sc *= 1 + .08 * Math.sin(t * .35); else if (a.idle === 'shake') { dx = Math.sin(t * 2.3) * 2.2 * u; dy += Math.cos(t * 3.1) * 1.6 * u; } else if (a.idle === 'bob') dy += Math.sin(t * .2) * 5 * u; else if (a.idle === 'spin') rot = t * .12;
+  }
   if (a.exit === 'fade') alpha *= 1 - xd; else if (a.exit === 'shrink') sc *= 1 - xd;
   alpha *= (a.groupOpacity??1)*(a.opacity??1);
   if (alpha <= 0 || sc <= 0) return;
-  const lift = ic.air ? 38 * size * u : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
+  const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
+  const lift = ic.air ? 38 * size * u * (1-collapse) : 0, g0 = H.project(v, X, Y, 0), g = H.project(v, X, Y, lift);
   if (g.z < v.near) return;
   const margin=Math.max(s*sc*10,256*u)+Math.abs(dx)+Math.abs(dy);
   if(Number.isFinite(v.W)&&Number.isFinite(v.H)&&(g.x < -margin||g.x > v.W+margin||g.y < -margin||g.y > v.H+margin))return;
@@ -114,7 +117,6 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   const isometric=isIsometricView(a),angle=rot+((a.objectAngle||0)+(a.formation==='wall'?(a.formationAngle||0):0))*Math.PI/180;
   const movingAngle=!isometric&&a.objectFacing!=='manual'&&ang!==null&&!isFrontArtwork(a.glyph)?ang:null;
   if(isometric){
-    const collapse=a.damageState==='destroyed'?destructionProgress(a,frame,v.fps||30):0;
     c.save();c.globalAlpha=alpha;c.translate(g0.x+dx,g0.y);c.scale(sc,sc);
     drawIsometricShadow(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{angle,mirror:facing.mirror,height:Math.max(0,(lift-dy)/(s*sc)),flatten:1-collapse*.94});c.restore();
   }
@@ -130,20 +132,28 @@ export function drawObject(H, c, v, geo, a, frame, labels) {
   if(facing.mirror)c.scale(-1,1);
   c.rotate(angle); c.scale(sc, sc);
   let isometricBounds;
+  const objectSeconds=a.damageState==='destroyed'?0:t/(v.fps||30),image=H.objectImage?.(a.image);
+  let damageProfile;
+  if(a.damageState&&a.damageState!=='intact'){
+    const bounds=a.glyph==='artwork'&&image?{left:-1.75*image.naturalWidth/Math.max(image.naturalWidth,image.naturalHeight),right:1.75*image.naturalWidth/Math.max(image.naturalWidth,image.naturalHeight),top:-3.5*image.naturalHeight/Math.max(image.naturalWidth,image.naturalHeight),bottom:0}:objectRenderBounds(a.glyph,a.color,objectSeconds,a,image);
+    damageProfile={bounds,family:ISOMETRIC_MODELS[a.glyph]?.family||'building',color:a.color,seed:a.id||a.glyph,...objectDamageGeometry(a.glyph,a.color,objectSeconds,a,image)};
+    isometricBounds=bounds;
+  }
   const drawIntact = (c) => {
-    if(isometric)isometricBounds=drawIsometricObject(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image),{shadows:false});
+    if(isometric)isometricBounds=drawIsometricObject(c,a.glyph,s,a.color,objectSeconds,a,image,{shadows:false});
     else if(a.glyph==='artwork'&&H.objectImage?.(a.image)){
       // Free artwork retains its uploaded aspect ratio and transparent canvas.
       const image=H.objectImage(a.image),factor=3.5*s/Math.max(image.naturalWidth,image.naturalHeight),w=image.naturalWidth*factor,h=image.naturalHeight*factor;
       c.drawImage(image,-w/2,-h,w,h);isometricBounds={top:-h/s};
     }
-    else isometricBounds=drawSideObject(c,a.glyph,s,a.color,t/(v.fps||30),a,H.objectImage?.(a.image));
+    else isometricBounds=drawSideObject(c,a.glyph,s,a.color,objectSeconds,a,image);
   };
   if(a.damageState==='destroyed'){
     const ship=['galleon','caravel','galley','eastIndiaman','bengalRiverBoat','warship','submarine','ferry','cargoShip'].includes(a.glyph);
-    drawDestruction(c,s,ship,destructionProgress(a,frame,v.fps||30),()=>drawIntact(c));
+    drawDestruction(c,s,ship,collapse,drawIntact,damageProfile);
   } else {
-    drawIntact(c);drawDamage(c,s,a.damageState,t/(v.fps||30));
+    if(!a.damageState||a.damageState==='intact')drawIntact(c);
+    else drawDamage(c,s,a.damageState,objectSeconds,drawIntact,damageProfile);
   }
   c.restore();
   if (a.showLabel && a.glyph!=='portrait') { const off = (isometricBounds?s*(isometricBounds.top-.35):-s * (ic.labelOffset ?? (a.glyph==='banner'?6:ic.historic?2.8:1.5))) - lift; labels.push({ x: g0.x + dx, y: g0.y + off, ground: { X, Y }, groundOffset: { y: off }, text: a.label || ic.label, alpha: alpha * Math.min(1, sc), scale: 1 }); }
@@ -219,7 +229,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
   if (!H.actAlpha(a, frame) || a.mode !== 'path' || (a.path || []).length < 2) return;
   const r = H.planeRoute(geo, a); if (!r) return;
   const animation=measurementShape?'static':pathAnimationMode(a),flow=['flow','both'].includes(animation);
-  const u = v.unit, k = Math.round(v.cx - r.mid), p = ['static','flow'].includes(animation)?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
+  const u = v.unit*shapeScaleAt(a,v.cam?.zoom??a.sizeZoom??3), k = Math.round(v.cx - r.mid), p = ['static','flow'].includes(animation)?1:H.ease(a.easing, H.actionProgress(a, frame)), P = [];
   const seconds=(frame-a.start)/(v.fps||30),phase=seconds*(a.flowSpeed??24)*u;
   for (let i = 0; i < r.n; i++) { const q = H.project(v, r.X[i] + k, r.Y[i]); P.push(q.z < v.near ? null : q); }
   const zone = a.shape === 'zone' || a.shape === 'noFly', w = (a.width || 6) * u;
@@ -259,7 +269,7 @@ export function drawShape(H, c, v, geo, a, frame, labels) {
     if (a.shape === 'noFly'||flow&&!landscape) {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (const q of pts) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
       x0=Math.max(-40*u,x0);x1=Math.min(v.W+40*u,x1);y0=Math.max(-40*u,y0);y1=Math.min(v.H+40*u,y1);
-      const gap=(a.shape==='noFly'?12:20)*u,offset=flow?((phase%gap)+gap)%gap:0;
+      const gap=Math.max((a.shape==='noFly'?12:20)*u,(x1-x0+y1-y0)/2500),offset=flow?((phase%gap)+gap)%gap:0;
       c.save(); c.clip(); c.beginPath(); for (let x = x0 - (y1 - y0)+offset; x < x1; x += gap) { c.moveTo(x, y1); c.lineTo(x + (y1 - y0), y0); } c.globalAlpha = (a.shape==='noFly'?.55:Math.min(.35,(a.fillAlpha??.28)*.6)) * p; c.strokeStyle = a.shape==='noFly'?a.color:'#fff2d8'; c.lineWidth = 1.6 * u; c.stroke(); c.restore();
     }
     c.beginPath(); pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y))); c.closePath();

@@ -258,6 +258,35 @@ try {
     return c.toDataURL().split(',')[1];
   })()`);
   await writeFile(join(tmpdir(),'frameflow-object-view-pairs.png'),Buffer.from(review,'base64'));
+  const damageReview=await evaluate(`(async()=>{
+    const M=await import('./map-isometric-objects.mjs'),D=await import('./map-damage.mjs'),{OBJECT_ICONS}=await import('./map-objects.mjs');
+    const samples=['stoneFort','tank','galleon','airliner'],states=['intact','damaged','burning','destroyed'];
+    const sheet=document.createElement('canvas');sheet.width=1280;sheet.height=960;const out=sheet.getContext('2d');
+    out.fillStyle='#e8e3d8';out.fillRect(0,0,1280,960);const failures=[];
+    for(const [row,glyph]of samples.entries())for(const [col,state]of states.entries()){
+      const canvas=document.createElement('canvas');canvas.width=320;canvas.height=240;const ctx=canvas.getContext('2d'),s=45;
+      const action={glyph,objectView:row%2?'side':'isometric',objectAnimation:'none'},color=OBJECT_ICONS[glyph].color;
+      const bounds=M.objectRenderBounds(glyph,color,0,action),profile={bounds,family:M.ISOMETRIC_MODELS[glyph].family,color,seed:glyph,...M.objectDamageGeometry(glyph,color,0,action)};
+      const intact=target=>(action.objectView==='side'?M.drawSideObject:M.drawIsometricObject)(target,glyph,s,color,0,action,undefined,{shadows:false});
+      const render=(seconds=2.5,progress=1)=>{ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,320,240);ctx.translate(160,180);
+        if(state==='intact')intact(ctx);else if(state==='destroyed')D.drawDestruction(ctx,s,profile.family==='ship',progress,intact,profile);else D.drawDamage(ctx,s,state,seconds,intact,profile);
+        return canvas.toDataURL();};
+      const first=render();if(first!==render())failures.push(glyph+' '+state+': unstable seek');
+      if(state==='burning'&&first===render(2.8))failures.push(glyph+': fire is static');
+      if(state==='destroyed'&&first===render(2.5,.35))failures.push(glyph+': collapse is static');
+      render();
+      if(state==='damaged'){
+        const mask=document.createElement('canvas');mask.width=320;mask.height=240;const m=mask.getContext('2d');m.translate(160,180);intact(m);
+        const original=m.getImageData(0,0,320,240).data,damaged=ctx.getImageData(0,0,320,240).data;let stray=0,changed=0;
+        for(let i=0;i<original.length;i+=4){if(original[i+3]===0&&damaged[i+3]>5)stray++;if(original[i+3]>10&&Math.abs(original[i]-damaged[i])>5)changed++;}
+        if(stray>8)failures.push(glyph+': damage escapes silhouette ('+stray+')');if(changed<80)failures.push(glyph+': surface damage is missing');
+      }
+      out.drawImage(canvas,col*320,row*240);out.fillStyle='#26352e';out.font='15px sans-serif';out.fillText(glyph+' / '+state,col*320+16,row*240+25);
+    }
+    return {failures,png:sheet.toDataURL().split(',')[1]};
+  })()`);
+  await writeFile(join(tmpdir(),'frameflow-object-damage-review.png'),Buffer.from(damageReview.png,'base64'));
+  assert.deepEqual(damageReview.failures,[],'material damage follows silhouettes; fire and collapse animate deterministically');
 
   await change('#mInspector [data-mf="glyph"]','stoneFort');
   assert.equal(await evaluate(`document.querySelectorAll('#mInspector [data-object-search]').length`),1,'object selection has one search field inside its compact picker');

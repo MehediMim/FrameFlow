@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { measureShape, measurementText, shapeLabel, resizeShape } from '../map-shape-measurements.mjs';
 import { makeAction, newMapProject, validateMapProject, planeRoute } from '../map-engine.mjs';
 import { drawShape } from '../map-objects.mjs';
-import { pathAt, putPathKey } from '../map-path-animation.mjs';
+import { pathAt, putPathKey, shapeScaleAt } from '../map-path-animation.mjs';
 const near=(actual,expected,epsilon=1e-5)=>assert.ok(Math.abs(actual-expected)<epsilon,`${actual} ≈ ${expected}`);
 const route=a=>planeRoute(null,a),measure=a=>measureShape(a,route(a));
 const point=(lon,lat)=>({lon,lat});
@@ -61,6 +61,24 @@ console.log('Shape lengths, spherical areas, curves, dateline, units, resizing, 
 // Measurement labels remain static while the arrow or zone reveals underneath.
 const H={actAlpha:()=>1,planeRoute:(_,a)=>route(a),ease:(_,p)=>p,actionProgress:()=>0,project:(_,x,y)=>({x,y,z:1})};
 const view={unit:1,cx:.5,near:0};
+for(const source of [arrow,square,{...arrow,shape:'retreat'},{...arrow,shape:'front'},{...square,shape:'noFly'},{...arrow,shape:'road'},{...arrow,shape:'railway'},{...arrow,shape:'river'}]){
+  const action={...source,sizeMode:'map',sizeZoom:4,networkAnimation:'static',path:source.path.map(p=>({...p}))};
+  assert.equal(shapeScaleAt(action,4),1);assert.equal(shapeScaleAt(action,5),2);assert.equal(shapeScaleAt(action,3),.5);
+  assert.equal(shapeScaleAt({...action,sizeMode:'screen'},9),1);
+  const capture=(zoom,mode)=>{
+    const widths=[];let width=0;
+    const ctx=new Proxy({},{get:(_,key)=>key==='stroke'?()=>widths.push(width):()=>{},set:(_,key,value)=>{if(key==='lineWidth')width=value;return true;}});
+    drawShape({...H,actionProgress:()=>1},ctx,{...view,W:1280,H:720,cam:{zoom}},null,{...action,sizeMode:mode},90,[]);
+    return widths;
+  };
+  const at4=capture(4,'map'),at5=capture(5,'map');assert.ok(at4.length>0,'shape has visible strokes');
+  at4.forEach((width,i)=>near(at5[i],width*2));
+  assert.deepEqual(capture(4,'screen'),capture(8,'screen'),'fixed screen sizing survives camera zoom');
+  assert.deepEqual(action.path,source.path,'sizing preserves geographic geometry');
+  validateMapProject({...p,actions:[action]});
+}
+for(const patch of [{sizeMode:'invalid'},{sizeZoom:NaN},{sizeZoom:-1},{sizeZoom:15}])assert.throws(()=>validateMapProject({...p,actions:[{...arrow,...patch}]}),/shape/i);
+assert.equal(shapeScaleAt({...arrow,sizeMode:undefined},12),1,'old shapes keep their screen sizing');
 let strokes=0;
 const c=new Proxy({}, {get:(_,key)=>key==='stroke'?()=>strokes++:()=>{},set:()=>true});
 for(const source of [arrow,square]){

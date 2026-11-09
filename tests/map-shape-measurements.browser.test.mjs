@@ -155,6 +155,11 @@ try{
   const original=(await stored()).actions[0].path;
   await change('[data-mf="showDistanceArrow"]',true);
   assert.deepEqual((await stored()).actions[0].path,original,'optional arrow keeps the measured endpoints');
+  await change('[data-mf="sizeMode"]','map');
+  let sizing=(await stored()).actions[0];
+  assert.equal(sizing.sizeMode,'map');assert.ok(Number.isFinite(sizing.sizeZoom),'map sizing captures the current camera zoom');
+  await change('[data-mf="sizeZoom"]',4);
+  assert.deepEqual((await stored()).actions[0].path,original,'map sizing leaves the drawn arrow path unchanged');
   await change('[data-mf="__lscustom"]',true);
   await change('[data-mf="measurementUnit"]','imperial');
   assert.ok(await evaluate(`document.querySelector('[data-shape-measurement]').textContent.includes('mi')`));
@@ -163,6 +168,8 @@ try{
   assert.equal(await evaluate(`document.querySelector('[data-mf="shape"]').value`),'area');
   assert.ok(await evaluate(`document.querySelector('[data-shape-measurement]').textContent.includes('Area:')`));
   await change('[data-mf="showAreaBoundary"]',true);
+  await change('[data-mf="sizeMode"]','map');
+  await change('[data-mf="sizeZoom"]',3);
   await change('[data-mf="measurementUnit"]','imperial');
   const rendering=await evaluate(`(async()=>{
     const E=await import('./map-engine.mjs'),{exportMapVideo}=await import('./map-video-export.mjs');
@@ -184,6 +191,8 @@ try{
   await select('area');
   assert.equal(await evaluate(`document.querySelector('[data-mf="showAreaBoundary"]').checked`),true);
   assert.equal(await evaluate(`document.querySelector('[data-mf="measurementUnit"]').value`),'imperial');
+  assert.equal(await evaluate(`document.querySelector('[data-mf="sizeMode"]').value`),'map','zone sizing survives reload');
+  assert.equal((await stored()).actions[0].sizeZoom,4,'arrow anchor zoom survives reload');
   assert.deepEqual(errors,[],'no browser runtime errors');
   console.log('Distance and Area shape choices, optional arrows and boundaries, units, persistence and video export passed');
 }finally{

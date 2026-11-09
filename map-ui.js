@@ -12,16 +12,16 @@ import { snapTimelineDelta } from './timeline-magnet.mjs';
 import { SCENE_PANEL_DEFAULTS } from './map-scene-panel.mjs';
 import { importObjectImage } from './map-object-images.mjs';
 import { installTimelineControls } from './timeline-controls.mjs?v=typed-lanes-1';
-import { HIGHLIGHT_ANIMATIONS, BORDER_ANIMATIONS, BORDER_STYLES, installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=live-follow-3';
+import { HIGHLIGHT_ANIMATIONS, BORDER_ANIMATIONS, BORDER_STYLES, installCountryDetail, detailRegions, regionAt, citiesOf, drawRegionSelection, drawBorderEndpoints, drawHighlightExtentHandles, BADGE_SHAPES, BADGE_STEMS, BADGE_EXITS, badgeOf, onBadgeImage, preloadBadges } from './map-engine.mjs?v=shape-sizing-1';
 import { detailFileOf, detailInfo, detailLevelOf, LEGACY_REGION_COUNTRY } from './map-country-details.mjs';
 import { detailCountriesOf, targetMembers, targetFeatures, featureForTarget, combinedFeature, nearestBorderPosition, borderRingOf } from './map-regions.mjs';
-import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs';
+import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=shape-sizing-1';
 import { bindTimelineRename } from './timeline-rename.mjs?v=timeline-rename-2';
 import { confirmStudio, exportMarkup } from './studio-ui.mjs?v=expanded-settings-1';
 import { getAudioSnapshot, registerAudioStudio } from './audio-reference.mjs?v=add-submenu-1';
 let audioUI = null;
 // FrameFlow Map Studio: editor UI (animations, camera presets, timeline, playback, export).
-import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=live-follow-3';
+import { THEMES, TEXTURES, DEFAULT_TEXTURE, LABEL_SHAPES, LABEL_WEIGHTS, DEFAULT_LABEL_STYLE, LABEL_PRESETS, TRAVEL_ICONS, labelStyleOf, mapFontsUsed, ACTION_TYPES, PRESETS, makeAction, makeShot, newMapProject, demoMapProject, validateMapProject, buildGeo, drawMap, screenToLonLat, countryAt, project as projectPoint, lonToX, latToY, DEFAULT_AREA, AREA_MODES, NEIGHBOR_MODES, PATH_CURVES, areaOf, drawPathEditor, pathHandles, imageryNeeds, PIN_MODES } from './map-engine.mjs?v=shape-sizing-1';
 import { CITIES } from './map-places.mjs';
 import { loadFont, loadFonts, fontPickerHtml, bindFontPicker } from './fonts.mjs';
 import { exportMapVideo } from './map-video-export.mjs?v=invert-1';
@@ -29,20 +29,20 @@ import { createImagery, IMAGERY_SOURCES, DEFAULT_IMAGERY } from './map-imagery.m
 import { createRelief, RELIEF_DEFAULTS } from './map-relief.mjs';
 import { atlasLabelSettings } from './map-atlas-labels.mjs';
 import { applyDocumentaryLook, DOCUMENTARY_LABEL } from './map-documentary.mjs';
-import { terrainSettingsOf } from './map-engine.mjs?v=live-follow-3';
+import { terrainSettingsOf } from './map-engine.mjs?v=shape-sizing-1';
 import { plaqueStyle } from './map-plaque-text.mjs';
 import { FORMATIONS, defaultObjectGap } from './map-formations.mjs';
 import { objectPoseAt, putObjectKey, removeObjectKey, moveObjectKey, DAMAGE_STATES } from './map-object-keys.mjs';
 import { ARMY_PRESETS } from './map-armies.mjs';
-import { resolveLoc } from './map-engine.mjs?v=live-follow-3';
+import { resolveLoc } from './map-engine.mjs?v=shape-sizing-1';
 import { panMapCamera, zoomMapCamera } from './map-navigation.mjs?v=invert-1';
-import { sampleCameraPreset, cameraTrackPoseAt, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=live-follow-3';
+import { sampleCameraPreset, cameraTrackPoseAt, putCameraTrackKey, cameraAt, xToLon, yToLat, makeView } from './map-engine.mjs?v=shape-sizing-1';
 import { retimeMapItem, animationKeysOf, setAnimationKey, splitMapItem } from './map-timing.mjs?v=paired-camera-1';
-import { syncCameraTimeline, cameraKeyAt, addCameraPair, cameraKeysOf, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs?v=live-follow-3';
+import { syncCameraTimeline, cameraKeyAt, addCameraPair, cameraKeysOf, putCameraKey, removeCameraKey, moveCameraKey, CAMERA_PROPERTIES, CAMERA_FIELDS } from './map-camera.mjs?v=composed-follow-4';
 import { trimMapHistory } from './map-history.mjs';
 import { installCampaignUI } from './map-campaign-ui.mjs?v=path-flow-1';
 import { groupPoseAt, putGroupKey } from './map-object-groups.mjs';
-import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs';
+import { pathAt, putPathKey, movePathKey, NETWORK_SHAPES } from './map-path-animation.mjs?v=shape-sizing-1';
 import { moveGroupKey, retimeGroup } from './map-object-groups.mjs';
 import { measureShape, measurementText } from './map-shape-measurements.mjs';
 import { ZONE_TERRAINS, TERRAIN_CONTENTS } from './map-strategy-terrain.mjs';
@@ -50,10 +50,10 @@ import { OBJECT_CATEGORIES, objectEntries } from './map-object-catalog.mjs';
 import { objectViewOf, OBJECT_VIEWS, isFrontArtwork } from './map-object-view.mjs';
 import { objectAnimationOptions } from './map-isometric-objects.mjs';
 import { naturalTrailKind } from './map-object-trails.mjs';
-import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs';
+import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs?v=shape-sizing-1';
 import { lightingAt, LIGHTING_FIELDS as SUN_FIELDS, putLightingKey, removeLightingKey, moveLightingKey } from './map-lighting-keys.mjs';
 import { lightingOf, lightingPreset } from './map-lighting.mjs';
-import { planeRoute } from './map-engine.mjs?v=live-follow-3';
+import { planeRoute } from './map-engine.mjs?v=shape-sizing-1';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const objectPreviewStates=new WeakMap();
@@ -453,11 +453,7 @@ function migrateCameraMovements(){
 function setCameraKey(shot,at,values){
   proj.camera.activeTrack=shot.id;
   const selected=selectedCameraKeyId&&cameraKeyAt(shot,at,selectedCameraKeyId);
-  if(selected?.pairId){
-    const start=cameraKeysOf(shot).find(k=>k.pairId===selected.pairId&&k.follow);
-    if(start){const live=cameraPoseAt(shot,at);values=Object.fromEntries(Object.entries(values).map(([field,value])=>[field,clamp(value-live[field]+selected.values[field],...CAMERA_FIELDS[field])]));}
-  }
-  return putCameraKey(shot,at,values,selected?.frame===at?selected.id:undefined);
+  return putCameraTrackKey(proj,geo,proj.width,proj.height,shot,at,values,selected?.frame===at?selected.id:undefined);
 }
 function deleteCameraKeyAt(shot,at,id){
   const key=cameraKeyAt(shot,at,id);if(!key)return;
@@ -876,6 +872,9 @@ function actionFields(a) {
         + (a.shape==='zone'?landscapeFields(a):'')
         + (measurement?'<div class="section-title">MEASUREMENT</div>'+shapeMeasurementFields(a):'')
         + '<div class="section-title">APPEARANCE</div>'
+        + F.sel('sizeMode','Sizing',a.sizeMode||'screen',[['screen','Fixed on screen'],['map','Scale with map']])
+        + (a.sizeMode==='map'?F.num('sizeZoom','Anchor zoom',a.sizeZoom??3,0,14,.1):'')
+        + '<p class="mini-label">Controls line width, arrowheads and patterns. The drawn path stays anchored to the map.</p>'
         + (['road','railway'].includes(a.shape)?networkDesignFields(a):F.color('color', 'Color', a.color))
         + (!['road','railway'].includes(a.shape)&&(!measurement||a.showDistanceArrow||a.showAreaBoundary)?F.range('width', 'Line width', a.width, 1, 16, .5):'')
         + (['zone','noFly'].includes(a.shape)||a.shape==='area'&&a.showAreaBoundary?F.range('fillAlpha', 'Fill', a.fillAlpha, 0, .8, .02, x => Math.round(x * 100) + '%'):'')
@@ -1057,7 +1056,7 @@ function cameraPositionFields(s, pose, disabled) {
 }
 function cameraMovementFields(s) {
   const keys = cameraKeysOf(s), starts = keys.filter(k => k.pairRole === 'start');
-  return '<div class="section-title">MOVEMENTS</div><p class="mini-label">Add a camera move at the playhead from the Camera menu. Set its start and end frames below, or drag its blue diamonds. Select an endpoint to adjust position, zoom, tilt and rotation below. Manual keys blend into the saved movement curve.</p>' +
+  return '<div class="section-title">MOVEMENTS</div><p class="mini-label">Add a camera move at the playhead from the Camera menu. Set its start and end frames below, or drag its blue diamonds. Zoom, tilt and orbit keep following the object. Pan and Fly to take over its position. Select an endpoint to adjust it; manual position keys adjust framing along the live follow path.</p>' +
     (starts.length ? starts.map(start => {
       const end = keys.find(k => k.pairId === start.pairId && k.pairRole === 'end');
       if (!end) return '';

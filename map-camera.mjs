@@ -8,6 +8,39 @@ export const CAMERA_PROPERTIES = {
   bearing: { label: 'Rotation', fields: ['bearing'] },
 };
 export const CAMERA_FIELDS = { lon: [-540, 540], lat: [-85, 85], zoom: [0, 14], pitch: [0, 75], bearing: [-3600, 3600] };
+const MOVEMENT_FIELDS = {
+  pushIn: ['zoom'], pullBack: ['zoom'], tilt: ['pitch', 'zoom'],
+  orbit: ['bearing', 'pitch', 'zoom'], panTo: ['lon', 'lat'],
+};
+export function cameraMovementFields(start, end) {
+  const fields = new Set(MOVEMENT_FIELDS[start.preset] || Object.keys(CAMERA_FIELDS));
+  // Explicit endpoint edits can add a property to an otherwise independent move.
+  for (const field of Object.keys(CAMERA_FIELDS)) {
+    if ([start, end].some((key, i) => key?.values[field] !== undefined &&
+      Math.abs(key.values[field] - start.samples?.[i ? start.samples.length - 1 : 0]?.values[field]) > 1e-9)) fields.add(field);
+  }
+  return fields;
+}
+export function cameraSampleAt(start, end, at, field) {
+  const t = Math.max(0, Math.min(1, (at - start.frame) / (end.frame - start.frame)));
+  const samples = start.samples, after = samples.findIndex(sample => sample.t > t);
+  const left = after < 0 ? samples.at(-1) : samples[Math.max(0, after - 1)], right = after < 0 ? left : samples[after];
+  const mix = right.t === left.t ? 0 : (t - left.t) / (right.t - left.t);
+  return left.values[field] + (right.values[field] - left.values[field]) * mix;
+}
+export function cameraPairsOf(s) {
+  const keys = cameraKeysOf(s);
+  return keys.filter(k => k.pairRole === 'start' && k.samples?.length).map(start => ({
+    start, end: keys.find(k => k.pairId === start.pairId && k.pairRole === 'end'),
+  })).filter(pair => pair.end).map(pair => ({...pair, fields:cameraMovementFields(pair.start, pair.end)}))
+    .sort((a, b) => b.start.frame - a.start.frame || keys.indexOf(b.start) - keys.indexOf(a.start));
+}
+// A later move takes over only its own properties, and keeps them after it ends.
+export function cameraPairOwnsField(pairs, pair, field, at) {
+  return pair.fields.has(field) && !pairs.some(other =>
+    (other.start.frame > pair.start.frame || (other.start.frame === pair.start.frame && pairs.indexOf(other) < pairs.indexOf(pair))) &&
+    other.start.frame <= at && other.fields.has(field));
+}
 // The editor's camera track shares the composition clock, including after a resize.
 export function syncCameraTimeline(project, createShot) {
   let shot = project.shots.find(s => s.fullTimelineCamera) || project.shots.find(s => s.preset === 'keyframed');
@@ -43,19 +76,12 @@ export function cameraKeysOf(s) {
 }
 export function cameraPoseAt(s, frame) {
   const keys = cameraKeysOf(s), pose = {};
-  const pairs = keys.filter(k => k.pairRole === 'start' && k.samples?.length).map(start => ({
-    start, end: keys.find(k => k.pairId === start.pairId && k.pairRole === 'end'),
-  })).filter(pair => pair.end).sort((a, b) => b.start.frame - a.start.frame);
-  const sampleAt = (pair, at, field) => {
-    const t = Math.max(0, Math.min(1, (at - pair.start.frame) / (pair.end.frame - pair.start.frame)));
-    const samples = pair.start.samples, after = samples.findIndex(sample => sample.t > t);
-    const left = after < 0 ? samples.at(-1) : samples[Math.max(0, after - 1)], right = after < 0 ? left : samples[after];
-    const mix = right.t === left.t ? 0 : (t - left.t) / (right.t - left.t);
-    return left.values[field] + (right.values[field] - left.values[field]) * mix;
-  };
+  const pairs = cameraPairsOf(s), byId = new Map(pairs.map(pair => [pair.start.pairId, pair]));
+  const sampleAt = (pair, at, field) => cameraSampleAt(pair.start, pair.end, at, field);
   for (const field of Object.keys(CAMERA_FIELDS)) {
     // Manual keys win shared frames; a newer movement wins over an older endpoint.
-    const ordered = keys.filter(k => k.values[field] !== undefined).sort((a, b) => a.frame - b.frame ||
+    const ordered = keys.filter(k => k.values[field] !== undefined && (!byId.has(k.pairId) ||
+      cameraPairOwnsField(pairs, byId.get(k.pairId), field, k.frame))).sort((a, b) => a.frame - b.frame ||
       Number(!a.pairId) - Number(!b.pairId) || Number(a.pairRole === 'start') - Number(b.pairRole === 'start'));
     const track = [...new Map(ordered.map(k => [k.frame, k])).values()];
     if (!track.length) { pose[field] = s.cameraFrom[field]; continue; }
@@ -64,7 +90,7 @@ export function cameraPoseAt(s, frame) {
     else if (next < 0) pose[field] = track.at(-1).values[field];
     else {
       const a = track[next - 1], b = track[next], t = (frame - a.frame) / (b.frame - a.frame);
-      const pair = pairs.find(p => p.start.frame <= a.frame && p.end.frame >= b.frame);
+      const pair = pairs.find(p => p.start.frame <= a.frame && p.end.frame >= b.frame && cameraPairOwnsField(pairs, p, field, a.frame));
       if (pair) {
         // Keep the preset's curve and smoothly offset it through edited/manual keys.
         const correction = (easings[b.easing || s.easing] || easings.easeInOut)(t);

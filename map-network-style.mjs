@@ -20,11 +20,12 @@ export function offsetPolyline(points,offset){
   });
 }
 function along(points,gap,draw){
-  let carry=0;
-  for(let i=1;i<points.length;i++){
+  gap=Math.max(.75,gap);
+  let carry=0,count=0;
+  for(let i=1;i<points.length&&count<4000;i++){
     const a=points[i-1],b=points[i];if(!a||!b){carry=0;continue;}
     const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(!d)continue;
-    let t=carry;for(;t<d;t+=gap)draw(a.x+dx*t/d,a.y+dy*t/d,dx/d,dy/d);carry=t-d;
+    let t=carry;for(;t<d&&count<4000;t+=gap,count++)draw(a.x+dx*t/d,a.y+dy*t/d,dx/d,dy/d);carry=t-d;
   }
 }
 const textures=new Map();

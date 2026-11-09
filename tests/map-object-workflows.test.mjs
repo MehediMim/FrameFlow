@@ -5,11 +5,29 @@ import { retimeMapItem } from '../map-timing.mjs';
 import { ARMY_PRESETS,armyCopies } from '../map-armies.mjs';
 import { wallPlacements } from '../map-wall-path.mjs';
 import { targetedAttack } from '../map-battle-effects.mjs';
-import { destructionProgress } from '../map-damage.mjs';
+import { destructionProgress, damageFireSites, fireOccluder } from '../map-damage.mjs';
+import { objectDamageGeometry, objectRenderBounds } from '../map-isometric-objects.mjs';
 import { splitMapItem,mapSourceItem } from '../map-timing.mjs';
 import { drawObject } from '../map-objects.mjs';
 import { pathViewFacing,validateObjectView } from '../map-object-view.mjs';
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} ~ ${b}`);
+const projectedSites=[];
+for(const view of ['side','isometric','isometricBack']){
+  const geometry=objectDamageGeometry('tank','#65734d',0,{glyph:'tank',objectView:view,objectAnimation:'none'});
+  const sites=damageFireSites({...geometry,bounds:objectRenderBounds('tank','#65734d',0,{glyph:'tank',objectView:view}),seed:'same-tank'});
+  assert.ok(sites.length>0,view+': fire has model surface anchors');
+  for(const site of sites){
+    assert.ok(site.world[2]>.13,'fire originates above the ground on the model');
+    const point=view==='side'?[site.world[0],-site.world[2]]:[(site.world[0]-site.world[1])*.866025403784,(site.world[0]+site.world[1])*.5-site.world[2]];
+    near(site.x,point[0]);near(site.y,point[1]);
+  }
+  projectedSites.push(sites.map(site=>[site.x,site.y]));
+}
+assert.notDeepEqual(projectedSites[0],projectedSites[1],'side and isometric fire use different projected model anchors');
+assert.notDeepEqual(projectedSites[1],projectedSites[2],'rear view reprojects the fire anchors');
+const front={points:[[-1,0],[1,0],[1,-1],[-1,-1]],world:[[-1,.7,0],[1,.7,0],[1,.7,1],[-1,.7,1]]};
+assert.equal(fireOccluder(front,{depth:0,y:-.5},'side').length,4,'foreground bodywork hides flames behind it');
+assert.equal(fireOccluder({...front,world:front.world.map(([x,y,z])=>[x,-y,z])},{depth:0,y:-.5},'side').length,0,'bodywork behind the flame does not hide it');
 const a=makeAction('object',10,{glyph:'stoneFort',easing:'linear',size:1,dur:120});
 putObjectKey(a,70,{size:3,objectAngle:180,damageState:'burning'});
 assert.deepEqual(a.objectKeys[0],{frame:10,values:{size:1,objectAngle:0,damageState:'intact'}});
@@ -67,6 +85,14 @@ const rotationsFor=view=>{
 };
 for(const view of ['isometric','isometricBack'])assert.ok(rotationsFor(view).every(angle=>angle===0),'manual '+view+' stays upright on a vertical path');
 assert.ok(rotationsFor('side').some(angle=>Math.abs(angle)>1),'side view retains path heading');
+{
+  const gradient={addColorStop(){}},heights=[],rotations=[];
+  const c=new Proxy({globalAlpha:1,getTransform:null,rotate:angle=>rotations.push(angle),createRadialGradient:()=>gradient,createLinearGradient:()=>gradient},{get:(o,k)=>k in o?o[k]:()=>{}});
+  const H={actAlpha:()=>1,clamp01:x=>Math.max(0,Math.min(1,x)),resolveLoc:()=>({X:0,Y:0}),project:(_v,X,Y,height=0)=>{heights.push(height);return {x:X,y:Y-height,z:1};}};
+  drawObject(H,c,{unit:1,fps:30,near:0,cx:0},null,{glyph:'airliner',mode:'stay',size:1,start:0,dur:120,enter:'none',idle:'spin',exit:'none',objectView:'side',damageState:'destroyed'},60,[]);
+  assert.ok(heights.every(height=>height===0),'destroyed aircraft wrecks rest on the ground');
+  assert.ok(rotations.every(angle=>angle===0),'settled wrecks stop their idle spinning');
+}
 console.log('Manual view keys: step switching, seeking, moving, deleting, splitting, validation and upright isometric path orientation passed');
 const movingIso={glyph:'car',mode:'path',objectView:'isometric'};
 for(const [dx,dy,objectView,mirror]of [[1,1,'isometric',false],[-1,1,'isometric',true],[1,-1,'isometricBack',false],[-1,-1,'isometricBack',true],[0,1,'isometric',false],[0,-1,'isometricBack',false],[1,0,'isometric',false],[-1,0,'isometric',true]]){

@@ -17,14 +17,14 @@ import { reliefSettings, validateRelief } from './map-relief.mjs';
 import { DOCUMENTARY_TERRAIN, DOCUMENTARY_LABEL } from './map-documentary.mjs';
 import { ANTIQUE_LABEL, drawAntiqueFrame } from './map-antique.mjs';
 import { validatePlaqueStyle } from './map-plaque-text.mjs';
-import { validatePathAnimation } from './map-path-animation.mjs';
+import { validatePathAnimation } from './map-path-animation.mjs?v=shape-sizing-1';
 import { validPolygon } from './map-area-selection.mjs';
 import { transformGroupObject, validateObjectGroups } from './map-object-groups.mjs';
 import { OCEAN_LABELS, atlasLabelSettings, validateAtlasLabels, countryLabelLayout } from './map-atlas-labels.mjs';
-import { cameraPoseAt, CAMERA_FIELDS } from './map-camera.mjs?v=live-follow-3';
+import { cameraPoseAt, cameraPairsOf, cameraPairOwnsField, cameraSampleAt, putCameraKey, CAMERA_FIELDS } from './map-camera.mjs?v=composed-follow-4';
 import { detailLevelOf, isLevelId } from './map-country-details.mjs';
 import { detailCountriesOf, targetFeatures, featureForTarget, borderSection, borderRingOf } from './map-regions.mjs';
-import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=path-flow-1';
+import { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT, drawObject, drawEffect, drawShape } from './map-objects.mjs?v=shape-sizing-1';
 import { validateShapeMeasurement } from './map-shape-measurements.mjs';
 import { strategyGroundPattern, validateZoneTerrain } from './map-strategy-terrain.mjs';
 import { drawIsometricObject, drawIsometricShadow, withObjectPreview } from './map-isometric-objects.mjs';
@@ -34,7 +34,7 @@ import { sceneLightingAt, validateLightingEffect } from './map-lighting-keys.mjs
 import { lightingPreset } from './map-lighting.mjs';
 import { lightingOf, validateLighting, withSceneLighting, applySceneLighting } from './map-lighting.mjs';
 export { detailLevelOf } from './map-country-details.mjs';
-export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=path-flow-1';
+export { OBJECT_ICONS, EFFECTS, SHAPES, OBJECT_ENTER, OBJECT_IDLE, OBJECT_EXIT } from './map-objects.mjs?v=shape-sizing-1';
 
 const RAD = Math.PI / 180, MAX_LAT = 85.0511287798, BASE_PX = 512, FOV = 45 * RAD;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -688,8 +688,9 @@ export function sampleCameraPreset(proj,geo,W,H,shot,fromPose) {
 }
 
 /** Follow pairs keep their object link; samples remain a fallback for deleted targets. */
-export function cameraTrackPoseAt(proj, geo, W, H, track, frame) {
+function liveCameraKeys(proj, geo, W, H, track) {
   let keys = track.cameraKeys;
+  const pairs = cameraPairsOf(track);
   for (const start of track.cameraKeys || []) {
     if (!start.follow || !start.samples?.length || !proj.actions.some(a => a.id === start.follow.planeId)) continue;
     const end = track.cameraKeys.find(k => k.pairId === start.pairId && k.pairRole === 'end'); if (!end) continue;
@@ -700,7 +701,42 @@ export function cameraTrackPoseAt(proj, geo, W, H, track, frame) {
     const last = adjust(end,start.samples.at(-1).values,samples.at(-1).values);
     keys = keys.map(k => k.id === start.id ? first : k.id === end.id ? last : k);
   }
+  // Manual framing keys are offsets from the saved follow curve. Rebase them
+  // onto the live route, just as we do for the follow pair's own endpoints.
+  keys = keys?.map(key => {
+    if (key.pairId) return key;
+    const values = {...key.values};
+    for (const field of ['lon', 'lat']) {
+      if (values[field] === undefined) continue;
+      const pair = pairs.find(p => p.start.follow && p.start.frame <= key.frame && cameraPairOwnsField(pairs, p, field, key.frame));
+      if (!pair) continue;
+      const live = keys.find(k => k.id === pair.start.id);
+      values[field] = clamp(values[field] + cameraSampleAt(live, pair.end, key.frame, field) - cameraSampleAt(pair.start, pair.end, key.frame, field), ...CAMERA_FIELDS[field]);
+    }
+    return {...key, values};
+  });
+  return keys;
+}
+export function cameraTrackPoseAt(proj, geo, W, H, track, frame) {
+  const keys = liveCameraKeys(proj, geo, W, H, track);
   return cameraPoseAt(keys === track.cameraKeys ? track : {...track,cameraKeys:keys},frame);
+}
+
+/** Store an edited live pose in the saved curve's reference coordinates. */
+export function putCameraTrackKey(proj, geo, W, H, track, frame, values, id) {
+  const keys = liveCameraKeys(proj, geo, W, H, track);
+  const stored = id ? track.cameraKeys?.find(k => k.id === id) : track.cameraKeys?.find(k => !k.pairId && k.frame === frame);
+  const live = stored && keys?.find(k => k.id === stored.id);
+  const pairs = cameraPairsOf(track);
+  values = Object.fromEntries(Object.entries(values).map(([field, value]) => {
+    let shift = live?.values[field] !== undefined ? live.values[field] - stored.values[field] : 0;
+    if (!stored?.pairId && ['lon', 'lat'].includes(field)) {
+      const pair = pairs.find(p => p.start.follow && p.start.frame <= frame && cameraPairOwnsField(pairs, p, field, frame));
+      if (pair) shift = cameraSampleAt(keys.find(k => k.id === pair.start.id), pair.end, frame, field) - cameraSampleAt(pair.start, pair.end, frame, field);
+    }
+    return [field, clamp(value - shift, ...CAMERA_FIELDS[field])];
+  }));
+  return putCameraKey(track, frame, values, id);
 }
 
 /** Camera state at a frame: start view followed by each preset shot in order. */
@@ -2008,7 +2044,7 @@ export function makeAction(type, start, extra = {}) {
     pin: { place: city('Paris', 48.8566, 2.3522), label: '', showIcon: true, showLabel: true, color: '#e63946', size: 1, mode: 'stay' },
     object: { place: city('Paris', 48.8566, 2.3522), glyph: 'tank', objectView: 'side', count: 1, color: OBJECT_ICONS.tank.color, size: 1.2, enter: 'none', idle: 'none', exit: 'none', mode: 'stay', path: [], curve: 'smooth', trail: true, showLabel: false, label: '' },
     effect: { place: city('Paris', 48.8566, 2.3522), fx: 'explosion', color: EFFECTS.explosion.color, size: 1.5, repeat: 1, from: { kind: 'point', name: 'Launch site', lat: 45.5, lon: -1.5 }, showLabel: false, label: '' },
-    shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, fillAlpha: .28, showLabel: false, label: '' },
+    shape: { shape: 'arrow', mode: 'path', path: [], curve: 'smooth', color: SHAPES.arrow.color, width: 6, sizeMode:'screen', fillAlpha: .28, showLabel: false, label: '' },
     label: { text: 'Your label', labelPlacement: 'screen', x: 50, y: 15, place: city('Paris', 48.8566, 2.3522), offsetX: 0, offsetY: -24, labelStyle: { shape: 'none', halo: true, size: 24 } },
   }[type];
   const a = { ...base, ...own, ...(type==='shape'&&['distance','area'].includes(extra.shape)?{curve:'straight'}:{}),...(type==='shape'&&['road','railway'].includes(extra.shape)?{color:SHAPES[extra.shape].color,name:SHAPES[extra.shape].label}:{}), ...extra };

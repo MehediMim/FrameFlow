@@ -143,6 +143,22 @@ try {
   assert.ok(await followsCurrentObject(),'changing the object destination updates the follow camera');
   await evaluate(`location.reload()`);await waitFor(`document.querySelectorAll('#mDlCountry option').length>100&&document.querySelectorAll('[data-camera-key-id]').length===2`);
   assert.ok(await followsCurrentObject(),'live follow survives reload');
+  // Editing camera properties and adding overlapping presets retains the live anchor.
+  project=await stored();
+  await evaluate(`document.querySelector('[data-mid="${project.shots[0].id}"]').click()`);
+  await change('#mFrame',2);
+  await evaluate(`document.querySelector('[data-mpre="pushIn"]').click()`);
+  await change('#mFrame',4);
+  await evaluate(`document.querySelector('[data-mpre="orbit"]').click()`);
+  await change('#mFrame',5);
+  await change('[data-camera-field="zoom"]',8);
+  project=await stored();
+  const composed=await evaluate(`(async()=>{const E=await import('./map-engine.mjs'),p=JSON.parse(localStorage.getItem('frameflow-map-v1')),key=p.shots[0].cameraKeys.find(k=>k.follow),object=p.actions.find(a=>a.id===key.follow.planeId);return [150,180,200,240].map(frame=>{const c=E.cameraAt(p,{},p.width,p.height,frame),point=E.objectLocationAt({cx:c.cx},{},object,Math.min(frame,200));return {frame,centered:Math.abs(c.cx-point.X)<1e-5&&Math.abs(c.cy-point.Y)<1e-5,zoom:c.zoom,bearing:c.bearing};});})()`);
+  assert.ok(composed.every(c=>c.centered),'zoom edits, zoom preset, and orbit keep the object centered');
+  assert.equal(composed[0].zoom,8,'manual zoom edit reaches its requested value during follow');
+  const orbitEnd=project.shots[0].cameraKeys.find(k=>k.preset==='orbit'&&k.pairRole==='end');
+  assert.equal(composed.at(-1).bearing,orbitEnd.values.bearing,'old follow endpoint cannot reset a later orbit');
+  assert.equal(composed.at(-1).zoom,orbitEnd.values.zoom,'old follow endpoint cannot reset a later zoom');
   assert.deepEqual(errors,[]);
   console.log('Camera pairs browser: one timeline row, paired presets, independent captures, keyboard/context/inspector deletion, shared frames, undo, reload and legacy migration passed');
 } finally {

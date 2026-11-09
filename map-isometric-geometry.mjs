@@ -217,6 +217,13 @@ export class IsoScene{
     if(!shadows)return this._bounds;
     const b=shadowGeometry(this).bounds;return {left:Math.min(b.left,this._bounds.left),right:Math.max(b.right,this._bounds.right),top:Math.min(b.top,this._bounds.top),bottom:Math.max(b.bottom,this._bounds.bottom)};
   }
+  damageSurfaces(){
+    if(!this._damageSurfaces){
+      const ordered=this._ordered||(this._ordered=paintOrder(this.faces,this.view)),ids=new Map(this.faces.map((face,i)=>[face,i]));
+      this._damageSurfaces=ordered.map(({face,p})=>({id:ids.get(face),points:p,world:face.points,material:face.material,color:face.color,artwork:!!(face.image||face.text)}));
+    }
+    return this._damageSurfaces;
+  }
   draw(c,size,{shadows=true}={}){
     if(shadows)drawModelShadow(c,this,size);
     c.save();c.lineJoin='round';c.lineWidth=Math.max(.22,size*.007);c.strokeStyle='#292b2580';

@@ -1,0 +1,3035 @@
+{
+  "version": 1,
+  "format": {
+    "root": [
+      "version",
+      "name",
+      "duration",
+      "fps",
+      "theme",
+      "initialView",
+      "motion",
+      "scenes",
+      "project",
+      "projectMode",
+      "layers",
+      "cameraTracks",
+      "audio"
+    ],
+    "scene": [
+      "start",
+      "end",
+      "duration",
+      "title",
+      "type",
+      "description",
+      "narration",
+      "year",
+      "endYear",
+      "yearEra",
+      "panel",
+      "from",
+      "to",
+      "place",
+      "target",
+      "route",
+      "unit",
+      "units",
+      "count",
+      "troopCount",
+      "color",
+      "effect",
+      "effects",
+      "camera",
+      "actions",
+      "motion",
+      "size",
+      "sizeFrom",
+      "sizeTo"
+    ],
+    "action": [
+      "id",
+      "type",
+      "name",
+      "start",
+      "end",
+      "duration",
+      "animateFor",
+      "from",
+      "to",
+      "place",
+      "target",
+      "path",
+      "color",
+      "unit",
+      "units",
+      "count",
+      "troopCount",
+      "effect",
+      "shape",
+      "text",
+      "options",
+      "keys",
+      "motion",
+      "size",
+      "sizeFrom",
+      "sizeTo",
+      "animation",
+      "movement"
+    ],
+    "projectSettings": [
+      "width",
+      "height",
+      "theme",
+      "texture",
+      "imagery",
+      "terrain",
+      "lighting",
+      "atlasLabels",
+      "labelStyle",
+      "area",
+      "graticule",
+      "mapBackground",
+      "armyPresets",
+      "camera"
+    ]
+  },
+  "timing": "Storyboard start/end/at values use seconds or timestamps. Native layers and cameraTracks use editor frame numbers.",
+  "project": {
+    "version": 1,
+    "kind": "map",
+    "name": "Untitled map",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "frames": 1800,
+    "theme": "earth",
+    "texture": {
+      "type": "none",
+      "strength": 0.3,
+      "scale": 1
+    },
+    "labelStyle": {
+      "font": "Arial",
+      "weight": 600,
+      "italic": false,
+      "size": 14,
+      "caps": false,
+      "spacing": 0,
+      "textPath": "straight",
+      "curveAngle": 90,
+      "shape": "pill",
+      "placement": "screen",
+      "useTheme": true,
+      "text": "#ffffff",
+      "bg": "#0c1c28",
+      "bgAlpha": 0.9,
+      "border": "#ffffff",
+      "borderW": 0,
+      "halo": false,
+      "shadow": false
+    },
+    "area": {
+      "mode": "world",
+      "country": "Bangladesh",
+      "neighbors": "dim",
+      "fit": true,
+      "pad": 0.12,
+      "name": true,
+      "cities": true
+    },
+    "graticule": true,
+    "camera": {
+      "init": {
+        "lon": 12,
+        "lat": 26,
+        "zoom": 1.3,
+        "bearing": 0,
+        "pitch": 0
+      }
+    },
+    "shots": [],
+    "actions": [],
+    "mapBackground": {
+      "mode": "modern",
+      "color": "#eef1ec",
+      "west": -180,
+      "east": 180,
+      "north": 85.0511287798,
+      "south": -85.0511287798
+    },
+    "terrain": {
+      "azimuth": 315,
+      "altitude": 38,
+      "strength": 0.88,
+      "ambient": 0.3,
+      "exaggeration": 3,
+      "multidirectional": true,
+      "bathymetry": true,
+      "low": "#596653",
+      "middle": "#89917f",
+      "high": "#b9bbaa",
+      "shallow": "#7fc8ed",
+      "deep": "#246c93",
+      "highlightColor": "#e8be4f",
+      "highlightOpacity": 0.85
+    },
+    "lighting": {
+      "enabled": false,
+      "preset": "day",
+      "azimuth": 225,
+      "altitude": 55,
+      "intensity": 1,
+      "ambient": 0.5,
+      "warmth": 0,
+      "shadowStrength": 1
+    },
+    "atlasLabels": {
+      "countries": false,
+      "oceans": false,
+      "declutter": true,
+      "fitCountries": true,
+      "countryAngles": true,
+      "caps": false,
+      "size": 30,
+      "oceanSize": 23,
+      "font": "Libre Baskerville",
+      "text": "#d5e3df",
+      "outline": "#172c30",
+      "opacity": 0.9,
+      "spacing": 8,
+      "haloWidth": 0.08,
+      "textPath": "straight",
+      "curveAngle": 60,
+      "placement": "map",
+      "scaleMode": "world",
+      "referenceZoom": 3
+    }
+  },
+  "layerOptions": [
+    "X",
+    "Y",
+    "accentColor",
+    "amount",
+    "animDur",
+    "animEnd",
+    "animStart",
+    "armyName",
+    "armyUnits",
+    "attackSourceId",
+    "attackTargetId",
+    "attackTargeted",
+    "autoFit",
+    "autoObjectKey",
+    "autoYear",
+    "badge",
+    "badgeBg",
+    "badgeBorder",
+    "badgeBorderW",
+    "badgeExit",
+    "badgeLabelY",
+    "badgeShadow",
+    "badgeShape",
+    "badgeSides",
+    "badgeStem",
+    "badgeStemLen",
+    "badgeX",
+    "badgeY",
+    "badgeZoom",
+    "bannerAspect",
+    "bannerPlaque",
+    "bannerPole",
+    "bannerPoleColor",
+    "bannerTitle",
+    "bannerWind",
+    "bannerWindSpeed",
+    "bannerWindStrength",
+    "battleAngle",
+    "battleIntensity",
+    "battleRange",
+    "battleSpread",
+    "bbox",
+    "bearing",
+    "borderAnimation",
+    "borderFrom",
+    "borderPartial",
+    "borderReverse",
+    "borderRing",
+    "borderStyle",
+    "borderTo",
+    "buffer",
+    "cameraFrom",
+    "cameraKeys",
+    "cameraTo",
+    "click",
+    "clipEnd",
+    "clipStart",
+    "color",
+    "count",
+    "countries",
+    "country",
+    "countryRefs",
+    "createdOrder",
+    "curve",
+    "damageState",
+    "dashed",
+    "degrees",
+    "depth",
+    "description",
+    "detailLevel",
+    "detailLevels",
+    "details",
+    "dim",
+    "download",
+    "easing",
+    "endYear",
+    "enter",
+    "eventTitle",
+    "every",
+    "exit",
+    "face",
+    "fadeSeconds",
+    "fillAlpha",
+    "flagFit",
+    "flagOpacity",
+    "flagRelief",
+    "flagX",
+    "flagY",
+    "flagZoom",
+    "flowSpeed",
+    "formation",
+    "formationAlign",
+    "formationAngle",
+    "formationCols",
+    "frame",
+    "from",
+    "fromLabel",
+    "frontSide",
+    "fullTimelineCamera",
+    "fx",
+    "gapX",
+    "gapY",
+    "glow",
+    "glyph",
+    "groupDestination",
+    "groupKeys",
+    "groupMove",
+    "groupOpacity",
+    "hidden",
+    "highlightAnimation",
+    "highlightColor2",
+    "highlightExclude",
+    "highlightExtent",
+    "highlightFill",
+    "highlightOrigin",
+    "highlightPercent",
+    "hint",
+    "holes",
+    "href",
+    "icon",
+    "idle",
+    "image",
+    "index",
+    "invert",
+    "key",
+    "label",
+    "labelPlacement",
+    "labelStyle",
+    "lat",
+    "length",
+    "lift",
+    "lighting",
+    "lightingKeys",
+    "localeCompare",
+    "lockHeading",
+    "lon",
+    "map",
+    "mapOrder",
+    "measurementUnit",
+    "memberIds",
+    "mode",
+    "moveEnd",
+    "moveStart",
+    "networkAnimation",
+    "objectAngle",
+    "objectAnimation",
+    "objectAnimationSpeed",
+    "objectDirection",
+    "objectFacing",
+    "objectKeys",
+    "objectView",
+    "offset",
+    "offsetX",
+    "offsetY",
+    "opacity",
+    "origin",
+    "outer",
+    "p",
+    "pairId",
+    "pairRole",
+    "panelAlign",
+    "panelColor",
+    "panelOpacity",
+    "panelSide",
+    "panelWidth",
+    "path",
+    "pathKeys",
+    "pinStyle",
+    "pitch",
+    "place",
+    "plane",
+    "planeColor",
+    "planeId",
+    "plaqueColor",
+    "plaqueFit",
+    "plaqueFont",
+    "plaqueItalic",
+    "plaqueSize",
+    "plaqueWeight",
+    "pulse",
+    "q",
+    "radius",
+    "railBallast",
+    "railElectrified",
+    "railStyle",
+    "redo",
+    "regionLabels",
+    "reliefColor",
+    "reliefOpacity",
+    "repeat",
+    "revealPath",
+    "roadEdgeLines",
+    "roadLanes",
+    "roadMarkings",
+    "roadShoulder",
+    "roadStyle",
+    "routeLabelMode",
+    "routeLabelTiming",
+    "s",
+    "score",
+    "shape",
+    "showAreaBoundary",
+    "showDistanceArrow",
+    "showFill",
+    "showIcon",
+    "showLabel",
+    "showLabels",
+    "showMeasurement",
+    "showPath",
+    "showRouteLabels",
+    "showWaypoints",
+    "showYear",
+    "size",
+    "sizeMode",
+    "sizeZoom",
+    "sleeperSpacing",
+    "sourceDur",
+    "sourceFrom",
+    "sourceStart",
+    "startYear",
+    "symbol",
+    "target",
+    "terrainContent",
+    "terrainDensity",
+    "terrainOpacity",
+    "terrainScale",
+    "terrainSeed",
+    "text",
+    "textColor",
+    "textScale",
+    "timestamp",
+    "timingKeys",
+    "to",
+    "toLabel",
+    "track",
+    "trail",
+    "trailStyle",
+    "transform",
+    "undo",
+    "unshift",
+    "values",
+    "visible",
+    "wallGate",
+    "wallSpacing",
+    "wallTowerEvery",
+    "width",
+    "x",
+    "x0",
+    "x1",
+    "y",
+    "y0",
+    "y1",
+    "yearEra",
+    "zoneTerrain",
+    "zoom"
+  ],
+  "manualLayerFields": [
+    "accentColor",
+    "amount",
+    "armyName",
+    "attackSourceId",
+    "attackTargetId",
+    "attackTargeted",
+    "autoFit",
+    "autoObjectKey",
+    "autoYear",
+    "badgeBg",
+    "badgeBorder",
+    "badgeBorderW",
+    "badgeExit",
+    "badgeLabelY",
+    "badgeShadow",
+    "badgeShape",
+    "badgeSides",
+    "badgeStem",
+    "badgeStemLen",
+    "badgeX",
+    "badgeY",
+    "badgeZoom",
+    "bannerAspect",
+    "bannerPlaque",
+    "bannerPole",
+    "bannerPoleColor",
+    "bannerTitle",
+    "bannerWind",
+    "bannerWindSpeed",
+    "bannerWindStrength",
+    "battleAngle",
+    "battleIntensity",
+    "battleRange",
+    "battleSpread",
+    "bearing",
+    "borderAnimation",
+    "borderFrom",
+    "borderPartial",
+    "borderReverse",
+    "borderStyle",
+    "borderTo",
+    "color",
+    "count",
+    "curve",
+    "damageState",
+    "dashed",
+    "degrees",
+    "dim",
+    "easing",
+    "endYear",
+    "enter",
+    "eventTitle",
+    "exit",
+    "fadeSeconds",
+    "fillAlpha",
+    "flagFit",
+    "flagOpacity",
+    "flagRelief",
+    "flagX",
+    "flagY",
+    "flagZoom",
+    "formation",
+    "formationAlign",
+    "formationAngle",
+    "formationCols",
+    "from",
+    "fromLabel",
+    "frontSide",
+    "gapX",
+    "gapY",
+    "glow",
+    "highlightAnimation",
+    "highlightColor2",
+    "highlightExtent",
+    "highlightFill",
+    "highlightOrigin",
+    "highlightPercent",
+    "icon",
+    "idle",
+    "invert",
+    "label",
+    "labelPlacement",
+    "lift",
+    "lockHeading",
+    "measurementUnit",
+    "mode",
+    "networkAnimation",
+    "objectAngle",
+    "objectAnimation",
+    "objectAnimationSpeed",
+    "objectDirection",
+    "objectFacing",
+    "objectView",
+    "offsetX",
+    "offsetY",
+    "opacity",
+    "panelAlign",
+    "panelColor",
+    "panelOpacity",
+    "panelSide",
+    "panelWidth",
+    "pinStyle",
+    "pitch",
+    "place",
+    "planeColor",
+    "planeId",
+    "plaqueColor",
+    "plaqueFit",
+    "plaqueItalic",
+    "plaqueSize",
+    "plaqueWeight",
+    "preset",
+    "pulse",
+    "radius",
+    "railBallast",
+    "railElectrified",
+    "railStyle",
+    "reliefColor",
+    "reliefOpacity",
+    "repeat",
+    "roadEdgeLines",
+    "roadLanes",
+    "roadMarkings",
+    "roadShoulder",
+    "roadStyle",
+    "routeLabelMode",
+    "showAreaBoundary",
+    "showDistanceArrow",
+    "showFill",
+    "showLabel",
+    "showLabels",
+    "showPath",
+    "showRouteLabels",
+    "showWaypoints",
+    "showYear",
+    "size",
+    "sizeMode",
+    "sizeZoom",
+    "sleeperSpacing",
+    "startYear",
+    "symbol",
+    "target",
+    "terrainContent",
+    "terrainDensity",
+    "terrainOpacity",
+    "terrainScale",
+    "terrainSeed",
+    "text",
+    "textColor",
+    "textScale",
+    "to",
+    "toLabel",
+    "trail",
+    "trailStyle",
+    "wallGate",
+    "wallSpacing",
+    "wallTowerEvery",
+    "width",
+    "x",
+    "y",
+    "yearEra",
+    "zoneTerrain",
+    "zoom"
+  ],
+  "layerDefaults": {
+    "group": {
+      "type": "group",
+      "name": "Object group",
+      "start": 0,
+      "dur": 90,
+      "easing": "easeInOut",
+      "color": "#a7b887",
+      "origin": {
+        "lon": 0,
+        "lat": 0
+      },
+      "transform": {
+        "lon": 0,
+        "lat": 0,
+        "scale": 1,
+        "rotation": 0,
+        "opacity": 1
+      },
+      "memberIds": [],
+      "groupKeys": [],
+      "animDur": 76
+    },
+    "scene": {
+      "type": "scene",
+      "name": "Scene panel",
+      "start": 0,
+      "dur": 240,
+      "easing": "easeInOut",
+      "panelSide": "left",
+      "panelWidth": 46,
+      "panelAlign": "center",
+      "panelOpacity": 0.92,
+      "panelColor": "#111a20",
+      "textColor": "#f1ede2",
+      "accentColor": "#d9b767",
+      "eventTitle": "Age of Exploration",
+      "description": "Add the story behind this moment on the map.",
+      "startYear": 1500,
+      "endYear": 1600,
+      "autoYear": true,
+      "showYear": true,
+      "yearEra": "",
+      "textScale": 1,
+      "fadeSeconds": 0.25,
+      "color": "#d9b767",
+      "animDur": 204
+    },
+    "border": {
+      "type": "border",
+      "name": "Border",
+      "start": 0,
+      "dur": 60,
+      "easing": "easeInOut",
+      "target": {
+        "kind": "country",
+        "name": "Brazil"
+      },
+      "color": "#e4572e",
+      "width": 3.5,
+      "glow": true,
+      "fillAlpha": 0.18,
+      "invert": false,
+      "animDur": 51
+    },
+    "plane": {
+      "type": "plane",
+      "name": "Object travel",
+      "start": 0,
+      "dur": 90,
+      "easing": "easeInOut",
+      "from": {
+        "kind": "city",
+        "name": "London",
+        "lat": 51.5072,
+        "lon": -0.1276
+      },
+      "to": {
+        "kind": "city",
+        "name": "New York",
+        "lat": 40.7128,
+        "lon": -74.006
+      },
+      "color": "#ff6b35",
+      "planeColor": "#ffffff",
+      "icon": "plane",
+      "symbol": "$",
+      "fromLabel": "",
+      "toLabel": "",
+      "width": 3,
+      "size": 20,
+      "lift": 50,
+      "glow": true,
+      "dashed": false,
+      "showPath": true,
+      "showLabels": true,
+      "showRouteLabels": false,
+      "routeLabelMode": "auto",
+      "routeLabelTiming": "visited",
+      "mode": "direct",
+      "path": [],
+      "curve": "smooth",
+      "showWaypoints": true,
+      "animDur": 76
+    },
+    "highlight": {
+      "type": "highlight",
+      "name": "Highlight",
+      "start": 0,
+      "dur": 45,
+      "easing": "easeInOut",
+      "target": {
+        "kind": "country",
+        "name": "Australia"
+      },
+      "color": "#ffb703",
+      "dim": 0,
+      "showLabel": true,
+      "label": "",
+      "pulse": false,
+      "radius": 400,
+      "invert": false,
+      "animDur": 38
+    },
+    "pin": {
+      "type": "pin",
+      "name": "Pin / label",
+      "start": 0,
+      "dur": 45,
+      "easing": "easeInOut",
+      "place": {
+        "kind": "city",
+        "name": "Paris",
+        "lat": 48.8566,
+        "lon": 2.3522
+      },
+      "label": "",
+      "showIcon": true,
+      "showLabel": true,
+      "color": "#e63946",
+      "size": 1,
+      "mode": "stay",
+      "animDur": 38
+    },
+    "object": {
+      "type": "object",
+      "name": "Object",
+      "start": 0,
+      "dur": 90,
+      "easing": "easeInOut",
+      "place": {
+        "kind": "city",
+        "name": "Paris",
+        "lat": 48.8566,
+        "lon": 2.3522
+      },
+      "glyph": "tank",
+      "objectView": "side",
+      "count": 1,
+      "color": "#6b7f4a",
+      "size": 1.2,
+      "enter": "none",
+      "idle": "none",
+      "exit": "none",
+      "mode": "stay",
+      "path": [],
+      "curve": "smooth",
+      "trail": true,
+      "showLabel": false,
+      "label": "",
+      "animDur": 76
+    },
+    "effect": {
+      "type": "effect",
+      "name": "Effect",
+      "start": 0,
+      "dur": 60,
+      "easing": "easeInOut",
+      "place": {
+        "kind": "city",
+        "name": "Paris",
+        "lat": 48.8566,
+        "lon": 2.3522
+      },
+      "fx": "explosion",
+      "color": "#ff7a1a",
+      "size": 1.5,
+      "repeat": 1,
+      "from": {
+        "kind": "point",
+        "name": "Launch site",
+        "lat": 45.5,
+        "lon": -1.5
+      },
+      "showLabel": false,
+      "label": "",
+      "animDur": 51
+    },
+    "shape": {
+      "type": "shape",
+      "name": "Arrow / zone",
+      "start": 0,
+      "dur": 90,
+      "easing": "easeInOut",
+      "shape": "arrow",
+      "mode": "path",
+      "path": [],
+      "curve": "smooth",
+      "color": "#e63946",
+      "width": 6,
+      "sizeMode": "screen",
+      "fillAlpha": 0.28,
+      "showLabel": false,
+      "label": "",
+      "animDur": 76
+    },
+    "label": {
+      "type": "label",
+      "name": "Pin / label",
+      "start": 0,
+      "dur": 90,
+      "easing": "easeInOut",
+      "text": "Your label",
+      "labelPlacement": "screen",
+      "x": 50,
+      "y": 15,
+      "place": {
+        "kind": "city",
+        "name": "Paris",
+        "lat": 48.8566,
+        "lon": 2.3522
+      },
+      "offsetX": 0,
+      "offsetY": -24,
+      "labelStyle": {
+        "shape": "none",
+        "halo": true,
+        "size": 24
+      },
+      "animDur": 76
+    }
+  },
+  "labelStyle": {
+    "font": "Arial",
+    "weight": 600,
+    "italic": false,
+    "size": 14,
+    "caps": false,
+    "spacing": 0,
+    "textPath": "straight",
+    "curveAngle": 90,
+    "shape": "pill",
+    "placement": "screen",
+    "useTheme": true,
+    "text": "#ffffff",
+    "bg": "#0c1c28",
+    "bgAlpha": 0.9,
+    "border": "#ffffff",
+    "borderW": 0,
+    "halo": false,
+    "shadow": false
+  },
+  "keyframes": {
+    "object": {
+      "size": [
+        0.2,
+        8
+      ],
+      "objectAngle": [
+        -3600,
+        3600
+      ],
+      "damageState": [
+        "intact",
+        "damaged",
+        "burning",
+        "destroyed"
+      ],
+      "objectView": [
+        "side",
+        "isometric",
+        "isometricBack"
+      ]
+    },
+    "group": {
+      "lon": [
+        -540,
+        540
+      ],
+      "lat": [
+        -85,
+        85
+      ],
+      "scale": [
+        0.1,
+        8
+      ],
+      "rotation": [
+        -3600,
+        3600
+      ],
+      "opacity": [
+        0,
+        1
+      ]
+    },
+    "camera": {
+      "lon": [
+        -540,
+        540
+      ],
+      "lat": [
+        -85,
+        85
+      ],
+      "zoom": [
+        0,
+        14
+      ],
+      "pitch": [
+        0,
+        75
+      ],
+      "bearing": [
+        -3600,
+        3600
+      ]
+    },
+    "lighting": [
+      "azimuth",
+      "altitude",
+      "intensity",
+      "ambient",
+      "warmth",
+      "shadowStrength"
+    ],
+    "path": "{at: video timestamp, path: [locations]}",
+    "native": "objectKeys/pathKeys/groupKeys/lightingKeys/cameraKeys retain frame-based editor data in options or native layers."
+  },
+  "enums": {
+    "themes": [
+      {
+        "id": "antique",
+        "label": "Antique parchment"
+      },
+      {
+        "id": "kingdom",
+        "label": "Kingdom strategy · illustrated"
+      },
+      {
+        "id": "documentary",
+        "label": "War documentary · colored terrain"
+      },
+      {
+        "id": "relief",
+        "label": "Cartographic Relief"
+      },
+      {
+        "id": "earth",
+        "label": "Earth vector"
+      },
+      {
+        "id": "dark",
+        "label": "Night"
+      },
+      {
+        "id": "paper",
+        "label": "Paper atlas"
+      },
+      {
+        "id": "realistic",
+        "label": "Natural terrain · realistic"
+      },
+      {
+        "id": "satellite",
+        "label": "Satellite · photo-realistic"
+      },
+      {
+        "id": "blueprint",
+        "label": "Blueprint"
+      }
+    ],
+    "textures": [
+      {
+        "id": "none",
+        "label": "None"
+      },
+      {
+        "id": "paper",
+        "label": "Paper grain"
+      },
+      {
+        "id": "grain",
+        "label": "Film grain"
+      },
+      {
+        "id": "linen",
+        "label": "Linen"
+      },
+      {
+        "id": "dots",
+        "label": "Halftone dots"
+      },
+      {
+        "id": "abstract",
+        "label": "Abstract blotches"
+      },
+      {
+        "id": "brush",
+        "label": "Brush strokes"
+      }
+    ],
+    "mapBackgrounds": [
+      {
+        "id": "modern",
+        "label": "Modern world"
+      },
+      {
+        "id": "historical1300",
+        "label": "World · c. AD 1300"
+      },
+      {
+        "id": "coastline",
+        "label": "Land only · no modern borders"
+      },
+      {
+        "id": "image",
+        "label": "Historical / custom map image"
+      },
+      {
+        "id": "blank",
+        "label": "Blank canvas"
+      }
+    ],
+    "objects": [
+      {
+        "id": "image",
+        "label": "Image badge"
+      },
+      {
+        "id": "artwork",
+        "label": "SVG / PNG image"
+      },
+      {
+        "id": "banner",
+        "label": "Hanging image flag"
+      },
+      {
+        "id": "army",
+        "label": "Mixed army formation"
+      },
+      {
+        "id": "conqueror",
+        "label": "Conqueror / conquistador"
+      },
+      {
+        "id": "expeditionLeader",
+        "label": "Expedition leader"
+      },
+      {
+        "id": "general",
+        "label": "General / commander"
+      },
+      {
+        "id": "mountedGeneral",
+        "label": "Mounted general"
+      },
+      {
+        "id": "admiral",
+        "label": "Admiral / naval captain"
+      },
+      {
+        "id": "monarch",
+        "label": "King / monarch"
+      },
+      {
+        "id": "queen",
+        "label": "Queen / ruler"
+      },
+      {
+        "id": "navigator",
+        "label": "Navigator / cartographer"
+      },
+      {
+        "id": "diplomat",
+        "label": "Diplomat / envoy"
+      },
+      {
+        "id": "stoneWall",
+        "label": "Stone wall segment"
+      },
+      {
+        "id": "palisade",
+        "label": "Wooden palisade"
+      },
+      {
+        "id": "watchtower",
+        "label": "Watchtower"
+      },
+      {
+        "id": "gatehouse",
+        "label": "Fortified gatehouse"
+      },
+      {
+        "id": "bastion",
+        "label": "Star bastion"
+      },
+      {
+        "id": "earthwork",
+        "label": "Earthwork / barricade"
+      },
+      {
+        "id": "cannonBattery",
+        "label": "Cannon battery"
+      },
+      {
+        "id": "caravel",
+        "label": "Caravel"
+      },
+      {
+        "id": "galleon",
+        "label": "Galleon / sailing warship"
+      },
+      {
+        "id": "galley",
+        "label": "Oared galley"
+      },
+      {
+        "id": "explorer",
+        "label": "Explorer with spyglass"
+      },
+      {
+        "id": "compass",
+        "label": "Mariner’s compass"
+      },
+      {
+        "id": "seaChart",
+        "label": "Parchment sea chart"
+      },
+      {
+        "id": "treasureChest",
+        "label": "Treasure chest"
+      },
+      {
+        "id": "supplyWagon",
+        "label": "Supply wagon"
+      },
+      {
+        "id": "cannon",
+        "label": "Field cannon"
+      },
+      {
+        "id": "musketeer",
+        "label": "Musketeer"
+      },
+      {
+        "id": "pikeman",
+        "label": "Pikeman"
+      },
+      {
+        "id": "cavalry",
+        "label": "Armored cavalry"
+      },
+      {
+        "id": "stoneFort",
+        "label": "Stone fort / coastal fortress"
+      },
+      {
+        "id": "bullockCart",
+        "label": "Bullock cart"
+      },
+      {
+        "id": "palanquin",
+        "label": "Palanquin"
+      },
+      {
+        "id": "bengalRiverBoat",
+        "label": "Bengal river boat"
+      },
+      {
+        "id": "subcontinentMerchant",
+        "label": "Subcontinent merchant"
+      },
+      {
+        "id": "caravanCamel",
+        "label": "Caravan camel"
+      },
+      {
+        "id": "stepwell",
+        "label": "Stepwell"
+      },
+      {
+        "id": "mughalMatchlock",
+        "label": "Mughal matchlock infantry"
+      },
+      {
+        "id": "mughalCavalry",
+        "label": "Mughal cavalry"
+      },
+      {
+        "id": "mughalWarElephant",
+        "label": "War elephant with howdah"
+      },
+      {
+        "id": "mughalCannon",
+        "label": "Mughal field cannon"
+      },
+      {
+        "id": "mughalFort",
+        "label": "Mughal red sandstone fort"
+      },
+      {
+        "id": "mughalTomb",
+        "label": "Mughal domed tomb"
+      },
+      {
+        "id": "companySepoy",
+        "label": "Company sepoy"
+      },
+      {
+        "id": "companyOfficer",
+        "label": "Company officer"
+      },
+      {
+        "id": "companyFieldGun",
+        "label": "Company field gun"
+      },
+      {
+        "id": "eastIndiaman",
+        "label": "East Indiaman merchant ship"
+      },
+      {
+        "id": "companyTradingPost",
+        "label": "Company trading post"
+      },
+      {
+        "id": "companyCargo",
+        "label": "Company cargo and tea chests"
+      },
+      {
+        "id": "soldier",
+        "label": "Rifleman · field uniform"
+      },
+      {
+        "id": "fieldOfficer",
+        "label": "Field officer · binoculars"
+      },
+      {
+        "id": "radioOperator",
+        "label": "Radio operator · backpack set"
+      },
+      {
+        "id": "fieldMedic",
+        "label": "Field medic · medical satchel"
+      },
+      {
+        "id": "tank",
+        "label": "Tank"
+      },
+      {
+        "id": "warship",
+        "label": "Warship"
+      },
+      {
+        "id": "jet",
+        "label": "Fighter jet"
+      },
+      {
+        "id": "helicopter",
+        "label": "Helicopter"
+      },
+      {
+        "id": "drone",
+        "label": "Drone"
+      },
+      {
+        "id": "submarine",
+        "label": "Submarine"
+      },
+      {
+        "id": "missile",
+        "label": "Missile"
+      },
+      {
+        "id": "base",
+        "label": "Military base"
+      },
+      {
+        "id": "city",
+        "label": "City skyline"
+      },
+      {
+        "id": "camp",
+        "label": "Campsite / tents"
+      },
+      {
+        "id": "factory",
+        "label": "Factory"
+      },
+      {
+        "id": "airport",
+        "label": "Airport"
+      },
+      {
+        "id": "car",
+        "label": "Passenger car"
+      },
+      {
+        "id": "bus",
+        "label": "City bus"
+      },
+      {
+        "id": "train",
+        "label": "Passenger train"
+      },
+      {
+        "id": "deliveryTruck",
+        "label": "Delivery / cargo truck"
+      },
+      {
+        "id": "ambulance",
+        "label": "Ambulance"
+      },
+      {
+        "id": "airliner",
+        "label": "Passenger airliner"
+      },
+      {
+        "id": "cargoShip",
+        "label": "Container ship"
+      },
+      {
+        "id": "ferry",
+        "label": "Passenger ferry"
+      },
+      {
+        "id": "bicycle",
+        "label": "Bicycle"
+      },
+      {
+        "id": "house",
+        "label": "House"
+      },
+      {
+        "id": "hospital",
+        "label": "Hospital"
+      },
+      {
+        "id": "school",
+        "label": "School"
+      },
+      {
+        "id": "lighthouse",
+        "label": "Lighthouse"
+      },
+      {
+        "id": "bridge",
+        "label": "Suspension bridge"
+      },
+      {
+        "id": "windTurbine",
+        "label": "Wind turbine"
+      },
+      {
+        "id": "solarFarm",
+        "label": "Solar farm"
+      },
+      {
+        "id": "tree",
+        "label": "Leafy tree"
+      },
+      {
+        "id": "traveler",
+        "label": "Hiker / traveler"
+      },
+      {
+        "id": "clock",
+        "label": "Analog clock"
+      },
+      {
+        "id": "stopwatch",
+        "label": "Stopwatch"
+      },
+      {
+        "id": "hourglass",
+        "label": "Hourglass"
+      },
+      {
+        "id": "calendar",
+        "label": "Calendar"
+      },
+      {
+        "id": "eiffelTower",
+        "label": "Eiffel Tower"
+      },
+      {
+        "id": "statueOfLiberty",
+        "label": "Statue of Liberty"
+      },
+      {
+        "id": "tajMahal",
+        "label": "Taj Mahal"
+      },
+      {
+        "id": "bigBen",
+        "label": "Big Ben / Elizabeth Tower"
+      },
+      {
+        "id": "colosseum",
+        "label": "Colosseum"
+      },
+      {
+        "id": "gizaPyramids",
+        "label": "Pyramids of Giza"
+      },
+      {
+        "id": "greatWall",
+        "label": "Great Wall of China"
+      },
+      {
+        "id": "burjKhalifa",
+        "label": "Burj Khalifa"
+      },
+      {
+        "id": "petronasTowers",
+        "label": "Petronas Twin Towers"
+      },
+      {
+        "id": "sydneyOperaHouse",
+        "label": "Sydney Opera House"
+      },
+      {
+        "id": "goldenGateBridge",
+        "label": "Golden Gate Bridge"
+      },
+      {
+        "id": "towerBridge",
+        "label": "Tower Bridge"
+      },
+      {
+        "id": "leaningTowerPisa",
+        "label": "Leaning Tower of Pisa"
+      },
+      {
+        "id": "padmaBridge",
+        "label": "Padma Bridge"
+      },
+      {
+        "id": "nationalParliament",
+        "label": "Bangladesh National Parliament"
+      },
+      {
+        "id": "brandenburgGate",
+        "label": "Brandenburg Gate"
+      },
+      {
+        "id": "doctor",
+        "label": "Doctor"
+      },
+      {
+        "id": "nurse",
+        "label": "Nurse"
+      },
+      {
+        "id": "engineer",
+        "label": "Engineer / architect"
+      },
+      {
+        "id": "constructionWorker",
+        "label": "Construction worker"
+      },
+      {
+        "id": "farmer",
+        "label": "Farmer"
+      },
+      {
+        "id": "chef",
+        "label": "Chef"
+      },
+      {
+        "id": "teacher",
+        "label": "Teacher"
+      },
+      {
+        "id": "firefighter",
+        "label": "Firefighter"
+      },
+      {
+        "id": "policeOfficer",
+        "label": "Police officer"
+      },
+      {
+        "id": "scientist",
+        "label": "Scientist"
+      },
+      {
+        "id": "pilot",
+        "label": "Pilot"
+      },
+      {
+        "id": "officeWorker",
+        "label": "Office worker"
+      },
+      {
+        "id": "artist",
+        "label": "Artist / painter"
+      },
+      {
+        "id": "photographer",
+        "label": "Photographer"
+      },
+      {
+        "id": "mechanic",
+        "label": "Mechanic"
+      },
+      {
+        "id": "deliveryWorker",
+        "label": "Delivery worker"
+      },
+      {
+        "id": "portrait",
+        "label": "Ruler portrait / ribbon"
+      },
+      {
+        "id": "medievalCastle",
+        "label": "Medieval castle"
+      },
+      {
+        "id": "castleKeep",
+        "label": "Castle keep"
+      },
+      {
+        "id": "citadel",
+        "label": "Hilltop citadel"
+      },
+      {
+        "id": "castleRuins",
+        "label": "Castle ruins"
+      },
+      {
+        "id": "importGoods",
+        "label": "Import / incoming goods"
+      },
+      {
+        "id": "exportGoods",
+        "label": "Export / outgoing goods"
+      },
+      {
+        "id": "cargoCrates",
+        "label": "Cargo crates / merchandise"
+      },
+      {
+        "id": "cargoContainers",
+        "label": "Shipping containers"
+      },
+      {
+        "id": "tradeWarehouse",
+        "label": "Trade warehouse"
+      },
+      {
+        "id": "tradePort",
+        "label": "Trade port / loading crane"
+      },
+      {
+        "id": "grainSacks",
+        "label": "Grain / commodity sacks"
+      },
+      {
+        "id": "tradeBarrels",
+        "label": "Oil / trade barrels"
+      },
+      {
+        "id": "tradeCoins",
+        "label": "Gold / trade revenue"
+      },
+      {
+        "id": "kingdomTownCenter",
+        "label": "Town center"
+      },
+      {
+        "id": "kingdomHouse",
+        "label": "Thatched cottage"
+      },
+      {
+        "id": "kingdomBarracks",
+        "label": "Kingdom barracks"
+      },
+      {
+        "id": "kingdomArchery",
+        "label": "Archery range"
+      },
+      {
+        "id": "kingdomStable",
+        "label": "Horse stable"
+      },
+      {
+        "id": "kingdomMarket",
+        "label": "Village market"
+      },
+      {
+        "id": "kingdomForge",
+        "label": "Blacksmith forge"
+      },
+      {
+        "id": "kingdomWindmill",
+        "label": "Working windmill"
+      },
+      {
+        "id": "kingdomFarm",
+        "label": "Cultivated farm plot"
+      },
+      {
+        "id": "kingdomGranary",
+        "label": "Grain store"
+      },
+      {
+        "id": "kingdomLumber",
+        "label": "Lumber camp"
+      },
+      {
+        "id": "kingdomMine",
+        "label": "Gold mining camp"
+      },
+      {
+        "id": "kingdomMonastery",
+        "label": "Stone monastery"
+      },
+      {
+        "id": "kingdomWorkshop",
+        "label": "Siege workshop"
+      },
+      {
+        "id": "kingdomDock",
+        "label": "Timber dock"
+      },
+      {
+        "id": "kingdomCastle",
+        "label": "Kingdom castle"
+      },
+      {
+        "id": "kingdomVillager",
+        "label": "Village worker"
+      },
+      {
+        "id": "kingdomSpearman",
+        "label": "Kingdom spearman"
+      },
+      {
+        "id": "kingdomArcher",
+        "label": "Kingdom archer"
+      },
+      {
+        "id": "kingdomJungle",
+        "label": "Tropical tree"
+      },
+      {
+        "id": "kingdomWoodland",
+        "label": "Broadleaf tree"
+      },
+      {
+        "id": "kingdomPine",
+        "label": "Pine tree"
+      },
+      {
+        "id": "kingdomMountain",
+        "label": "Rocky mountain"
+      },
+      {
+        "id": "kingdomGold",
+        "label": "Gold deposit"
+      },
+      {
+        "id": "flag",
+        "label": "Flag"
+      },
+      {
+        "id": "checkpoint",
+        "label": "Checkpoint"
+      },
+      {
+        "id": "storm",
+        "label": "Storm"
+      },
+      {
+        "id": "volcano",
+        "label": "Volcano"
+      }
+    ],
+    "effects": [
+      {
+        "id": "cannonShot",
+        "label": "Cannon fire"
+      },
+      {
+        "id": "musketVolley",
+        "label": "Musket volley"
+      },
+      {
+        "id": "arrowVolley",
+        "label": "Arrow volley"
+      },
+      {
+        "id": "artilleryBarrage",
+        "label": "Artillery barrage"
+      },
+      {
+        "id": "meleeClash",
+        "label": "Sword clash / fighting"
+      },
+      {
+        "id": "battleSmoke",
+        "label": "Battlefield smoke"
+      },
+      {
+        "id": "siegeFire",
+        "label": "Siege fire / embers"
+      },
+      {
+        "id": "sunlight",
+        "label": "Sunlight / day & night"
+      },
+      {
+        "id": "explosion",
+        "label": "Explosion"
+      },
+      {
+        "id": "fire",
+        "label": "Fire"
+      },
+      {
+        "id": "smoke",
+        "label": "Smoke"
+      },
+      {
+        "id": "shockwave",
+        "label": "Shockwave"
+      },
+      {
+        "id": "quake",
+        "label": "Earthquake rings"
+      },
+      {
+        "id": "blast",
+        "label": "Blast / danger radius"
+      },
+      {
+        "id": "strike",
+        "label": "Missile strike (launch → target)"
+      }
+    ],
+    "shapes": [
+      {
+        "id": "road",
+        "label": "Road"
+      },
+      {
+        "id": "railway",
+        "label": "Railway"
+      },
+      {
+        "id": "river",
+        "label": "River"
+      },
+      {
+        "id": "distance",
+        "label": "Distance"
+      },
+      {
+        "id": "area",
+        "label": "Area"
+      },
+      {
+        "id": "arrow",
+        "label": "Attack arrow"
+      },
+      {
+        "id": "retreat",
+        "label": "Retreat arrow"
+      },
+      {
+        "id": "front",
+        "label": "Front line"
+      },
+      {
+        "id": "zone",
+        "label": "Zone / occupied area"
+      },
+      {
+        "id": "noFly",
+        "label": "No-fly / restricted zone"
+      }
+    ],
+    "cameraPresets": [
+      {
+        "id": "keyframed",
+        "label": "Keyframed camera"
+      },
+      {
+        "id": "flyTo",
+        "label": "Fly to"
+      },
+      {
+        "id": "swoop",
+        "label": "Cinematic swoop"
+      },
+      {
+        "id": "worldView",
+        "label": "Back to start view"
+      },
+      {
+        "id": "pushIn",
+        "label": "Push in"
+      },
+      {
+        "id": "pullBack",
+        "label": "Pull back"
+      },
+      {
+        "id": "orbit",
+        "label": "Orbit"
+      },
+      {
+        "id": "tilt",
+        "label": "Tilt"
+      },
+      {
+        "id": "panTo",
+        "label": "Pan to"
+      },
+      {
+        "id": "framePlane",
+        "label": "Frame route"
+      },
+      {
+        "id": "followPlane",
+        "label": "Follow object / traveler"
+      }
+    ],
+    "travelIcons": [
+      {
+        "id": "plane",
+        "label": "Plane"
+      },
+      {
+        "id": "helicopter",
+        "label": "Helicopter"
+      },
+      {
+        "id": "rocket",
+        "label": "Rocket"
+      },
+      {
+        "id": "car",
+        "label": "Car"
+      },
+      {
+        "id": "bus",
+        "label": "Bus"
+      },
+      {
+        "id": "train",
+        "label": "Train"
+      },
+      {
+        "id": "ship",
+        "label": "Ship"
+      },
+      {
+        "id": "person",
+        "label": "Person walking"
+      },
+      {
+        "id": "bicycle",
+        "label": "Bicycle"
+      },
+      {
+        "id": "money",
+        "label": "Money (coin)"
+      }
+    ],
+    "objectViews": [
+      {
+        "id": "side",
+        "label": "Side view"
+      },
+      {
+        "id": "isometric",
+        "label": "Isometric view"
+      },
+      {
+        "id": "isometricBack",
+        "label": "Back isometric view"
+      }
+    ],
+    "formations": [
+      {
+        "id": "grid",
+        "label": "Grid"
+      },
+      {
+        "id": "row",
+        "label": "Row"
+      },
+      {
+        "id": "wall",
+        "label": "Joined wall segments"
+      },
+      {
+        "id": "column",
+        "label": "Column"
+      },
+      {
+        "id": "staggered",
+        "label": "Staggered ranks"
+      },
+      {
+        "id": "wedge",
+        "label": "Wedge"
+      },
+      {
+        "id": "circle",
+        "label": "Circle"
+      }
+    ],
+    "roadStyles": [
+      {
+        "id": "asphalt",
+        "label": "Asphalt road"
+      },
+      {
+        "id": "highway",
+        "label": "Divided highway"
+      },
+      {
+        "id": "residential",
+        "label": "Residential street"
+      },
+      {
+        "id": "cobblestone",
+        "label": "Cobblestone"
+      },
+      {
+        "id": "dirt",
+        "label": "Dirt / country track"
+      }
+    ],
+    "railStyles": [
+      {
+        "id": "wood",
+        "label": "Timber sleepers"
+      },
+      {
+        "id": "concrete",
+        "label": "Concrete sleepers"
+      },
+      {
+        "id": "double",
+        "label": "Double track"
+      },
+      {
+        "id": "tram",
+        "label": "Urban tramway"
+      },
+      {
+        "id": "narrow",
+        "label": "Narrow gauge"
+      }
+    ],
+    "roadMarkings": [
+      {
+        "id": "auto",
+        "label": "Automatic"
+      },
+      {
+        "id": "dashed",
+        "label": "Dashed center line"
+      },
+      {
+        "id": "solid",
+        "label": "Solid center line"
+      },
+      {
+        "id": "double",
+        "label": "Double yellow"
+      },
+      {
+        "id": "none",
+        "label": "No markings"
+      }
+    ],
+    "zoneTerrains": [
+      {
+        "id": "plain",
+        "label": "Plain color"
+      },
+      {
+        "id": "grassland",
+        "label": "Grassland"
+      },
+      {
+        "id": "jungle",
+        "label": "Jungle"
+      },
+      {
+        "id": "woodland",
+        "label": "Woodland"
+      },
+      {
+        "id": "pineForest",
+        "label": "Pine forest"
+      },
+      {
+        "id": "mountains",
+        "label": "Mountains"
+      },
+      {
+        "id": "hills",
+        "label": "Rolling hills"
+      },
+      {
+        "id": "river",
+        "label": "River / flowing water"
+      },
+      {
+        "id": "lake",
+        "label": "Lake"
+      },
+      {
+        "id": "desert",
+        "label": "Desert dunes"
+      },
+      {
+        "id": "snow",
+        "label": "Snowfields"
+      },
+      {
+        "id": "marsh",
+        "label": "Marsh / wetlands"
+      },
+      {
+        "id": "farmland",
+        "label": "Farmland"
+      }
+    ],
+    "terrainContents": [
+      {
+        "id": "background",
+        "label": "Background only"
+      },
+      {
+        "id": "objects",
+        "label": "Objects only"
+      },
+      {
+        "id": "both",
+        "label": "Background + objects"
+      }
+    ],
+    "labelShapes": [
+      {
+        "id": "pill",
+        "label": "Pill"
+      },
+      {
+        "id": "rounded",
+        "label": "Rounded box"
+      },
+      {
+        "id": "square",
+        "label": "Square box"
+      },
+      {
+        "id": "tag",
+        "label": "Tag with pointer"
+      },
+      {
+        "id": "none",
+        "label": "Text only"
+      }
+    ],
+    "labelWeights": [
+      [
+        400,
+        "Regular"
+      ],
+      [
+        600,
+        "Semibold"
+      ],
+      [
+        700,
+        "Bold"
+      ],
+      [
+        800,
+        "Extra bold"
+      ]
+    ],
+    "labelPresets": {
+      "antique": {
+        "label": "Antique serif capitals",
+        "style": {
+          "font": "Georgia",
+          "weight": 400,
+          "italic": false,
+          "caps": true,
+          "spacing": 5,
+          "size": 22,
+          "placement": "map",
+          "scaleMode": "fixed",
+          "shape": "none",
+          "useTheme": false,
+          "text": "#30291e",
+          "bg": "#e5d3a7",
+          "halo": true,
+          "haloWidth": 0.025,
+          "shadow": false
+        }
+      },
+      "documentary": {
+        "label": "War documentary · military lettering",
+        "style": {
+          "font": "Oswald",
+          "weight": 600,
+          "caps": true,
+          "spacing": 9,
+          "size": 20,
+          "placement": "map",
+          "scaleMode": "fixed",
+          "shape": "none",
+          "useTheme": false,
+          "text": "#eee6cf",
+          "bg": "#303d36",
+          "halo": true,
+          "haloWidth": 0.1,
+          "shadow": false
+        }
+      },
+      "atlasGround": {
+        "label": "Atlas serif · fixed to map",
+        "style": {
+          "placement": "map",
+          "scaleMode": "fixed",
+          "font": "Libre Baskerville",
+          "weight": 700,
+          "size": 48,
+          "shape": "none",
+          "halo": true,
+          "haloWidth": 0.08,
+          "useTheme": false,
+          "text": "#d5e3df",
+          "bg": "#172c30",
+          "spacing": 8
+        }
+      },
+      "curved": {
+        "label": "Curved atlas text",
+        "style": {
+          "placement": "map",
+          "shape": "none",
+          "font": "Libre Baskerville",
+          "size": 36,
+          "halo": true,
+          "textPath": "arc",
+          "curveAngle": 90
+        }
+      },
+      "default": {
+        "label": "Default pill",
+        "style": {
+          "placement": "screen"
+        }
+      },
+      "clean": {
+        "label": "Clean text",
+        "style": {
+          "placement": "screen",
+          "shape": "none",
+          "halo": true,
+          "weight": 700,
+          "size": 17
+        }
+      },
+      "map2d": {
+        "label": "2D · Attached to map",
+        "style": {
+          "placement": "map",
+          "shape": "none",
+          "halo": true,
+          "weight": 700,
+          "size": 17
+        }
+      },
+      "atlas": {
+        "label": "Atlas capitals",
+        "style": {
+          "placement": "screen",
+          "font": "Cinzel",
+          "weight": 700,
+          "caps": true,
+          "spacing": 14,
+          "size": 15,
+          "shape": "none",
+          "halo": true
+        }
+      },
+      "news": {
+        "label": "News banner",
+        "style": {
+          "placement": "screen",
+          "font": "Oswald",
+          "weight": 700,
+          "caps": true,
+          "spacing": 6,
+          "size": 16,
+          "shape": "square",
+          "useTheme": false,
+          "bg": "#e63946",
+          "text": "#ffffff",
+          "bgAlpha": 1,
+          "shadow": true
+        }
+      },
+      "tag": {
+        "label": "Yellow tag",
+        "style": {
+          "placement": "screen",
+          "font": "Poppins",
+          "weight": 700,
+          "size": 15,
+          "shape": "tag",
+          "useTheme": false,
+          "bg": "#ffd166",
+          "text": "#1b1b1b",
+          "bgAlpha": 1,
+          "shadow": true
+        }
+      },
+      "ribbon": {
+        "label": "Black ribbon (for image badges)",
+        "style": {
+          "placement": "screen",
+          "font": "Cinzel",
+          "weight": 700,
+          "size": 16,
+          "spacing": 4,
+          "shape": "rounded",
+          "useTheme": false,
+          "bg": "#111111",
+          "text": "#ffffff",
+          "bgAlpha": 1,
+          "border": "#ffffff",
+          "borderW": 1.5,
+          "shadow": true
+        }
+      },
+      "hand": {
+        "label": "Handwritten",
+        "style": {
+          "placement": "screen",
+          "font": "Caveat",
+          "weight": 700,
+          "size": 24,
+          "shape": "none",
+          "halo": true
+        }
+      },
+      "bangla": {
+        "label": "Bangla (বাংলা)",
+        "style": {
+          "placement": "screen",
+          "font": "Hind Siliguri",
+          "weight": 600,
+          "size": 17
+        }
+      }
+    },
+    "badgeShapes": [
+      {
+        "id": "polygon",
+        "label": "Polygon"
+      },
+      {
+        "id": "circle",
+        "label": "Circle"
+      },
+      {
+        "id": "rounded",
+        "label": "Rounded square"
+      },
+      {
+        "id": "star",
+        "label": "Star"
+      }
+    ],
+    "badgeStems": [
+      {
+        "id": "none",
+        "label": "No pointer"
+      },
+      {
+        "id": "line",
+        "label": "Line"
+      },
+      {
+        "id": "pointer",
+        "label": "Pointer (tapered)"
+      }
+    ],
+    "badgeExits": [
+      {
+        "id": "none",
+        "label": "Stay until the bar ends"
+      },
+      {
+        "id": "fade",
+        "label": "Fade out"
+      },
+      {
+        "id": "shrink",
+        "label": "Shrink away"
+      },
+      {
+        "id": "pop",
+        "label": "Pop and vanish"
+      }
+    ],
+    "pinStyles": [
+      {
+        "id": "classic",
+        "label": "Classic pin"
+      },
+      {
+        "id": "dot",
+        "label": "Dot"
+      },
+      {
+        "id": "ring",
+        "label": "Ring"
+      },
+      {
+        "id": "diamond",
+        "label": "Diamond"
+      },
+      {
+        "id": "star",
+        "label": "Star"
+      },
+      {
+        "id": "flag",
+        "label": "Flag"
+      }
+    ],
+    "pinModes": [
+      {
+        "id": "stay",
+        "label": "Stay in one place"
+      },
+      {
+        "id": "move",
+        "label": "Move to another place"
+      },
+      {
+        "id": "path",
+        "label": "Move along my path"
+      }
+    ],
+    "areaModes": [
+      {
+        "id": "world",
+        "label": "World map"
+      },
+      {
+        "id": "country",
+        "label": "One country (detailed)"
+      }
+    ],
+    "neighborModes": [
+      {
+        "id": "dim",
+        "label": "Dimmed"
+      },
+      {
+        "id": "show",
+        "label": "Shown normally"
+      },
+      {
+        "id": "hide",
+        "label": "Hidden"
+      }
+    ],
+    "pathCurves": [
+      {
+        "id": "smooth",
+        "label": "Smooth curve"
+      },
+      {
+        "id": "straight",
+        "label": "Straight lines"
+      }
+    ],
+    "objectAnimations": [
+      {
+        "id": "auto",
+        "label": "Automatic"
+      },
+      {
+        "id": "none",
+        "label": "Still"
+      },
+      {
+        "id": "walk",
+        "label": "Walk"
+      },
+      {
+        "id": "run",
+        "label": "Run"
+      },
+      {
+        "id": "drive",
+        "label": "Wheels turning"
+      },
+      {
+        "id": "operate",
+        "label": "Working"
+      },
+      {
+        "id": "sway",
+        "label": "Sway in wind"
+      },
+      {
+        "id": "sail",
+        "label": "Rock on water"
+      }
+    ],
+    "networkAnimations": [
+      {
+        "id": "reveal",
+        "label": "Draw along path"
+      },
+      {
+        "id": "flow",
+        "label": "Flow / traffic"
+      },
+      {
+        "id": "both",
+        "label": "Draw and flow"
+      },
+      {
+        "id": "static",
+        "label": "Static"
+      }
+    ],
+    "fonts": [
+      {
+        "id": "Arial",
+        "label": "Arial"
+      },
+      {
+        "id": "Verdana",
+        "label": "Verdana"
+      },
+      {
+        "id": "Trebuchet MS",
+        "label": "Trebuchet MS"
+      },
+      {
+        "id": "Georgia",
+        "label": "Georgia"
+      },
+      {
+        "id": "Times New Roman",
+        "label": "Times New Roman"
+      },
+      {
+        "id": "Courier New",
+        "label": "Courier New"
+      },
+      {
+        "id": "Impact",
+        "label": "Impact"
+      },
+      {
+        "id": "Inter",
+        "label": "Inter"
+      },
+      {
+        "id": "Poppins",
+        "label": "Poppins"
+      },
+      {
+        "id": "Montserrat",
+        "label": "Montserrat"
+      },
+      {
+        "id": "Roboto",
+        "label": "Roboto"
+      },
+      {
+        "id": "Open Sans",
+        "label": "Open Sans"
+      },
+      {
+        "id": "Lato",
+        "label": "Lato"
+      },
+      {
+        "id": "DM Sans",
+        "label": "DM Sans"
+      },
+      {
+        "id": "Manrope",
+        "label": "Manrope"
+      },
+      {
+        "id": "Space Grotesk",
+        "label": "Space Grotesk"
+      },
+      {
+        "id": "Raleway",
+        "label": "Raleway"
+      },
+      {
+        "id": "Nunito",
+        "label": "Nunito"
+      },
+      {
+        "id": "Oswald",
+        "label": "Oswald"
+      },
+      {
+        "id": "Playfair Display",
+        "label": "Playfair Display"
+      },
+      {
+        "id": "Merriweather",
+        "label": "Merriweather"
+      },
+      {
+        "id": "Lora",
+        "label": "Lora"
+      },
+      {
+        "id": "Source Serif 4",
+        "label": "Source Serif 4"
+      },
+      {
+        "id": "Cinzel",
+        "label": "Cinzel"
+      },
+      {
+        "id": "Bebas Neue",
+        "label": "Bebas Neue"
+      },
+      {
+        "id": "Anton",
+        "label": "Anton"
+      },
+      {
+        "id": "Archivo Black",
+        "label": "Archivo Black"
+      },
+      {
+        "id": "Abril Fatface",
+        "label": "Abril Fatface"
+      },
+      {
+        "id": "Lobster",
+        "label": "Lobster"
+      },
+      {
+        "id": "Pacifico",
+        "label": "Pacifico"
+      },
+      {
+        "id": "Caveat",
+        "label": "Caveat"
+      },
+      {
+        "id": "Permanent Marker",
+        "label": "Permanent Marker"
+      },
+      {
+        "id": "Bangers",
+        "label": "Bangers"
+      },
+      {
+        "id": "Roboto Mono",
+        "label": "Roboto Mono"
+      },
+      {
+        "id": "JetBrains Mono",
+        "label": "JetBrains Mono"
+      },
+      {
+        "id": "Headline Bangla Regular Unicode",
+        "label": "Headline Bangla Regular Unicode"
+      },
+      {
+        "id": "Hind Siliguri",
+        "label": "Hind Siliguri"
+      },
+      {
+        "id": "Noto Sans Bengali",
+        "label": "Noto Sans Bengali"
+      },
+      {
+        "id": "Noto Serif Bengali",
+        "label": "Noto Serif Bengali"
+      },
+      {
+        "id": "Baloo Da 2",
+        "label": "Baloo Da 2"
+      },
+      {
+        "id": "Anek Bangla",
+        "label": "Anek Bangla"
+      },
+      {
+        "id": "Tiro Bangla",
+        "label": "Tiro Bangla"
+      },
+      {
+        "id": "Mina",
+        "label": "Mina"
+      },
+      {
+        "id": "Galada",
+        "label": "Galada"
+      },
+      {
+        "id": "UnifrakturCook",
+        "label": "UnifrakturCook"
+      },
+      {
+        "id": "Old Standard TT",
+        "label": "Old Standard TT"
+      },
+      {
+        "id": "Libre Baskerville",
+        "label": "Libre Baskerville"
+      },
+      {
+        "id": "Special Elite",
+        "label": "Special Elite"
+      },
+      {
+        "id": "DM Serif Display",
+        "label": "DM Serif Display"
+      },
+      {
+        "id": "Rozha One",
+        "label": "Rozha One"
+      }
+    ],
+    "imagery": [
+      {
+        "id": "gibs",
+        "label": "NASA Blue Marble (free, soft up close)"
+      },
+      {
+        "id": "esri",
+        "label": "Esri World Imagery (sharp, check licence)"
+      }
+    ],
+    "highlightAnimations": [
+      [
+        "radial",
+        "Circular spread"
+      ],
+      [
+        "fade",
+        "Fade in"
+      ],
+      [
+        "left",
+        "Wipe left to right"
+      ],
+      [
+        "right",
+        "Wipe right to left"
+      ],
+      [
+        "down",
+        "Wipe top to bottom"
+      ],
+      [
+        "up",
+        "Wipe bottom to top"
+      ],
+      [
+        "none",
+        "Instant"
+      ]
+    ],
+    "borderAnimations": [
+      [
+        "draw",
+        "Trace outline"
+      ],
+      [
+        "fade",
+        "Fade in"
+      ],
+      [
+        "pulse",
+        "Pulsing outline"
+      ],
+      [
+        "flow",
+        "Flowing dashes"
+      ],
+      [
+        "none",
+        "Instant"
+      ]
+    ],
+    "borderStyles": [
+      [
+        "solid",
+        "Solid"
+      ],
+      [
+        "dashed",
+        "Dashed"
+      ],
+      [
+        "dotted",
+        "Dotted"
+      ]
+    ],
+    "objectEnter": [
+      [
+        "drop",
+        "Drop in"
+      ],
+      [
+        "fade",
+        "Fade in"
+      ],
+      [
+        "grow",
+        "Grow"
+      ],
+      [
+        "none",
+        "Instant"
+      ]
+    ],
+    "objectIdle": [
+      [
+        "none",
+        "Still"
+      ],
+      [
+        "pulse",
+        "Pulse"
+      ],
+      [
+        "shake",
+        "Shake"
+      ],
+      [
+        "bob",
+        "Bob up and down"
+      ],
+      [
+        "spin",
+        "Spin"
+      ]
+    ],
+    "objectExit": [
+      [
+        "none",
+        "Stay until the bar ends"
+      ],
+      [
+        "fade",
+        "Fade out"
+      ],
+      [
+        "shrink",
+        "Shrink"
+      ],
+      [
+        "explode",
+        "Explode"
+      ]
+    ],
+    "lightingPresets": {
+      "day": {
+        "label": "Daylight",
+        "azimuth": 225,
+        "altitude": 55,
+        "intensity": 1,
+        "ambient": 0.5,
+        "warmth": 0,
+        "shadowStrength": 1
+      },
+      "golden": {
+        "label": "Golden hour",
+        "azimuth": 265,
+        "altitude": 14,
+        "intensity": 1.05,
+        "ambient": 0.48,
+        "warmth": 0.65,
+        "shadowStrength": 0.9
+      },
+      "dusk": {
+        "label": "Dusk",
+        "azimuth": 280,
+        "altitude": 1,
+        "intensity": 0.45,
+        "ambient": 0.3,
+        "warmth": 0.25,
+        "shadowStrength": 0.6
+      },
+      "night": {
+        "label": "Night",
+        "azimuth": 315,
+        "altitude": -15,
+        "intensity": 0,
+        "ambient": 0.22,
+        "warmth": -0.45,
+        "shadowStrength": 0.45
+      }
+    },
+    "armyPresets": {
+      "mughalColumn": {
+        "name": "Mughal column",
+        "units": [
+          {
+            "glyph": "mughalMatchlock",
+            "count": 5,
+            "color": "#52725c"
+          },
+          {
+            "glyph": "mughalCavalry",
+            "count": 3,
+            "color": "#8b4948"
+          },
+          {
+            "glyph": "mughalWarElephant",
+            "count": 1,
+            "color": "#9c4943"
+          },
+          {
+            "glyph": "mughalCannon",
+            "count": 2,
+            "color": "#658272"
+          }
+        ]
+      },
+      "companyColumn": {
+        "name": "East India Company column",
+        "units": [
+          {
+            "glyph": "companySepoy",
+            "count": 7,
+            "color": "#ab4542"
+          },
+          {
+            "glyph": "companyOfficer",
+            "count": 1,
+            "color": "#a44640"
+          },
+          {
+            "glyph": "companyFieldGun",
+            "count": 2,
+            "color": "#465d60"
+          },
+          {
+            "glyph": "bullockCart",
+            "count": 1,
+            "color": "#b38750"
+          }
+        ]
+      },
+      "riflePlatoon": {
+        "name": "Documentary · rifle platoon",
+        "units": [
+          {
+            "glyph": "soldier",
+            "count": 8,
+            "color": "#737b50"
+          },
+          {
+            "glyph": "fieldOfficer",
+            "count": 1,
+            "color": "#72765a"
+          },
+          {
+            "glyph": "radioOperator",
+            "count": 1,
+            "color": "#6c7752"
+          },
+          {
+            "glyph": "fieldMedic",
+            "count": 1,
+            "color": "#8a8764"
+          }
+        ]
+      },
+      "armoredColumn": {
+        "name": "Documentary · armored column",
+        "units": [
+          {
+            "glyph": "tank",
+            "count": 3,
+            "color": "#75794e"
+          },
+          {
+            "glyph": "soldier",
+            "count": 6,
+            "color": "#737b50"
+          },
+          {
+            "glyph": "radioOperator",
+            "count": 1,
+            "color": "#6c7752"
+          }
+        ]
+      },
+      "pikeShot": {
+        "name": "Pike & shot company",
+        "units": [
+          {
+            "glyph": "pikeman",
+            "count": 5,
+            "color": "#667e8c"
+          },
+          {
+            "glyph": "musketeer",
+            "count": 6,
+            "color": "#9d4d40"
+          },
+          {
+            "glyph": "flag",
+            "count": 1,
+            "color": "#a43d39"
+          }
+        ]
+      },
+      "siege": {
+        "name": "Siege army",
+        "units": [
+          {
+            "glyph": "musketeer",
+            "count": 4,
+            "color": "#9d4d40"
+          },
+          {
+            "glyph": "cannon",
+            "count": 3,
+            "color": "#656d55"
+          },
+          {
+            "glyph": "supplyWagon",
+            "count": 2,
+            "color": "#8d6844"
+          },
+          {
+            "glyph": "flag",
+            "count": 1,
+            "color": "#a43d39"
+          }
+        ]
+      },
+      "cavalry": {
+        "name": "Cavalry wing",
+        "units": [
+          {
+            "glyph": "cavalry",
+            "count": 6,
+            "color": "#8c493d"
+          },
+          {
+            "glyph": "pikeman",
+            "count": 2,
+            "color": "#667e8c"
+          },
+          {
+            "glyph": "flag",
+            "count": 1,
+            "color": "#c5a052"
+          }
+        ]
+      }
+    }
+  },
+  "audio": {
+    "file": "voiceover.wav",
+    "start": 0,
+    "source": 0,
+    "duration": 10,
+    "volume": 0.7,
+    "muted": false
+  },
+  "notes": [
+    "All layer properties are available in options. id/name/type/start/end use action fields.",
+    "Native layers and cameraTracks preserve all saved editor fields, including groups, split source timing and camera movement samples.",
+    "Choose supporting files to resolve asset:filename image references and audio file names. Files are read locally.",
+    "Download current map as script to obtain exact settings for anything built manually."
+  ]
+}

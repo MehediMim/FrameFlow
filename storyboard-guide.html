@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Storyboard format · FrameFlow</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#151b20;color:#e5ebee;font:16px/1.7 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:48px 24px 80px}a{color:#b6cd8c;text-underline-offset:4px}nav{display:flex;gap:24px;flex-wrap:wrap}h1{font-size:clamp(30px,5vw,48px);line-height:1.15;margin:32px 0 20px}h2{font-size:24px;margin-top:42px}p,li{max-width:80ch;color:#c1cbd1}pre{padding:20px;background:#0e1419;border:1px solid #354149;border-radius:10px;overflow-x:auto;font-size:14px;line-height:1.7}code{font-family:Consolas,monospace;color:#d7e8b8}table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:left;padding:12px;border-bottom:1px solid #354149;vertical-align:top}th{color:#b6cd8c}.table-wrap{overflow-x:auto}.note{padding:18px 22px;border-left:3px solid #b6cd8c;background:#1d272d}.tag{letter-spacing:.12em;color:#b6cd8c;font-size:13px;font-weight:700}
+</style><link rel="stylesheet" href="storyboard-ai-copy.css"></head><body><main>
+<nav><a href="index.html#map">Map Studio</a><a href="storyboard-reference.html">Every editor option</a><a href="examples/storyboard-full-control.json" download>Full-control template</a><a href="examples/storyboard-4-minutes.json" download>Download JSON example</a><a href="examples/storyboard-4-minutes.txt" download>Download text example</a></nav>
+<p class="tag">STORY AUTOMATION</p><h1>Your script becomes<br>the map timeline.</h1>
+<section data-storyboard-ai aria-labelledby="storyboardAiTitle"><h2 id="storyboardAiTitle">Ask an AI to write your storyboard</h2><p>Copy the complete instructions, paste them into your AI, and replace <strong>MY STORY BRIEF</strong> with your story, duration, and available files. The prompt includes this entire format guide, every catalogued property and ID, defaults, timing rules, and a working full-control example.</p><div class="storyboard-ai-actions"><button type="button" data-copy-storyboard-ai>Copy full AI instructions</button><a href="storyboard-ai-prompt.txt" download>Download AI instructions</a></div><p data-storyboard-ai-status role="status" aria-live="polite"></p><textarea data-storyboard-ai-manual hidden readonly aria-label="Complete AI storyboard instructions for manual copying"></textarea></section>
+<p>In Map Studio, choose <strong>Upload storyboard</strong> in the sidebar. Upload a <code>.json</code> or <code>.txt</code> file, or paste the script. Preview checks the entire story and shows scene times, narration, layer counts, and gaps. <strong>Build timeline</strong> creates editable layers and a single camera track. Undo restores the previous map.</p>
+<p class="note">Use the explicit fields below for automation. Freeform paragraphs belong in <code>narration</code> or <code>description</code>; they are not interpreted as map commands. Narration is saved as text. Timed audio uses an <code>audio</code> list and selected supporting files. Imports use the current map unless <code>project.mapBackground</code> selects another source.</p>
+
+<h2>Full editor control</h2>
+<p>The script can use the editor's complete project and layer model. <strong>Download current map as script</strong> captures everything you have built manually. Uploading that script restores settings, geometry, images, visibility, stacking order, groups, split source clocks, keyframes, and camera samples. Existing saved <code>.framemap.json</code> files are also accepted. See <a href="storyboard-reference.html">the searchable option catalogue</a> or download <a href="storyboard-reference.json" download>the complete JSON reference</a> for property names, choices, and defaults generated from the editor.</p>
+<div class="table-wrap"><table><thead><tr><th>Script field</th><th>Editor controls</th></tr></thead><tbody>
+<tr><td><code>project</code></td><td>Canvas width/height, base map and image bounds, imagery, terrain, sunlight, texture, atlas labels, label fonts/styles, regional detail, grid, saved army presets, and initial camera. These are the same property names as a saved project.</td></tr>
+<tr><td><code>options</code> on any action</td><td>All catalogued layer properties: object view/material presentation, animation, walls, banners/plaques, images and badges, formations, path curves, roads/railways/landscapes, border endpoints, territory fills/exclusions, measurements, labels, linked attacks, visibility, stacking, and native timing/keyframe arrays.</td></tr>
+<tr><td><code>layers</code></td><td>Native editor layers with frame-based <code>start</code>, <code>dur</code>, IDs and properties. Includes objects, groups, shapes, effects, plane travel, pins, labels, highlights, borders and panels. This preserves exact editor data and can be combined with additional timed scenes.</td></tr>
+<tr><td><code>cameraTracks</code></td><td>Native camera tracks with frame-based keys, paired movements, live follow links and samples. Use these instead of scene cameras for an exact timeline copy.</td></tr>
+<tr><td><code>audio</code></td><td>Named source files, timeline start, source trim offset, clip duration, volume, and mute. Audio clips can overlap and mix, matching manual audio layers.</td></tr>
+</tbody></table></div>
+<p>Project settings merge with the current map by default. Downloaded snapshots use <code>"projectMode":"replace"</code> and include a complete <code>project</code> object, so another map's settings cannot leak into the result. Set <code>motion</code> to <code>none</code> when you want only the exact animation you specified. Native <code>layers</code> and <code>cameraTracks</code> are preserved without generated motion.</p>
+<pre><code>{
+  "name":"My full-control map", "duration":"04:00", "fps":30,
+  "project":{
+    "width":1920,"height":1080,"theme":"earth",
+    "mapBackground":{"mode":"historical1300"},
+    "labelStyle":{"font":"Georgia","size":24,"text":"#f1e8cf"}
+  },
+  "scenes":[{"start":0,"end":240,"panel":false,
+    "camera":{"preset":"swoop","target":"France / Normandy",
+      "duration":15,"options":{"zoom":5,"pitch":45,"bearing":20,"autoFit":true}},
+    "actions":[{"id":"army-a","type":"object","place":"Paris",
+      "options":{"glyph":"cavalry","count":8,"formation":"wedge",
+        "objectView":"isometric","objectAnimationSpeed":1.25,
+        "visible":true,"mapOrder":4,"plaqueFont":"Georgia"}}]
+  }]
+}</code></pre>
+
+<h2>Groups, changing paths, sunlight, and exact timing</h2>
+<p>Give actions stable <code>id</code> strings. A group action uses <code>options.memberIds</code> to list its objects; forward references are supported. Its <code>origin</code> and initial <code>transform</code> are native group properties. Group keys animate <code>lon</code>, <code>lat</code>, <code>scale</code>, <code>rotation</code>, and <code>opacity</code>. Linked attacks use <code>attackSourceId</code> and <code>attackTargetId</code>, so the attack follows moved objects.</p>
+<pre><code>{"type":"shape","shape":"front","path":["Paris","Berlin"],
+ "options":{"frontSide":"left","width":3},
+ "keys":[{"at":"00:30","path":["Brussels","Berlin"]}]}
+
+{"type":"effect","effect":"sunlight",
+ "keys":[{"at":0,"values":{"altitude":45,"ambient":0.5}},
+         {"at":59,"values":{"altitude":2,"ambient":0.3,"warmth":0.5}}]}</code></pre>
+<p>Use <code>animation:{"start":5,"end":12}</code> or <code>movement:{"start":6,"end":10}</code> to position the layer's animation/movement diamonds separately from visibility. These times are absolute video seconds. Key entries can use <code>at</code> (seconds/timestamp) or <code>frame</code> (integer frame), never both. Native <code>objectKeys</code>, <code>pathKeys</code>, <code>groupKeys</code>, <code>lightingKeys</code>, <code>animStart</code> and split source fields in <code>options</code> retain their frame-based clock. The editor's limits and validation apply.</p>
+
+<h2>Images and timed audio</h2>
+<p>Press <strong>Add supporting files</strong> and choose your image/audio sources. Reference an image as <code>"image":"asset:portrait.svg"</code> in an object's options or the project's map background. The importer uses the normal SVG/image processing, embeds the resulting image, and includes it in project backups. You can also supply the editor's existing PNG/JPEG/WebP/GIF data URLs directly.</p>
+<pre><code>"audio":[
+  {"file":"voice.wav","start":"00:05","source":2,"duration":30,
+   "volume":0.8,"muted":false},
+  {"file":"music.mp3","start":0,"source":0,"duration":240,
+   "volume":0.2,"muted":false}
+]</code></pre>
+<p>Audio times are seconds or video timestamps. <code>source</code> trims the beginning of the file; <code>duration</code> controls the retained portion. Both source bounds and video timing are checked before applying anything. An audio list replaces session audio; <code>[]</code> clears it, and omitting <code>audio</code> keeps existing clips. The motion preview plays imported audio. Undo/redo restores the scripted audio and visual edit together. Source filenames/settings are saved in the script; audio buffers remain session-only, so select the files again after reloading.</p>
+
+<h2>Motion throughout the scene</h2>
+<p>Storyboards use <strong>Cinematic</strong> motion by default. Scenes without camera instructions get a moving camera: traveling forces receive live follow shots, while other scenes establish their subject and continue a slow zoom. A short scripted camera move continues drifting through the rest of its scene. Objects receive gradual size changes across their timeline bars. Existing position paths, attacks, smoke, territory reveals, and damage animations play alongside this motion.</p>
+<p>Choose <strong>Cinematic</strong>, <strong>Subtle</strong>, or <strong>Scripted motion only</strong> in the upload dialog. You can also set <code>"motion":"cinematic"</code>, <code>"subtle"</code>, or <code>"none"</code> at the storyboard, scene, or object-action level. Scene and action settings override the default. <code>none</code> retains your explicit animation instructions and omits generated motion. Use <code>"camera":false</code> or <code>{"mode":"hold"}</code> for a deliberate camera hold.</p>
+<p>After checking the script, press <strong>Play motion preview</strong> or <strong>Play scene</strong> to watch the result before building. Scrub the preview to inspect any instant. This uses the same map renderer as the editor and export. To update a storyboard you already built, reopen Upload storyboard, select a motion preset, preview, and build again.</p>
+
+<h2>Camera zoom, orbit, and follow</h2>
+<div class="table-wrap"><table><thead><tr><th>Mode</th><th>Example</th></tr></thead><tbody>
+<tr><td>Zoom in</td><td><code>{"mode":"pushIn","from":{"target":"Berlin","zoom":4},"amount":1.2}</code></td></tr>
+<tr><td>Zoom out</td><td><code>{"mode":"pullBack","amount":1}</code></td></tr>
+<tr><td>Orbit with tilt</td><td><code>{"mode":"orbit","degrees":40,"pitch":35,"zoom":6}</code></td></tr>
+<tr><td>Follow a moving force</td><td><code>{"mode":"follow","zoom":5,"pitch":25}</code></td></tr>
+<tr><td>Pan and zoom to a place</td><td><code>{"mode":"move","target":"Paris","zoom":5,"duration":8}</code></td></tr>
+</tbody></table></div>
+<p>Camera modes span the scene unless a shorter <code>duration</code> is supplied. In Cinematic or Subtle motion, a shorter move is followed by slow zoom and rotation. Follow always spans the scene and remains linked when you edit the route. Use <code>object</code> to select a force by its action name, or omit it to follow the first moving object. Follow accepts <code>zoom</code>, <code>pitch</code>, <code>from</code>, <code>easing</code>, and <code>lockHeading</code>. It does not accept a destination or duration.</p>
+<p>For exact choreography, use absolute video times in <code>camera.keys</code>. Each key accepts <code>at</code>, a target or longitude/latitude, zoom, pitch, bearing, and easing. Keys replace preset instructions for that scene and remain editable on the camera timeline.</p>
+<pre><code>"camera": {
+  "keys": [
+    {"at":"01:30","target":"Berlin","zoom":4.5,"pitch":10},
+    {"at":"01:45","zoom":6.2,"pitch":30,"bearing":20},
+    {"at":"02:00","zoom":5.2,"bearing":-15},
+    {"at":"02:29","zoom":6.5,"pitch":40,"bearing":35}
+  ]
+}</code></pre>
+
+<h2>Resize objects over time</h2>
+<p>Use <code>size</code> for an object's base size, or <code>sizeFrom</code> and <code>sizeTo</code> to animate it between two sizes across the action. Animated sizes range from 0.2 to 8. These fields also work on scenes that generate units. For example, <code>"sizeFrom":0.6,"sizeTo":1.4</code> makes an approaching force grow. Explicit size keys override the automatic size animation; add more keys for growth, shrinkage, and emphasis at precise moments.</p>
+<pre><code>{
+  "type":"object", "unit":"tank", "from":"Paris", "to":"Berlin",
+  "sizeFrom":0.6, "sizeTo":1.4,
+  "keys":[{"at":"01:10","values":{"size":2}}]
+}</code></pre>
+<p>After building, move the editor playhead inside the object's bar and drag its Size handle or change Size in Properties. Imported animated objects add a size key at that time. Scrubbing interpolates the size between keys. Choose <code>"options":{"sizeMode":"map","sizeZoom":5}</code> if you also want its apparent size to grow with camera zoom.</p>
+
+<h2>A four-minute video</h2>
+<p><code>duration: "04:00"</code> sets a 240-second video. Every time is an <strong>absolute position in the video</strong>, including actions and keys inside scenes. Use seconds (<code>90</code>), <code>MM:SS</code> (<code>"01:30"</code>), or <code>HH:MM:SS</code>. Decimal seconds are supported and rounded to the nearest frame. Scene and action end times are exclusive.</p>
+<pre><code>{
+  "version": 1,
+  "name": "My campaign",
+  "duration": "04:00",
+  "fps": 30,
+  "initialView": {"lon": 8, "lat": 50, "zoom": 4},
+  "scenes": [
+    {
+      "start": "00:00", "end": "01:00",
+      "title": "The advance", "type": "travel",
+      "route": ["Paris", "Brussels", "Berlin"],
+      "unit": "cavalry", "count": 8, "troopCount": 12000,
+      "color": "#c75c4b",
+      "narration": "Write the spoken story here.",
+      "camera": {"target": "Berlin", "zoom": 5, "duration": 15}
+    }
+  ]
+}</code></pre>
+<p>This short example leaves the final three minutes uncovered; preview reports that gap. The download examples cover all four minutes with an opening, advance, battle, control change, and aftermath. Their events are fictional.</p>
+
+<h2>Scene fields</h2><div class="table-wrap"><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>start</code>, <code>end</code></td><td>Scene time in the video. Use <code>duration</code> instead of <code>end</code> if preferred. Without either, the scene ends with the video. Scenes must be ordered by start time.</td></tr>
+<tr><td><code>title</code>, <code>description</code>, <code>narration</code></td><td>On-screen event title and context, plus retained voiceover notes. Title supports 160 characters, description 2,000, narration 10,000. If description is omitted, narration is also used as the panel description and must fit 2,000 characters.</td></tr>
+<tr><td><code>type</code></td><td><code>custom</code> for explicit actions; <code>travel</code> for moving units; <code>war</code> / <code>battle</code> for units and an effect; <code>conquest</code> for units and a territory fill; <code>incident</code> for an effect; <code>highlight</code> for territory; <code>route</code> for a path.</td></tr>
+<tr><td><code>from</code>, <code>to</code>, <code>route</code></td><td>Start and destination, or an ordered list of waypoints. A route creates an arrow. A scene with units also moves them along it.</td></tr>
+<tr><td><code>place</code>, <code>target</code></td><td>Position of units and effects, and territory to fill. Conquest uses <code>target</code>, falling back to <code>to</code>. For an exact conquest moment, use an explicitly timed highlight action.</td></tr>
+<tr><td><code>unit</code>, <code>count</code>, <code>troopCount</code></td><td>Object ID, number of visible symbols (1–100), and the actual force size shown as a label. <code>troopCount: 12000</code> does not create 12,000 objects.</td></tr>
+<tr><td><code>motion</code>, <code>sizeFrom</code>, <code>sizeTo</code></td><td>Motion preset for the scene, and starting/ending size of generated units. Explicit object actions accept the same fields.</td></tr>
+<tr><td><code>units</code></td><td>A mixed army: <code>[{"glyph":"cavalry","count":3,"color":"#c75c4b"},{"glyph":"cannon","count":2}]</code>. At most 100 symbols total.</td></tr>
+<tr><td><code>color</code>, <code>effect</code>, <code>effects</code></td><td>Six-digit hex color; effect ID; or a list of effect action objects with their own absolute times, places, and settings.</td></tr>
+<tr><td><code>year</code>, <code>endYear</code>, <code>yearEra</code></td><td>Historical years (1–9999) are separate from video timestamps. Supplying endYear animates the date. Era is <code>CE</code>, <code>BCE</code>, or empty. Omit year to show only the title and context.</td></tr>
+<tr><td><code>panel</code></td><td>Set <code>false</code> to hide the scene panel, or supply panel settings such as <code>{"panelSide":"right","panelWidth":40,"textScale":0.9}</code>.</td></tr>
+<tr><td><code>camera</code></td><td>Mode, target, zoom (0–14), pitch (0–75), bearing, and movement duration in seconds. Optional <code>from</code> and <code>to</code> objects can specify target or longitude/latitude and view settings. Explicit camera directions cannot overlap; overlapping scenes without camera instructions share the earlier scene's camera. Uncovered gaps hold the previous camera pose.</td></tr>
+<tr><td><code>actions</code></td><td>Precise instructions for multiple armies, events, paths, or fills within a scene. Use <code>custom</code> to build entirely from these actions.</td></tr>
+</tbody></table></div>
+
+<h2>Actions for precise control</h2>
+<p>Action types are <code>object</code>, <code>army</code>, <code>travel</code>, <code>route</code>, <code>shape</code>, <code>effect</code>, <code>highlight</code>, <code>border</code>, <code>pin</code>, <code>label</code>, <code>scene</code>, <code>plane</code>, and <code>group</code>. Actions inherit the scene's start/end unless supplied. They must fit inside the scene. Colors and options belong to each explicit action; scene shorthand settings apply to the automatically generated actions.</p>
+<pre><code>{
+  "type": "object", "name": "Northern force",
+  "start": "01:00", "end": "02:00", "animateFor": 20,
+  "unit": "soldier", "count": 8, "troopCount": 12000,
+  "from": "Paris", "to": "Berlin", "color": "#c75c4b",
+  "options": {"size": 0.8, "objectView": "isometric", "formation": "row"},
+  "keys": [
+    {"at": "01:45", "values": {"damageState": "damaged"}},
+    {"at": "01:55", "values": {"damageState": "destroyed"}}
+  ]
+}</code></pre>
+<p><code>animateFor</code> finishes the movement or reveal early, then holds the result until the action ends. Without it, animation spans the full action. Object keys support <code>size</code>, <code>objectAngle</code>, <code>objectView</code>, and <code>damageState</code> (<code>intact</code>, <code>damaged</code>, <code>burning</code>, <code>destroyed</code>).</p>
+<p>Common object IDs: <code>soldier</code>, <code>tank</code>, <code>cavalry</code>, <code>musketeer</code>, <code>cannon</code>, <code>warship</code>, <code>jet</code>, <code>flag</code>. Common effects: <code>explosion</code>, <code>fire</code>, <code>smoke</code>, <code>cannonShot</code>, <code>musketVolley</code>, <code>arrowVolley</code>, <code>artilleryBarrage</code>, <code>meleeClash</code>, <code>battleSmoke</code>, <code>siegeFire</code>. Shape IDs include <code>arrow</code>, <code>front</code>, <code>zone</code>, <code>road</code>, <code>railway</code>, and <code>river</code>. Unknown IDs are rejected.</p>
+<p>Use <code>options</code> for properties such as <code>size</code>, <code>opacity</code>, <code>easing</code>, <code>showLabel</code>, <code>label</code>, <code>objectView</code>, <code>formation</code>, <code>enter</code>, <code>exit</code>, <code>repeat</code>, <code>battleIntensity</code>, <code>highlightAnimation</code>, <code>fillAlpha</code>, <code>width</code>, <code>networkAnimation</code>, and <code>roadStyle</code>. Unsupported fields and invalid settings produce an error before the map changes.</p>
+
+<h2>Locations and territory</h2>
+<p>Use names from the selected map or the built-in city list. Matching is case-insensitive. For other places, use coordinates: <code>{"name":"Battle site","lat":23.8,"lon":90.4}</code> or the text <code>"23.8, 90.4"</code>. Latitude is limited to −85…85 and longitude to −180…180. Paths accept arrays of locations; text routes can use <code>Paris &gt; Brussels &gt; Berlin</code>.</p>
+<p>A region can be written as <code>{"kind":"region","country":"Bangladesh","name":"Dhaka"}</code>; the importer loads its country detail pack. Use the region's exact key from the map inspector when the key differs from its display name. Historical maps use their own territory and region keys.</p>
+<p>For an exact occupied area, use a highlight target such as <code>{"kind":"polygon","name":"Occupied sector","path":[{"lat":50,"lon":10},{"lat":51,"lon":10},{"lat":51,"lon":12}]}</code>. A shape action uses <code>path</code> and a <code>shape</code> ID. Country fills represent the selected base map; they do not reconstruct unprovided historical boundaries.</p>
+
+<h2>The readable text format</h2>
+<pre><code>name: My story
+duration: 04:00
+fps: 30
+
+[00:00 - 00:30] The advance
+type: travel
+from: Paris
+to: Berlin
+unit: cavalry
+count: 8
+troopCount: 12000
+color: #c75c4b
+narration: Explain what happened here.
+camera: {"target":"Berlin","zoom":5,"duration":10}
+action: {"type":"effect","start":"00:20","end":"00:30","place":"Berlin","effect":"battleSmoke"}</code></pre>
+<p>Field names are lowercase or camelCase exactly as shown. Start each scene with <code>[start - end] Title</code>. Use one field per line. Arrays and objects use JSON on a single line. Repeat <code>action:</code> for multiple actions. Comments start with <code>#</code> or <code>//</code> on their own line. The same fields work in both formats.</p>
+<p>Storyboards support up to 100 scenes and 200 map layers within a 5 MB script file, plus selected supporting media. A file with errors leaves the current project untouched. Scenes may overlap, and preview reports overlaps and uncovered times. Layer visibility follows its timeline bar; add another highlight in the next scene if control should stay visible. The imported plan and narration are saved in project backups. Open Upload storyboard again to review the source; manual layer edits do not rewrite that source. Download current map as script to capture the latest manual edits.</p>
+<p><a href="index.html#map">Open Map Studio</a></p>
+</main><script type="module" src="storyboard-ai-copy.mjs"></script></body></html>

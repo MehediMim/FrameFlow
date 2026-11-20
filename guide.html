@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="design-tokens.css">
   <link rel="stylesheet" href="guide.css">
   <link rel="stylesheet" href="interface.css?v=shared-interface-1">
+  <link rel="stylesheet" href="storyboard-ai-copy.css">
 </head>
 <body>
   <header class="guide-header">
@@ -21,6 +22,7 @@
   </header>
   <main>
     <section class="intro" aria-labelledby="guideTitle"><div><p class="eyebrow">THE FRAMEFLOW FIELD GUIDE</p><h1 id="guideTitle">See how it works.<br><em>Then make it yours.</em></h1></div><p>From your first pin to your final film.<br>Pick a feature, watch it unfold, and follow the steps in Map Studio.</p></section>
+    <section data-storyboard-ai aria-labelledby="storyboardAiTitle"><h2 id="storyboardAiTitle">Turn your story into an animated map</h2><p>Give an AI the complete storyboard format, every editor option and ID, and a working example. Paste the copied instructions into your AI and replace <strong>MY STORY BRIEF</strong> with your story, duration, and available files.</p><div class="storyboard-ai-actions"><button type="button" data-copy-storyboard-ai>Copy full AI instructions</button><a href="storyboard-ai-prompt.txt" download>Download AI instructions</a><a href="storyboard-guide.html">Read the storyboard guide</a><a href="storyboard-reference.html">Every script option</a></div><p data-storyboard-ai-status role="status" aria-live="polite"></p><textarea data-storyboard-ai-manual hidden readonly aria-label="Complete AI storyboard instructions for manual copying"></textarea></section>
     <div class="guide-layout">
       <aside class="lesson-sidebar" aria-label="Feature lessons">
         <label class="search-label" for="lessonSearch">Find a feature</label>
@@ -47,5 +49,6 @@
   </main>
   <noscript><p class="no-script">Enable JavaScript to browse the animated lessons. You can still <a href="index.html#feature-library">read the feature library</a>.</p></noscript>
   <script type="module" src="guide.mjs"></script>
+  <script type="module" src="storyboard-ai-copy.mjs"></script>
 </body>
 </html>

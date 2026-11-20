@@ -128,6 +128,22 @@ export function registerAudioStudio(studio, host) {
   for(const type of ['ff-play','ff-frame'])window.addEventListener(type,e=>{if(e.detail.studio!==studio)return;playing=e.detail.playing;sync(type==='ff-play');});
   window.addEventListener('blur',()=>{if(drag){drag=null;refresh();}});
   return {add:()=>add.click(),renderList,renderTimeline,renderInspector,remove,duplicate,move,canMove,history,syncPlayback:()=>sync(true),isSelected:()=>!!current(),
+    captureLayers:()=>copy(state.layers),
+    describeLayers:()=>state.layers.map(l=>({id:l.id,name:l.name,file:l.fileName,start:l.start,source:l.source,duration:l.duration,volume:l.volume,muted:l.muted})),
+    async prepareScriptLayers(manifest,files){
+      const decoded=new Map(),layers=[];
+      for(const clip of manifest){
+        const file=files.get(clip.file);if(!file)throw Error(`Missing supporting audio "${clip.file}". Choose it with Add supporting files.`);
+        if(!decoded.has(clip.file))decoded.set(clip.file,audioContext().decodeAudioData(await file.arrayBuffer()));
+        const buffer=await decoded.get(clip.file);
+        if(clip.source+clip.duration>buffer.duration+1e-4)throw Error(`Audio "${clip.name}" exceeds its source file. Check source and duration.`);
+        const peaks=new Float32Array(1000);
+        for(let i=0;i<peaks.length;i++){const a=Math.floor(i*buffer.length/peaks.length),b=Math.floor((i+1)*buffer.length/peaks.length);for(let ch=0;ch<buffer.numberOfChannels;ch++){const data=buffer.getChannelData(ch);for(let j=a;j<b;j+=Math.max(1,Math.floor((b-a)/20)))peaks[i]=Math.max(peaks[i],Math.abs(data[j]));}}
+        const {file:filename,...settings}=clip;layers.push({...settings,fileName:filename,buffer,peaks});
+      }
+      return layers;
+    },
+    restoreScriptLayers(layers){++state.generation;state.loading=false;state.layers=copy(layers);state.history=[];state.future=[];stop();},
     copySelection:()=>current()?{...current()}:null,
     pasteLayer(layer){host.pause();checkpoint();const pasted={...layer,id:crypto.randomUUID(),name:layer.name+' copy',start:time()};state.layers.push(pasted);refresh(pasted.id);},
     item: id => state.layers.find(l => l.id === id),

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "name": "A fictional campaign · 4-minute storyboard",
+  "duration": "04:00",
+  "fps": 30,
+  "motion": "cinematic",
+  "theme": "earth",
+  "initialView": { "lon": 8, "lat": 50, "zoom": 3.8, "pitch": 0, "bearing": 0 },
+  "scenes": [
+    {
+      "start": "00:00", "end": "00:30", "title": "The stage is set", "type": "custom",
+      "description": "A fictional campaign demonstrating storyboard automation. Replace these details with your own story.",
+      "narration": "Introduce the two sides and explain the setting. This template does not depict a historical event.",
+      "camera": { "mode": "pushIn", "from": { "target": "France", "zoom": 3.4 }, "amount": 0.9 },
+      "actions": [
+        { "type": "highlight", "target": "France", "color": "#c75c4b", "animateFor": 5 },
+        { "type": "highlight", "target": "Germany", "color": "#507cb6", "animateFor": 5 },
+        { "type": "pin", "place": "Paris", "options": { "label": "Departure", "showLabel": true } }
+      ]
+    },
+    {
+      "start": "00:30", "end": "01:30", "title": "The advance", "type": "travel",
+      "description": "12,000 troops advance along the marked route. Eight symbols represent the full force.",
+      "narration": "Explain where the force came from, its size, and the route it followed.",
+      "route": ["Paris", "Brussels", "Berlin"], "unit": "cavalry", "count": 8, "troopCount": 12000,
+      "color": "#c75c4b",
+      "sizeFrom": 0.75, "sizeTo": 1.25,
+      "camera": { "mode": "follow", "zoom": 5, "pitch": 28 }
+    },
+    {
+      "start": "01:30", "end": "02:30", "title": "The battle", "type": "custom",
+      "description": "The two sides meet. Attacks, smoke, and damage follow the script's timestamps.",
+      "narration": "Describe the battle, the opposing forces, and the outcome.",
+      "camera": { "mode": "orbit", "from": { "target": "Berlin", "zoom": 5.4, "pitch": 18 }, "zoom": 6.4, "pitch": 38, "degrees": 40 },
+      "actions": [
+        { "type": "object", "name": "Attacking cavalry", "unit": "cavalry", "count": 8, "troopCount": 12000, "from": { "name": "Western approach", "lat": 52.45, "lon": 12.7 }, "to": "Berlin", "animateFor": 20, "color": "#c75c4b", "sizeFrom": 0.6, "sizeTo": 1.15, "options": { "size": 0.8, "objectView": "isometric", "formation": "row" } },
+        { "type": "object", "name": "Defending force", "unit": "musketeer", "count": 6, "troopCount": 8000, "place": { "name": "Defenders", "lat": 52.55, "lon": 13.8 }, "color": "#507cb6", "options": { "size": 0.8, "objectView": "isometric" }, "keys": [{ "at": "02:15", "values": { "damageState": "damaged" } }, { "at": "02:25", "values": { "damageState": "destroyed" } }] },
+        { "type": "effect", "name": "Cannon exchange", "start": "01:50", "end": "02:15", "effect": "cannonShot", "from": { "lat": 52.45, "lon": 12.7 }, "place": "Berlin", "options": { "battleIntensity": 5, "repeat": 4 } },
+        { "type": "effect", "start": "02:00", "end": "02:30", "effect": "battleSmoke", "place": "Berlin", "color": "#81796b", "options": { "size": 2, "repeat": 3 } }
+      ]
+    },
+    {
+      "start": "02:30", "end": "03:30", "title": "Control changes", "type": "custom",
+      "description": "A territory fill shows the result. Change the target or supply a custom polygon for a smaller area.",
+      "narration": "Explain how the result changed territorial control. The geography here is only a demonstration.",
+      "camera": { "mode": "pullBack", "from": { "target": "Berlin", "zoom": 6.4, "pitch": 38, "bearing": 40 }, "to": { "target": "Germany", "zoom": 4.5, "pitch": 12, "bearing": 0 }, "amount": 0.4 },
+      "actions": [
+        { "type": "highlight", "name": "New control", "target": "Germany", "color": "#c75c4b", "animateFor": 12, "options": { "highlightAnimation": "left", "label": "New control", "showLabel": true } },
+        { "type": "object", "unit": "flag", "place": "Berlin", "color": "#c75c4b", "options": { "enter": "grow" }, "animateFor": 3 }
+      ]
+    },
+    {
+      "start": "03:30", "end": "04:00", "title": "The aftermath", "type": "incident",
+      "description": "Close the story with consequences and context. Every generated layer can be edited in the timeline.",
+      "narration": "Summarize the consequences and bring the four-minute story to a close.",
+      "place": "Berlin", "effect": "battleSmoke", "color": "#81796b",
+      "camera": { "mode": "pushIn", "from": { "target": "Berlin", "zoom": 4.5, "pitch": 10, "bearing": 0 }, "amount": 1.1 }
+    }
+  ]
+}

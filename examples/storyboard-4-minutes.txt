@@ -1,0 +1,57 @@
+# Structured text storyboard. All timestamps are absolute video times.
+# This fictional example demonstrates the format, not a historical event.
+name: A fictional campaign · text storyboard
+duration: 04:00
+fps: 30
+motion: cinematic
+theme: earth
+initialView: {"lon":8,"lat":50,"zoom":3.8,"pitch":0,"bearing":0}
+
+[00:00 - 00:30] The stage is set
+type: custom
+description: Introduce the setting. Replace this fictional story with your own.
+narration: Explain the two sides and why the campaign begins.
+camera: {"mode":"pushIn","from":{"target":"France","zoom":3.4},"amount":0.9}
+action: {"type":"highlight","target":"France","color":"#c75c4b","animateFor":5}
+action: {"type":"highlight","target":"Germany","color":"#507cb6","animateFor":5}
+
+[00:30 - 01:30] The advance
+type: travel
+description: 12,000 troops march from Paris through Brussels to Berlin.
+route: Paris > Brussels > Berlin
+unit: cavalry
+count: 8
+troopCount: 12000
+color: #c75c4b
+sizeFrom: 0.75
+sizeTo: 1.25
+camera: {"mode":"follow","zoom":5,"pitch":28}
+
+[01:30 - 02:30] The battle
+type: war
+description: Opposing forces clash at Berlin. Eight symbols represent the attacking force.
+place: Berlin
+unit: cavalry
+count: 8
+troopCount: 12000
+effect: artilleryBarrage
+color: #c75c4b
+camera: {"mode":"orbit","from":{"target":"Berlin","zoom":5.4,"pitch":18},"zoom":6.4,"pitch":38,"degrees":40}
+action: {"type":"object","name":"Defenders","unit":"musketeer","place":{"name":"Eastern position","lat":52.55,"lon":13.8},"count":6,"troopCount":8000,"color":"#507cb6","keys":[{"at":"02:15","values":{"damageState":"damaged"}},{"at":"02:25","values":{"damageState":"destroyed"}}]}
+action: {"type":"effect","start":"02:00","end":"02:30","place":"Berlin","effect":"battleSmoke","options":{"size":2,"repeat":3}}
+
+[02:30 - 03:30] Control changes
+type: conquest
+description: Change the territory color to show the campaign's result.
+place: Berlin
+target: Germany
+unit: flag
+color: #c75c4b
+camera: {"mode":"pullBack","from":{"target":"Berlin","zoom":6.4,"pitch":38,"bearing":40},"to":{"target":"Germany","zoom":4.5,"pitch":12,"bearing":0},"amount":0.4}
+
+[03:30 - 04:00] The aftermath
+type: incident
+description: Explain the consequences and close your story.
+place: Berlin
+effect: battleSmoke
+camera: {"mode":"pushIn","from":{"target":"Berlin","zoom":4.5,"pitch":10,"bearing":0},"amount":1.1}

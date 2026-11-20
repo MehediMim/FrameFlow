@@ -249,9 +249,13 @@ body.landing #landing{display:block}
 
 <header><a class="brand" id="homeLink" href="#home" title="Back to home" aria-label="FrameFlow home"><span class="logo">◈</span> FrameFlow <small>MAP STUDIO</small></a><nav class="modes" aria-label="Studio"><button data-mode="map" class="on">Map Studio</button></nav><input id="mProjectName" class="map-only" aria-label="Map project name" value="Untitled map"><span id="mSaveState" class="muted map-only">Saved locally</span><button id="mUndo" class="map-only" title="Undo (Ctrl Z)">↶</button><button id="mRedo" class="map-only" title="Redo (Ctrl Shift Z)">↷</button><button id="mOpen" class="map-only">Open</button><button id="mSave" class="map-only">Save project</button><button id="mExport" class="map-only primary">Export video ↗</button></header>
 <div id="mapStudio">
+<link rel="stylesheet" href="map-storyboard.css">
+<link rel="stylesheet" href="storyboard-ai-copy.css">
 <div class="workspace">
 <aside class="left">
 <div class="tabs ff-sidebar-header"><b>Tools &amp; layers</b><span>MAP</span></div>
+<div class="section-title">STORY AUTOMATION</div>
+<button id="mStoryboard" type="button" class="help" aria-haspopup="dialog">Upload storyboard</button>
 <div class="section-title">ADD LAYER <span>＋</span></div><div class="add-grid" id="mAddGrid"></div>
 <div class="section-title">CAMERA <span>▣</span></div><div class="m-presets" id="mPresets"></div>
 <div class="section-title">LAYERS <span id="mItemCount"></span></div><div id="mItems"></div>

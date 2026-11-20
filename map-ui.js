@@ -54,6 +54,8 @@ import { ROAD_STYLES, RAIL_STYLES, ROAD_MARKINGS } from './map-network-style.mjs
 import { lightingAt, LIGHTING_FIELDS as SUN_FIELDS, putLightingKey, removeLightingKey, moveLightingKey } from './map-lighting-keys.mjs';
 import { lightingOf, lightingPreset } from './map-lighting.mjs';
 import { planeRoute } from './map-engine.mjs?v=shape-sizing-1';
+import { installStoryboardUI } from './map-storyboard-ui.mjs';
+import { storyboardProjectBase } from './map-storyboard-editor.mjs';
 let cameraProperty = 'all', objectProperty = 'all', selectedCameraKeyId=null;
 const objectTypeFilters = new Map();
 const objectPreviewStates=new WeakMap();
@@ -102,8 +104,10 @@ function notify(s) {
   const t = $('#toast'); t.textContent = s; t.classList.add('show');
   clearTimeout(notify.timer); notify.timer = setTimeout(() => t.classList.remove('show'), 2600); $('#mStatus').textContent = s;
 }
-function checkpoint() { undoStack.push(JSON.stringify(proj)); redoStack = []; trimMapHistory(undoStack, redoStack); updateHistory(); }
-function updateHistory() { const a=audioUI?.historyState(); $('#mUndo').disabled = a?!a.undo:!undoStack.length; $('#mRedo').disabled = a?!a.redo:!redoStack.length; }
+// Keep session-only AudioBuffers on their own history entry, even when two map JSON snapshots are identical.
+const withStoryboardAudio=(text,audioLayers)=>({text,audioLayers,length:text.length});
+function checkpoint() { undoStack.push(JSON.stringify(proj)); redoStack = []; trimMapHistory(undoStack, redoStack);updateHistory(); }
+function updateHistory() { const a=audioUI?.historyState(); $('#mUndo').disabled = undoStack.at(-1)?.audioLayers!==undefined?false:a?!a.undo:!undoStack.length; $('#mRedo').disabled = redoStack.at(-1)?.audioLayers!==undefined?false:a?!a.redo:!redoStack.length; }
 function ensureCameraTrack() {
   return syncCameraTimeline(proj, pose => makeShot('keyframed', 0, {dur:proj.frames, createdOrder:0, followInitialView:true, cameraFrom:pose, cameraTo:{...pose}, cameraKeys:[]}));
 }
@@ -117,11 +121,14 @@ function captureViewAtPlayhead() {
 function saveLocal() { ensureCameraTrack(); try { localStorage.setItem(STORE, JSON.stringify(proj)); $('#mSaveState').textContent = 'Saved locally'; } catch { $('#mSaveState').textContent = 'Save project to keep changes'; } }
 function changed() { saveLocal(); renderItems(); renderTimeline(); draw(); }
 function history(dir) {
-  if (audioUI?.handlesHistory()) { audioUI.history(dir); return; }
-  pause();
   const from = dir === 'undo' ? undoStack : redoStack, to = dir === 'undo' ? redoStack : undoStack;
+  const hasStoryboardAudio=from.at(-1)?.audioLayers!==undefined;
+  if (!hasStoryboardAudio&&audioUI?.handlesHistory()) { audioUI.history(dir); return; }
+  pause();
   if (!from.length) return;
-  to.push(JSON.stringify(proj)); proj = JSON.parse(from.pop());
+  const previous=JSON.stringify(proj),target=from.pop();to.push(hasStoryboardAudio?withStoryboardAudio(previous,audioUI.captureLayers()):previous);
+  if(hasStoryboardAudio)audioUI.restoreScriptLayers(target.audioLayers);
+  proj = JSON.parse(typeof target==='string'?target:target.text);
   trimMapHistory(undoStack, redoStack);
   if (!items().some(i => i.id === sel)) sel = null;
   frame = Math.min(frame, proj.frames - 1); saveLocal(); renderAll(); updateHistory();
@@ -828,6 +835,7 @@ function scenePanelFields(a) {
     + F.range('panelWidth','Panel width',d.panelWidth,25,70,1,x=>x+'%')
     + F.sel('panelAlign','Text position',d.panelAlign,[['top','Top'],['center','Center'],['bottom','Bottom']])
     + '<div class="section-title m-sep">YEAR &amp; EVENT</div>'
+    + F.chk('showYear','Show historical year',d.showYear!==false)
     + F.chk('autoYear','Advance year automatically',d.autoYear)
     + F.num('startYear',d.autoYear?'Starting year':'Year',d.startYear,1,9999)
     + (d.autoYear?F.num('endYear','Ending year',d.endYear,1,9999):'')
@@ -2036,6 +2044,33 @@ audioUI = registerAudioStudio('map', {
  trackLabels:'#mTrackLabels', trackRows:'#mTrackRows', tracks:'#mTracks', actionButtons:['#mDuplicate','#mDelete']
 });
 saveLocal(); renderAll();
+installStoryboardUI({
+  getProject:()=>proj, pause,
+  getAudio:()=>audioUI.describeLayers(),
+  getPreviewAudio:()=>audioUI.captureLayers(),
+  prepareAudio:(manifest,files)=>audioUI.prepareScriptLayers(manifest,files),
+  async prepareGeo(raw){
+    const effective=storyboardProjectBase(raw,proj),loaded=await mapSources.load(mapSourceOf(effective));
+    const modern=loaded.land||loaded;modern.cities||=CITIES;modern.imagery||=createImagery();modern.relief||=createRelief();loaded.imagery=modern.imagery;loaded.relief=modern.relief;
+    // Explicit region objects can use any installed country detail pack.
+    const countries=new Set(effective.area?.detailCountries||[]);
+    const scan=value=>{if(!value||typeof value!=='object')return;if(value.kind==='region'&&typeof value.country==='string')countries.add(value.country);for(const child of Object.values(value))scan(child);};
+    scan(raw);
+    if(!loaded.historical)for(const country of countries){
+      if(loaded.details?.has(country))continue;
+      const response=await fetch(detailFileOf(country));if(!response.ok)throw Error(`Could not load regions for ${country}. Use coordinates or check the country name.`);
+      const pack=await response.json();if(pack.country!==country)throw Error(`Invalid region data for ${country}.`);installCountryDetail(loaded,pack);
+    }
+    return loaded;
+  },
+  applyProject(project,audioLayers){
+    validateMapProject(project);pause();endPathDraw(true);cancelPick();finishMapPan();checkpoint();
+    if(audioLayers!==undefined){undoStack[undoStack.length-1]=withStoryboardAudio(undoStack.at(-1),audioUI.captureLayers());audioUI.restoreScriptLayers(audioLayers);}
+    proj=project;sel=null;frame=0;selectedCameraKeyId=null;previewCamera=null;pathDrag=null;
+    directMapEditing?.setSelection([]);timelineAutoFit=true;
+    saveLocal();renderAll();notify(`Storyboard built: ${project.storyboard.scenes.length} scenes. Press Play to preview.`);
+  }
+});
 setMode('map')
 // Independent map-settings drawer: keep item properties visible in the inspector.
 {

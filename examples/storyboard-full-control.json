@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "Full editor control · animated campaign",
+  "duration": "01:00",
+  "fps": 30,
+  "motion": "none",
+  "project": {
+    "width": 1280, "height": 720, "theme": "earth", "graticule": false,
+    "mapBackground": { "mode": "modern" },
+    "area": { "mode": "world", "detailCountries": [] },
+    "texture": { "type": "none", "strength": 0, "scale": 1 },
+    "labelStyle": { "font": "Georgia", "size": 22, "text": "#f4ebd4", "halo": true },
+    "lighting": { "enabled": true, "preset": "custom", "azimuth": 225, "altitude": 45, "intensity": 1, "ambient": 0.5, "warmth": 0.15, "shadowStrength": 0.8 }
+  },
+  "initialView": { "lon": 13, "lat": 52, "zoom": 5, "pitch": 20, "bearing": 0 },
+  "scenes": [
+    {
+      "start": "00:00", "end": "01:00", "title": "Every editor track", "type": "custom", "panel": false,
+      "camera": { "preset": "orbit", "duration": 60, "options": { "degrees": 35, "pitch": 35, "amount": 0.7 } },
+      "actions": [
+        { "id": "formation", "type": "group", "name": "Combined force", "options": { "memberIds": ["cavalry", "guns"], "origin": { "lon": 12.7, "lat": 52.45 }, "transform": { "lon": 12.7, "lat": 52.45, "scale": 1, "rotation": 0, "opacity": 1 } }, "keys": [{ "at": 0, "values": { "lon": 12.7, "lat": 52.45, "scale": 1, "rotation": 0, "opacity": 1 } }, { "at": 59, "values": { "lon": 13, "lat": 52.6, "scale": 1.2, "rotation": 15, "opacity": 0.9 } }] },
+        { "id": "cavalry", "type": "object", "name": "Cavalry", "unit": "cavalry", "place": { "lat": 52.45, "lon": 12.7 }, "sizeFrom": 0.6, "sizeTo": 1.1, "options": { "count": 4, "objectView": "isometric", "formation": "wedge", "objectAnimation": "auto", "autoObjectKey": true, "mapOrder": 5, "color": "#be6952" } },
+        { "id": "guns", "type": "object", "name": "Artillery", "options": { "glyph": "cannon", "place": { "lat": 52.35, "lon": 12.6 }, "count": 2, "size": 0.8, "objectView": "isometric", "color": "#718354", "formation": "row" } },
+        { "id": "defenders", "type": "object", "name": "Defenders", "unit": "musketeer", "place": { "lat": 52.6, "lon": 13.8 }, "count": 4, "color": "#507cb6", "options": { "objectView": "isometric", "formation": "row" }, "keys": [{ "at": 35, "values": { "damageState": "damaged", "size": 1 } }, { "at": 50, "values": { "damageState": "destroyed" } }] },
+        { "type": "effect", "name": "Linked cannon attack", "start": 15, "end": 45, "effect": "cannonShot", "from": { "lat": 52.35, "lon": 12.6 }, "place": { "lat": 52.6, "lon": 13.8 }, "options": { "attackSourceId": "guns", "attackTargetId": "defenders", "battleIntensity": 6, "battleSpread": 12, "repeat": 5 } },
+        { "type": "shape", "name": "Changing front", "shape": "front", "path": [{ "lat": 51.9, "lon": 13.3 }, { "lat": 52.4, "lon": 13.4 }, { "lat": 53, "lon": 13.2 }], "options": { "frontSide": "left", "width": 3, "color": "#b34b43", "showLabel": true, "label": "Front line" }, "keys": [{ "at": 45, "path": [{ "lat": 51.9, "lon": 13.7 }, { "lat": 52.4, "lon": 13.9 }, { "lat": 53, "lon": 13.6 }] }] },
+        { "type": "shape", "name": "Supply road", "shape": "road", "path": [{ "lat": 52, "lon": 12.2 }, { "lat": 52.3, "lon": 12.5 }, { "lat": 52.45, "lon": 12.7 }], "options": { "width": 12, "roadStyle": "dirt", "roadLanes": 1, "roadMarkings": "none", "roadShoulder": 2, "networkAnimation": "both", "flowSpeed": 24 } },
+        { "type": "pin", "name": "Berlin marker", "from": "Berlin", "to": { "name": "Northern camp", "lat": 52.8, "lon": 13.5 }, "options": { "pinStyle": "flag", "label": "Command", "showLabel": true, "size": 0.8, "color": "#f0c466", "labelStyle": { "font": "Georgia", "size": 18, "text": "#f1e8cf", "halo": true } } },
+        { "type": "object", "name": "Commander banner", "unit": "flag", "place": { "lat": 52.45, "lon": 12.9 }, "options": { "bannerTitle": "COMMAND", "bannerWind": true, "bannerWindStrength": 0.6, "bannerWindSpeed": 1.2, "bannerPole": true, "bannerPoleColor": "#60513f", "plaqueFont": "Georgia", "plaqueSize": 8, "plaqueWeight": 700, "plaqueColor": "#fff0d5", "size": 0.8 } },
+        { "type": "effect", "name": "Afternoon to dusk", "effect": "sunlight", "options": { "lighting": { "enabled": true, "preset": "custom", "azimuth": 225, "altitude": 45, "intensity": 1, "ambient": 0.5, "warmth": 0.1, "shadowStrength": 0.8 } }, "keys": [{ "at": 0, "values": { "azimuth": 225, "altitude": 45, "intensity": 1, "ambient": 0.5, "warmth": 0.1, "shadowStrength": 0.8 } }, { "at": 59, "values": { "azimuth": 280, "altitude": 2, "intensity": 0.45, "ambient": 0.3, "warmth": 0.5, "shadowStrength": 0.4 } }] },
+        { "type": "label", "text": "A fictional campaign", "options": { "labelPlacement": "screen", "x": 50, "y": 8, "labelStyle": { "font": "Georgia", "size": 28, "text": "#f2e7ce", "halo": true } } }
+      ]
+    }
+  ]
+}

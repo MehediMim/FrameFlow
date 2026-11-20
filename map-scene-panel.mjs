@@ -3,7 +3,7 @@ export const SCENE_PANEL_DEFAULTS = {
   panelSide: 'left', panelWidth: 46, panelAlign: 'center', panelOpacity: .92,
   panelColor: '#111a20', textColor: '#f1ede2', accentColor: '#d9b767',
   eventTitle: 'Age of Exploration', description: 'Add the story behind this moment on the map.',
-  startYear: 1500, endYear: 1600, autoYear: true, yearEra: '', textScale: 1, fadeSeconds: .25,
+  startYear: 1500, endYear: 1600, autoYear: true, showYear: true, yearEra: '', textScale: 1, fadeSeconds: .25,
 };
 export function sceneYearAt(a, frame) {
   const start = a.startYear ?? SCENE_PANEL_DEFAULTS.startYear;
@@ -13,6 +13,7 @@ export function sceneYearAt(a, frame) {
 }
 export function validateScenePanel(a) {
   const d = { ...SCENE_PANEL_DEFAULTS, ...a };
+  if(typeof d.showYear!=='boolean')throw Error('Invalid scene year visibility.');
   if (!['left','right'].includes(d.panelSide) || !['top','center','bottom'].includes(d.panelAlign) || !['','CE','BCE'].includes(d.yearEra) || typeof d.autoYear !== 'boolean') throw Error('Invalid scene panel setting.');
   for (const [key,lo,hi] of [['panelWidth',25,70],['panelOpacity',0,1],['textScale',.6,2],['fadeSeconds',0,2],['startYear',1,9999],['endYear',1,9999]]) {
     if (!Number.isFinite(d[key]) || d[key]<lo || d[key]>hi || (key.endsWith('Year') && !Number.isInteger(d[key]))) throw Error('Invalid scene panel '+key+'.');
@@ -56,14 +57,14 @@ export function drawScenePanel(ctx, W, H, a, frame, fps = 30) {
   for(let attempt=0;attempt<18;attempt++) {
     ctx.font=`600 ${32*scale}px Georgia, serif`;const titles=title?wrap(ctx,title,textWidth):[];
     ctx.font=`${19*scale}px Arial, sans-serif`;const paragraphs=description?wrap(ctx,description,textWidth):[];
-    const height=105*scale+(titles.length?22*scale+titles.length*39*scale:0)+(paragraphs.length?24*scale+paragraphs.length*29*scale:0);
+    const height=(d.showYear?105:18)*scale+(titles.length?22*scale+titles.length*39*scale:0)+(paragraphs.length?24*scale+paragraphs.length*29*scale:0);
     layout={titles,paragraphs,height};if(height<=H-pad*2)break;scale*=.88;
   }
   let y=d.panelAlign==='top'?pad:d.panelAlign==='bottom'?H-pad-layout.height:(H-layout.height)/2;
   ctx.beginPath();ctx.rect(x-pad/4,0,textWidth+pad/2,H);ctx.clip();ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillStyle=d.accentColor;ctx.fillRect(x,y,Math.min(textWidth,46*u),3*u);y+=18*scale;
-  let yearSize=78*scale;ctx.font=`600 ${yearSize}px Georgia, serif`;
-  yearSize*=Math.min(1,textWidth/Math.max(1,ctx.measureText(year).width));ctx.font=`600 ${yearSize}px Georgia, serif`;ctx.fillText(year,x,y);y+=87*scale;
+  if(d.showYear){let yearSize=78*scale;ctx.font=`600 ${yearSize}px Georgia, serif`;
+  yearSize*=Math.min(1,textWidth/Math.max(1,ctx.measureText(year).width));ctx.font=`600 ${yearSize}px Georgia, serif`;ctx.fillText(year,x,y);y+=87*scale;}
   ctx.fillStyle=d.textColor;
   if(layout.titles.length){y+=22*scale;ctx.font=`600 ${32*scale}px Georgia, serif`;for(const line of layout.titles){ctx.fillText(line,x,y);y+=39*scale;}}
   if(layout.paragraphs.length){y+=24*scale;ctx.font=`${19*scale}px Arial, sans-serif`;for(const line of layout.paragraphs){ctx.fillText(line,x,y);y+=29*scale;}}

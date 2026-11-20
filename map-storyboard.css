@@ -1,0 +1,35 @@
+body.ff-unified dialog.ff-dialog.ff-storyboard{width:min(900px,calc(100vw - 32px));max-width:900px;font:16px/1.55 'DM Sans',sans-serif;padding:28px}
+.storyboard-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.storyboard-heading h2{font-size:24px;line-height:1.25;margin:0 0 12px;color:var(--text)}
+.storyboard-eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--accent);margin:0 0 6px}
+.storyboard-heading button{flex-shrink:0}
+.ff-storyboard p{color:var(--muted);margin:10px 0 16px}
+.storyboard-tools,.storyboard-examples{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0}
+.storyboard-tools span{overflow-wrap:anywhere;color:var(--muted)}
+.storyboard-examples{font-size:14px;gap:8px 16px}
+.storyboard-examples a{color:var(--accent);text-underline-offset:3px}
+body.ff-unified #mStoryboardDialog label{display:block;font-size:14px;margin:18px 0 7px}
+body.ff-unified #mStoryboardText{width:100%;min-height:230px;resize:vertical;font:14px/1.6 Consolas,monospace;tab-size:2}
+body.ff-unified #mStoryboardDialog button{font-size:14px;min-height:38px}
+body.ff-unified #mStoryboardDialog select{font-size:14px;width:100%;min-height:40px}
+.storyboard-player{border:1px solid var(--ff-border);border-radius:9px;overflow:hidden;margin:16px 0}
+.storyboard-player canvas{width:100%;height:auto;aspect-ratio:16/9;max-height:none;box-shadow:none;cursor:default}
+.storyboard-player-controls{display:flex;align-items:center;gap:12px;padding:12px;background:var(--ff-control);flex-wrap:wrap}
+body.ff-unified #mStoryboardDialog .storyboard-player-controls button{margin:0}
+.storyboard-player-controls input{flex:1;min-width:70px}
+.storyboard-player-controls span{font:13px Consolas,monospace;color:var(--accent)}
+.storyboard-scenes button{margin-top:8px}
+.ff-storyboard .storyboard-hint,.ff-storyboard .storyboard-replace{font-size:13px}
+#mStoryboardError{background:#b84d461a;color:#ffa69e;border:1px solid #b84d4670;border-radius:8px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin:16px 0}
+.ff-storyboard .storyboard-summary{font-weight:600;color:var(--text);margin-top:24px}
+.storyboard-scenes{padding:0;list-style:none;border:1px solid var(--ff-border);border-radius:9px;overflow:hidden;max-height:320px;overflow-y:auto}
+.storyboard-scenes li{display:grid;grid-template-columns:145px 1fr;gap:16px;padding:14px 16px;border-bottom:1px solid var(--ff-border)}
+.storyboard-scenes li:last-child{border-bottom:0}
+.storyboard-time{font:13px/1.6 Consolas,monospace;color:var(--accent)}
+.storyboard-scenes strong,.storyboard-scenes div>span{display:block}
+.storyboard-scenes div>span{font-size:13px;color:var(--muted);margin-top:3px}
+.storyboard-scenes p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.storyboard-warnings{color:#e1bd78;padding-left:20px}
+.ff-storyboard .ff-dialog-actions{position:sticky;bottom:-28px;margin-bottom:-28px;padding:16px 0;background:var(--ff-surface);border-top:1px solid var(--ff-border);z-index:1}
+body.ff-unified #mStoryboard{display:block;width:100%;margin:0;padding:10px;font-size:14px;text-align:left;background:var(--ff-control);border:1px solid var(--ff-border)}
+@media(max-width:600px){body.ff-unified dialog.ff-dialog.ff-storyboard{padding:18px}.storyboard-heading h2{font-size:21px}.storyboard-scenes li{grid-template-columns:1fr;gap:4px}.ff-storyboard .ff-dialog-actions{flex-wrap:wrap;bottom:-18px;margin-bottom:-18px}}
